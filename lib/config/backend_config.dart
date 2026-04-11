@@ -1,7 +1,7 @@
 /// Backend / database configuration for Lebanon Hoops.
 ///
 /// **Security:** The Flutter app must not open raw PostgreSQL connections.
-/// Use the small API in `/api` (see `package.json`) or your own server.
+/// Use the Node API in this repo at `api/` (`npm install` + `npm start`; see `api/package.json`).
 ///
 /// Example server connection string:
 /// `postgresql://postgres:admin@localhost:5432/BasketballApp`

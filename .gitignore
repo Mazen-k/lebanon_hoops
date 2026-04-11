@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node REST API (co-located in this repo)
+api/node_modules/
+api/.env
