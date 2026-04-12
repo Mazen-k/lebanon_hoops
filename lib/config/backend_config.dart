@@ -26,7 +26,7 @@ abstract final class BackendConfig {
   static String get apiBaseUrl {
     const fromEnv = String.fromEnvironment('API_BASE_URL', defaultValue: '');
     if (fromEnv.isNotEmpty) return fromEnv;
-    return 'http://127.0.0.1:3000';
+    return 'https://lebanon-hoops.onrender.com'; // Live Render API URL
   }
 
   /// Path to the teams list, appended after [apiBaseUrl] (no leading slash).
