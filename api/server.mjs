@@ -2,14 +2,17 @@ import bcrypt from 'bcryptjs';
 import cors from 'cors';
 import express from 'express';
 import pg from 'pg';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const pool = new pg.Pool({
-  connectionString:
-    process.env.DATABASE_URL ?? 'postgresql://postgres:admin@127.0.0.1:5432/BasketballApp',
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 async function listTeams(_req, res) {
@@ -28,6 +31,35 @@ async function listTeams(_req, res) {
 app.get('/teams', listTeams);
 // Common alternate layout
 app.get('/api/teams', listTeams);
+
+async function getTeamDetails(req, res) {
+  const teamId = Number(req.params.id);
+  if (Number.isNaN(teamId)) {
+    return res.status(400).json({ error: 'team id must be an integer.' });
+  }
+  try {
+    const { rows: teamRows } = await pool.query(
+      'SELECT team_id, team_name FROM teams WHERE team_id = $1',
+      [teamId]
+    );
+    if (teamRows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    const team = teamRows[0];
+    
+    const { rows: playerRows } = await pool.query(
+      'SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob FROM players WHERE team_id = $1 ORDER BY jersey_number ASC',
+      [teamId]
+    );
+    res.json({ team, players: playerRows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/teams/:id', getTeamDetails);
+app.get('/api/teams/:id', getTeamDetails);
 
 function collectionDuplicatesOnly(query) {
   const v = query.duplicates_only ?? query.duplicatesOnly;

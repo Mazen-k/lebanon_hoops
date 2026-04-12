@@ -4,7 +4,6 @@ import '../theme/colors.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/gradient_button.dart';
 import '../widgets/auth_text_field.dart';
-import '../config/backend_config.dart';
 import '../data/team_repository.dart';
 import '../models/sign_up_data.dart';
 import '../models/team.dart';
@@ -145,14 +144,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildSectionTitle('CREATE ACCOUNT'),
-              const SizedBox(height: 12),
-              Text(
-                'Teams: GET ${BackendConfig.apiBaseUrl}/${BackendConfig.teamsPath} (DB ${BackendConfig.postgresDatabaseName}). Emulator: API_BASE_URL=http://10.0.2.2:3000',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.secondary,
-                      height: 1.4,
-                    ),
-              ),
               const SizedBox(height: 20),
               GlassCard(
                 borderRadius: 12,

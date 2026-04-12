@@ -1,28 +1,59 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
+import '../data/team_repository.dart';
+import '../models/team.dart';
 
-class StandingsScreen extends StatelessWidget {
+class StandingsScreen extends StatefulWidget {
   const StandingsScreen({super.key});
 
   @override
+  State<StandingsScreen> createState() => _StandingsScreenState();
+}
+
+class _StandingsScreenState extends State<StandingsScreen> {
+  final _teamsRepo = const TeamRepository();
+  List<Team> _teams = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTeams();
+  }
+
+  Future<void> _loadTeams() async {
+    try {
+      final teams = await _teamsRepo.fetchTeams();
+      if (mounted) setState(() { _teams = teams; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _loading = false; });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-        padding: const EdgeInsets.only(top: 24, bottom: 128, left: 16, right: 16), // pt-20 pb-32 px-4
-        child: Column(
-          children: [
-            _buildHeroTitle(context),
-            _buildTabToggle(context),
-            const SizedBox(height: 24), // spacing logic applied
-            _buildPodiumColumn(context),
-            const SizedBox(height: 32), // gap between left and right column on mobile
-            _buildTableColumn(context),
-          ],
+          padding: const EdgeInsets.only(top: 24, bottom: 128, left: 16, right: 16),
+          child: Column(
+            children: [
+              _buildHeroTitle(context),
+              _buildTabToggle(context),
+              const SizedBox(height: 24),
+              _buildPodiumColumn(context, _teams.isNotEmpty ? _teams.first.teamName : 'AL RIYADI'),
+              const SizedBox(height: 32),
+              _buildTableColumn(context),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -112,7 +143,7 @@ class StandingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPodiumColumn(BuildContext context) {
+  Widget _buildPodiumColumn(BuildContext context, String teamName) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -168,7 +199,7 @@ class StandingsScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('BEIRUT DISTRICT', style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white.withAlpha((255 * 0.8).round()), letterSpacing: 1.0)), // text-xs uppercase tracking-widest opacity-80
-                          const Text('AL RIYADI', style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -1.0)), // text-2xl uppercase tracking-tighter
+                          Text(teamName.toUpperCase(), style: const TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -1.0)), // text-2xl uppercase tracking-tighter
                         ],
                       ),
                     ],
