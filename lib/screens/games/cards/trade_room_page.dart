@@ -41,7 +41,8 @@ class _TradeRoomPageState extends State<TradeRoomPage>
   String? _error;
   List<TradeableInstance>? _tradeable;
   bool _readyBusy = false;
-  bool _finalizeBusy = false;
+  bool _autoSummaryOpened = false;
+  bool _summaryRouteOpen = false;
   int? _myUid;
   late final AnimationController _pulse;
 
@@ -93,6 +94,7 @@ class _TradeRoomPageState extends State<TradeRoomPage>
 
   Future<void> _flushCoinsToServer() async {
     if (!mounted) return;
+    if (_iAmReady()) return;
     var v = int.tryParse(_coinsCtrl.text.trim());
     v ??= 0;
     final maxC = _cardCoins ?? 999999999;
@@ -212,20 +214,49 @@ class _TradeRoomPageState extends State<TradeRoomPage>
     return p != null && _mapFlag(_state?['ready_confirm'], p);
   }
 
-  bool _iAmFinalized() =>
-      _myUid != null && _mapFlag(_state?['final_confirm'], _myUid!);
-  bool _peerFinalized() {
-    final p = _peerUserId();
-    return p != null && _mapFlag(_state?['final_confirm'], p);
+  String? _summaryChoiceForUid(int? uid) {
+    if (uid == null) return null;
+    final m = _state?['summary_choice'];
+    if (m is! Map) return null;
+    final k = uid.toString();
+    final v = m[k] ?? m[uid];
+    if (v == null) return null;
+    return v.toString().toLowerCase();
+  }
+
+  String? _mySummaryChoice() => _summaryChoiceForUid(_myUid);
+  String? _peerSummaryChoice() => _summaryChoiceForUid(_peerUserId());
+
+  void _scheduleSummaryDialogIfNeeded() {
+    if (!mounted) return;
+    if (!_bothLockedIn() || _peerUserId() == null) {
+      _autoSummaryOpened = false;
+      return;
+    }
+    if (_autoSummaryOpened || _summaryRouteOpen) return;
+    _autoSummaryOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_bothLockedIn() || _peerUserId() == null) {
+        _autoSummaryOpened = false;
+        return;
+      }
+      if (_summaryRouteOpen) {
+        _autoSummaryOpened = false;
+        return;
+      }
+      unawaited(_showTradeSummaryDialog());
+    });
   }
 
   void _syncPulseAnimation() {
     if (!mounted) return;
     final waitingPeerLock =
         _iAmReady() && !_peerReady() && _peerUserId() != null;
-    final waitingPeerFinalize =
-        _iAmFinalized() && !_peerFinalized() && _peerUserId() != null;
-    final show = waitingPeerLock || waitingPeerFinalize;
+    final waitingPeerAccept = _bothLockedIn() &&
+        _peerUserId() != null &&
+        _mySummaryChoice() == 'accept' &&
+        _peerSummaryChoice() != 'accept';
+    final show = waitingPeerLock || waitingPeerAccept;
     if (show) {
       if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
     } else {
@@ -257,6 +288,7 @@ class _TradeRoomPageState extends State<TradeRoomPage>
       });
       _syncCoinsControllerFromState();
       _syncPulseAnimation();
+      _scheduleSummaryDialogIfNeeded();
     } on TradeApiException catch (e) {
       if (!mounted) return;
       if (e.message.contains('not found')) {
@@ -320,11 +352,13 @@ class _TradeRoomPageState extends State<TradeRoomPage>
     _poll?.cancel();
     if (!mounted) return;
     setState(() => _awaitingCompleted404 = false);
+    await _loadWallet();
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Trade complete'),
-        content: const Text('Cards have been exchanged.'),
+        content: const Text('Cards and agreed coins have been exchanged.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -360,52 +394,140 @@ class _TradeRoomPageState extends State<TradeRoomPage>
     }
   }
 
-  Future<void> _openFinalizeAreYouSure() async {
-    final ok =
-        await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Finalize trade?'),
-            content: const Text(
-              'This cannot be undone. The cards currently locked in by both players will be swapped.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Yes, finalize'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-    if (!ok || !mounted) return;
-    setState(() => _finalizeBusy = true);
+  Future<void> _unconfirmOffer() async {
+    setState(() => _readyBusy = true);
     try {
       final uid = await _userId();
-      final status = await _api.confirmFinalize(
-        code: widget.roomCode,
-        userId: uid,
-      );
+      await _api.postUnconfirm(code: widget.roomCode, userId: uid);
       if (!mounted) return;
-      if (status == 'completed') {
-        await _onTradeCompleted();
-      } else {
-        if (status == 'waiting_peer_finalize' && mounted) {
-          setState(() => _awaitingCompleted404 = true);
-        }
-        await _refresh();
-      }
+      await _refresh();
     } on TradeApiException catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
-      if (mounted) setState(() => _finalizeBusy = false);
+      if (mounted) setState(() => _readyBusy = false);
+    }
+  }
+
+  Future<void> _showTradeSummaryDialog() async {
+    if (!mounted || !_bothLockedIn() || _summaryRouteOpen) return;
+    _summaryRouteOpen = true;
+    var dialogBusy = false;
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx, setLocal) {
+              Future<void> pick(String choice) async {
+                if (dialogBusy) return;
+                dialogBusy = true;
+                setLocal(() {});
+                try {
+                  final uid = await _userId();
+                  final status = await _api.postSummaryChoice(
+                    code: widget.roomCode,
+                    userId: uid,
+                    choice: choice,
+                  );
+                  if (!ctx.mounted) return;
+                  if (status == 'returned_to_trading') {
+                    Navigator.of(ctx).pop();
+                    await _refresh();
+                    return;
+                  }
+                  if (status == 'waiting_peer_accept') {
+                    Navigator.of(ctx).pop();
+                    if (mounted) {
+                      setState(() => _awaitingCompleted404 = true);
+                      await _refresh();
+                    }
+                    return;
+                  }
+                  if (status == 'completed') {
+                    Navigator.of(ctx).pop();
+                    await _onTradeCompleted();
+                    return;
+                  }
+                  await _refresh();
+                } on TradeApiException catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(
+                      ctx,
+                    ).showSnackBar(SnackBar(content: Text(e.message)));
+                  }
+                } finally {
+                  dialogBusy = false;
+                  if (ctx.mounted) setLocal(() {});
+                }
+              }
+
+              final yourCoins = _state?['your_coins'];
+              final peerCoins = _state?['peer_coins'];
+              final yc = yourCoins is int
+                  ? yourCoins
+                  : int.tryParse(yourCoins?.toString() ?? '') ?? 0;
+              final pc = peerCoins is int
+                  ? peerCoins
+                  : int.tryParse(peerCoins?.toString() ?? '') ?? 0;
+
+              return AlertDialog(
+                backgroundColor: _TradeRoomVisual.panel,
+                title: const Text(
+                  'Trade summary',
+                  style: TextStyle(color: CardGameUiTheme.onDark),
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'You give: $yc card coins and the cards in your slots.\n'
+                        'They give: $pc card coins and the cards in their slots.',
+                        style: TextStyle(
+                          color: CardGameUiTheme.onDark.withAlpha(220),
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Both must tap Accept to complete. Modify sends you both back to edit offers.',
+                        style: TextStyle(
+                          color: CardGameUiTheme.onDark.withAlpha(160),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: dialogBusy ? null : () => pick('modify'),
+                    child: const Text('Modify'),
+                  ),
+                  FilledButton(
+                    onPressed: dialogBusy ? null : () => pick('accept'),
+                    child: dialogBusy
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Accept'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      _summaryRouteOpen = false;
+      if (mounted) setState(() {});
     }
   }
 
@@ -446,6 +568,14 @@ class _TradeRoomPageState extends State<TradeRoomPage>
     ScaffoldMessengerState messenger,
   ) async {
     if (cardId <= 0) return false;
+    if (_iAmReady()) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Remove your confirmation before changing your offer.'),
+        ),
+      );
+      return false;
+    }
     if (_alreadyOfferingCard(cardId)) {
       messenger.showSnackBar(
         const SnackBar(content: Text('That card is already in your offer.')),
@@ -511,6 +641,14 @@ class _TradeRoomPageState extends State<TradeRoomPage>
   }
 
   Future<void> _pickSlotFixed(int index) async {
+    if (_iAmReady()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Remove your confirmation before changing slots.'),
+        ),
+      );
+      return;
+    }
     final current = _parseInstanceSlots(_state?['your_slots']);
     final used = <int>{};
     for (var i = 0; i < 3; i++) {
@@ -573,9 +711,11 @@ class _TradeRoomPageState extends State<TradeRoomPage>
 
     final waitingPeerLock =
         _iAmReady() && !_peerReady() && _peerUserId() != null;
-    final waitingPeerFinalize =
-        _iAmFinalized() && !_peerFinalized() && _peerUserId() != null;
-    final showPulse = waitingPeerLock || waitingPeerFinalize;
+    final waitingPeerAccept = _bothLockedIn() &&
+        _peerUserId() != null &&
+        _mySummaryChoice() == 'accept' &&
+        _peerSummaryChoice() != 'accept';
+    final showPulse = waitingPeerLock || waitingPeerAccept;
 
     return PopScope(
       canPop: false,
@@ -672,11 +812,14 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                                 message: peerMsg.isEmpty ? '—' : peerMsg,
                                 slots: theirSlots,
                                 reactions: youOnPeer,
-                                reactionsInteractive: peerName != null,
+                                reactionsInteractive:
+                                    peerName != null && !_iAmReady(),
                                 onVoteSlot: _setPeerSlotReaction,
                                 onSlotTap: null,
                                 coinLabel: 'OPPONENT GIVES COINS',
                                 peerCoinsText: '$peerCoins',
+                                sideConfirmed:
+                                    peerName != null && _peerReady(),
                               ),
                             ),
                           ),
@@ -717,20 +860,27 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                                 reactions: peerOnYou,
                                 reactionsInteractive: false,
                                 onVoteSlot: null,
-                                onSlotTap: (i) => _pickSlotFixed(i),
+                                onSlotTap: _iAmReady() ? null : (i) => _pickSlotFixed(i),
                                 coinLabel: 'YOU GIVE COINS',
-                                coinsEditor: TextField(
-                                  controller: _coinsCtrl,
-                                  focusNode: _coinsFocus,
-                                  keyboardType: TextInputType.number,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: CardGameUiTheme.onDark,
-                                    fontWeight: FontWeight.w700,
+                                coinsEditor: IgnorePointer(
+                                  ignoring: _iAmReady(),
+                                  child: TextField(
+                                    controller: _coinsCtrl,
+                                    focusNode: _coinsFocus,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: CardGameUiTheme.onDark,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    cursorColor: _TradeRoomVisual.gold,
+                                    decoration: _tradeCoinInputDecoration(),
                                   ),
-                                  cursorColor: _TradeRoomVisual.gold,
-                                  decoration: _tradeCoinInputDecoration(),
                                 ),
+                                sideConfirmed: _iAmReady(),
+                                onUnconfirm: peerName != null && _iAmReady()
+                                    ? _unconfirmOffer
+                                    : null,
                               ),
                             ),
                           ),
@@ -771,8 +921,8 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    waitingPeerFinalize
-                                        ? 'You finalized — waiting for partner…'
+                                    waitingPeerAccept
+                                        ? 'You accepted — waiting for partner…'
                                         : 'You locked in — waiting for partner…',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
@@ -791,13 +941,11 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                       child: _TradeConfirmBar(
                         bothLocked: _bothLockedIn(),
                         readyBusy: _readyBusy,
-                        finalizeBusy: _finalizeBusy,
                         iAmReady: _iAmReady(),
                         peerReady: _peerReady(),
                         peerPresent: peerName != null,
-                        iAmFinalized: _iAmFinalized(),
                         onLockIn: _lockInOffer,
-                        onFinalize: _openFinalizeAreYouSure,
+                        onOpenSummary: _showTradeSummaryDialog,
                       ),
                     ),
                     Padding(
@@ -854,6 +1002,8 @@ class _TradePlayerColumn extends StatelessWidget {
     required this.coinLabel,
     this.coinsEditor,
     this.peerCoinsText,
+    this.sideConfirmed = false,
+    this.onUnconfirm,
   });
 
   final bool alignEnd;
@@ -868,6 +1018,8 @@ class _TradePlayerColumn extends StatelessWidget {
   final String coinLabel;
   final Widget? coinsEditor;
   final String? peerCoinsText;
+  final bool sideConfirmed;
+  final VoidCallback? onUnconfirm;
 
   Map<String, dynamic>? _slotMap(dynamic el) {
     if (el is Map) return Map<String, dynamic>.from(el);
@@ -876,18 +1028,21 @@ class _TradePlayerColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-      decoration: BoxDecoration(
-        color: _TradeRoomVisual.panel.withAlpha(200),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _TradeRoomVisual.panelLine.withAlpha(180)),
-      ),
-      child: Column(
-        crossAxisAlignment: alignEnd
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          decoration: BoxDecoration(
+            color: _TradeRoomVisual.panel.withAlpha(200),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _TradeRoomVisual.panelLine.withAlpha(180)),
+          ),
+          child: Column(
+            crossAxisAlignment: alignEnd
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
+            children: [
           Text(
             playerName.toUpperCase(),
             maxLines: 1,
@@ -936,7 +1091,6 @@ class _TradePlayerColumn extends StatelessWidget {
                       right: i == 2 ? 0 : 3,
                     ),
                     child: _TradeSlotRow(
-                      alignReactionsEnd: alignEnd,
                       slotMap: slots is List && i < slots.length
                           ? _slotMap(slots[i])
                           : null,
@@ -999,15 +1153,52 @@ class _TradePlayerColumn extends StatelessWidget {
                 ],
               ),
             ),
-        ],
-      ),
+            ],
+          ),
+        ),
+        if (sideConfirmed)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: _TradeRoomVisual.neonGreen.withAlpha(34),
+                ),
+              ),
+            ),
+          ),
+        if (onUnconfirm != null && sideConfirmed)
+          Positioned(
+            top: 6,
+            left: alignEnd ? null : 8,
+            right: alignEnd ? 8 : null,
+            child: Material(
+              color: Colors.black.withAlpha(200),
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                onTap: onUnconfirm,
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  child: Text(
+                    'Remove confirmation',
+                    style: TextStyle(
+                      color: CardGameUiTheme.onDark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
 
 class _TradeSlotRow extends StatelessWidget {
   const _TradeSlotRow({
-    required this.alignReactionsEnd,
     required this.slotMap,
     required this.reaction,
     required this.reactionsInteractive,
@@ -1016,7 +1207,6 @@ class _TradeSlotRow extends StatelessWidget {
     this.onSlotTap,
   });
 
-  final bool alignReactionsEnd;
   final Map<String, dynamic>? slotMap;
   final String? reaction;
   final bool reactionsInteractive;
@@ -1089,7 +1279,7 @@ class _TradeSlotRow extends StatelessWidget {
       },
     );
 
-    final reactionCol = !hasCard
+    final reactionRow = !hasCard
         ? const SizedBox.shrink()
         : _TradeReactionColumn(
             interactive: reactionsInteractive,
@@ -1098,22 +1288,15 @@ class _TradeSlotRow extends StatelessWidget {
             onDown: onVoteDown,
           );
 
-    if (alignReactionsEnd) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          reactionCol,
-          const SizedBox(width: 4),
-          Expanded(child: slot),
-        ],
-      );
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(child: slot),
-        const SizedBox(width: 4),
-        reactionCol,
+        slot,
+        if (hasCard) ...[
+          const SizedBox(height: 5),
+          Center(child: reactionRow),
+        ],
       ],
     );
   }
@@ -1135,42 +1318,36 @@ class _TradeReactionColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!interactive) {
-      return SizedBox(
-        width: 28,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.thumb_up_alt_outlined,
-              size: 15,
-              color: state == 'up'
-                  ? _TradeRoomVisual.neonGreen
-                  : Colors.white24,
-            ),
-            const SizedBox(height: 6),
-            Icon(
-              Icons.thumb_down_alt_outlined,
-              size: 15,
-              color: state == 'down' ? const Color(0xFFFF4444) : Colors.white24,
-            ),
-          ],
-        ),
-      );
-    }
-    return SizedBox(
-      width: 30,
-      child: Column(
+      return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _RoundThumb(selected: state == 'up', positive: true, onTap: onUp),
-          const SizedBox(height: 6),
-          _RoundThumb(
-            selected: state == 'down',
-            positive: false,
-            onTap: onDown,
+          Icon(
+            Icons.thumb_up_alt_outlined,
+            size: 16,
+            color: state == 'up'
+                ? _TradeRoomVisual.neonGreen
+                : Colors.white24,
+          ),
+          const SizedBox(width: 10),
+          Icon(
+            Icons.thumb_down_alt_outlined,
+            size: 16,
+            color: state == 'down' ? const Color(0xFFFF4444) : Colors.white24,
           ),
         ],
-      ),
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _RoundThumb(selected: state == 'up', positive: true, onTap: onUp),
+        const SizedBox(width: 8),
+        _RoundThumb(
+          selected: state == 'down',
+          positive: false,
+          onTap: onDown,
+        ),
+      ],
     );
   }
 }
@@ -1604,24 +1781,20 @@ class _TradeConfirmBar extends StatelessWidget {
   const _TradeConfirmBar({
     required this.bothLocked,
     required this.readyBusy,
-    required this.finalizeBusy,
     required this.iAmReady,
     required this.peerReady,
     required this.peerPresent,
-    required this.iAmFinalized,
     required this.onLockIn,
-    required this.onFinalize,
+    required this.onOpenSummary,
   });
 
   final bool bothLocked;
   final bool readyBusy;
-  final bool finalizeBusy;
   final bool iAmReady;
   final bool peerReady;
   final bool peerPresent;
-  final bool iAmFinalized;
   final VoidCallback onLockIn;
-  final VoidCallback onFinalize;
+  final Future<void> Function() onOpenSummary;
 
   String _label() {
     if (!bothLocked) {
@@ -1630,8 +1803,7 @@ class _TradeConfirmBar extends StatelessWidget {
       if (iAmReady) return 'LOCKED IN';
       return 'CONFIRM';
     }
-    if (iAmFinalized) return 'WAITING…';
-    return 'CONFIRM';
+    return 'OPEN SUMMARY';
   }
 
   VoidCallback? _onPressed() {
@@ -1639,13 +1811,15 @@ class _TradeConfirmBar extends StatelessWidget {
       if (readyBusy || !peerPresent || iAmReady) return null;
       return onLockIn;
     }
-    if (finalizeBusy || iAmFinalized) return null;
-    return onFinalize;
+    if (readyBusy) return null;
+    return () {
+      unawaited(onOpenSummary());
+    };
   }
 
   @override
   Widget build(BuildContext context) {
-    final busy = !bothLocked ? readyBusy : finalizeBusy;
+    final busy = readyBusy;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(

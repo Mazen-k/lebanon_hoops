@@ -833,6 +833,7 @@ async function tradeCreateHandler(req, res) {
     offers: { [uid]: [null, null, null] },
     ready: { [uid]: false },
     finalize: { [uid]: false },
+    summary_choice: { [uid]: null },
     coins: { [uid]: 0 },
     /** targetUserId -> viewerUserId -> [null | 'up' | 'down'] for each slot */
     slotReactions: {},
@@ -866,6 +867,8 @@ async function tradeJoinHandler(req, res) {
   if (!room.coins) room.coins = {};
   room.coins[uid] = 0;
   if (!room.slotReactions) room.slotReactions = {};
+  if (!room.summary_choice) room.summary_choice = {};
+  room.summary_choice[uid] = null;
   res.json({ code, joined: true, peer: room.users[0] });
 }
 
@@ -875,6 +878,10 @@ function ensureRoomTradeFields(room) {
     if (room.coins[u] == null) room.coins[u] = 0;
   }
   if (!room.slotReactions) room.slotReactions = {};
+  if (!room.summary_choice) room.summary_choice = {};
+  for (const u of room.users) {
+    if (!(u in room.summary_choice)) room.summary_choice[u] = null;
+  }
 }
 
 function slotReactionArray(room, targetUid, viewerUid) {
@@ -1016,6 +1023,7 @@ async function tradeStateHandler(req, res) {
       peer_wishlist: peerWishlistMeta,
       ready_confirm: room.ready,
       final_confirm: room.finalize,
+      summary_choice: room.summary_choice ?? {},
     });
   } catch (err) {
     console.error(err);
@@ -1041,6 +1049,11 @@ async function tradeOfferHandler(req, res) {
   if (!room) return res.status(404).json({ error: 'Room not found or expired' });
   if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member of this room' });
   ensureRoomTradeFields(room);
+  if (room.ready[uid]) {
+    return res
+      .status(400)
+      .json({ error: 'Remove your trade confirmation before changing cards.' });
+  }
 
   const normalized = slots.map((x) => (x == null || x === '' ? null : Number(x)));
   if (normalized.some((x) => x !== null && Number.isNaN(x))) {
@@ -1075,6 +1088,7 @@ async function tradeOfferHandler(req, res) {
     for (const u of room.users) {
       room.ready[u] = false;
       room.finalize[u] = false;
+      room.summary_choice[u] = null;
     }
     room.rev = (room.rev ?? 0) + 1;
     res.json({ ok: true, rev: room.rev });
@@ -1120,10 +1134,16 @@ async function tradeCoinsHandler(req, res) {
   if (!room) return res.status(404).json({ error: 'Room not found or expired' });
   if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member of this room' });
   ensureRoomTradeFields(room);
+  if (room.ready[uid]) {
+    return res
+      .status(400)
+      .json({ error: 'Remove your trade confirmation before changing coins.' });
+  }
   room.coins[uid] = c;
   for (const u of room.users) {
     room.ready[u] = false;
     room.finalize[u] = false;
+    room.summary_choice[u] = null;
   }
   room.rev = (room.rev ?? 0) + 1;
   return res.json({ ok: true, rev: room.rev });
@@ -1155,6 +1175,11 @@ async function tradeSlotReactionHandler(req, res) {
   const peerId = room.users.find((u) => u !== uid);
   if (peerId == null) return res.status(400).json({ error: 'Waiting for second player' });
   ensureRoomTradeFields(room);
+  if (room.ready[uid]) {
+    return res
+      .status(400)
+      .json({ error: 'Remove your trade confirmation before changing reactions.' });
+  }
   const arr = slotReactionArray(room, peerId, uid);
   arr[slotIndex] = reaction === 'clear' ? null : reaction;
   room.rev = (room.rev ?? 0) + 1;
@@ -1175,7 +1200,11 @@ async function tradeConfirmReadyHandler(req, res) {
   if (room.users.length < 2) return res.status(400).json({ error: 'Waiting for second player' });
   if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member of this room' });
   const peerId = room.users.find((u) => u !== uid);
+  ensureRoomTradeFields(room);
   room.ready[uid] = true;
+  for (const u of room.users) {
+    room.summary_choice[u] = null;
+  }
   if (!room.ready[peerId]) {
     room.rev = (room.rev ?? 0) + 1;
     return res.json({ status: 'waiting_peer_ready', rev: room.rev });
@@ -1184,8 +1213,8 @@ async function tradeConfirmReadyHandler(req, res) {
   return res.json({ status: 'both_ready', rev: room.rev });
 }
 
-/** Phase 2: after both locked in, each must finalize (client shows “Are you sure?” first). */
-async function tradeConfirmFinalizeHandler(req, res) {
+/** Clear lock-in for this user (and summary flags) so they can edit offer/coins again. */
+async function tradeUnconfirmHandler(req, res) {
   pruneStaleRooms();
   const code = (req.params.code ?? '').toUpperCase();
   const userId = req.body?.user_id ?? req.body?.userId;
@@ -1195,62 +1224,163 @@ async function tradeConfirmFinalizeHandler(req, res) {
   const uid = Number(userId);
   const room = tradeRooms.get(code);
   if (!room) return res.status(404).json({ error: 'Room not found or expired' });
-  if (room.users.length < 2) return res.status(400).json({ error: 'Waiting for second player' });
   if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member of this room' });
-  const peerId = room.users.find((u) => u !== uid);
-  if (!room.ready[uid] || !room.ready[peerId]) {
-    return res.status(400).json({ error: 'Both players must lock in their offer first' });
+  ensureRoomTradeFields(room);
+  room.ready[uid] = false;
+  for (const u of room.users) {
+    room.summary_choice[u] = null;
+    room.finalize[u] = false;
   }
-  room.finalize[uid] = true;
-  if (!room.finalize[peerId]) {
-    room.rev = (room.rev ?? 0) + 1;
-    return res.json({ status: 'waiting_peer_finalize', rev: room.rev });
-  }
+  room.rev = (room.rev ?? 0) + 1;
+  return res.json({ status: 'unconfirmed', rev: room.rev });
+}
 
+async function validateTradeOffersInTx(client, user, offer) {
+  for (const instId of offer) {
+    const { rows } = await client.query(
+      `SELECT card_id FROM card_instances WHERE card_instance_id = $1::int AND user_id = $2::int`,
+      [instId, user],
+    );
+    if (rows.length === 0) throw new Error('Invalid trade offer');
+    const { rows: cr } = await client.query(
+      `SELECT COUNT(*)::int AS n FROM card_instances WHERE user_id = $1::int AND card_id = $2::int`,
+      [user, rows[0].card_id],
+    );
+    if ((cr[0]?.n ?? 0) < 2) throw new Error('Offer includes a card that is not a duplicate');
+  }
+}
+
+/** Swap offered cards and transfer agreed card_coins between the two users (caller holds BEGIN). */
+async function runTradeExchange(client, room) {
   const a = room.users[0];
   const b = room.users[1];
   const offerA = (room.offers[a] ?? [null, null, null]).filter((x) => x != null);
   const offerB = (room.offers[b] ?? [null, null, null]).filter((x) => x != null);
+  const coinsA = Math.min(Math.max(0, Math.floor(Number(room.coins[a] ?? 0))), 999_999_999);
+  const coinsB = Math.min(Math.max(0, Math.floor(Number(room.coins[b] ?? 0))), 999_999_999);
+
+  await validateTradeOffersInTx(client, a, offerA);
+  await validateTradeOffersInTx(client, b, offerB);
+
+  const lo = a < b ? a : b;
+  const hi = a < b ? b : a;
+  await client.query(
+    `SELECT user_id FROM users WHERE user_id IN ($1::int, $2::int) ORDER BY user_id FOR UPDATE`,
+    [lo, hi],
+  );
+
+  const { rows: wA } = await client.query(
+    `SELECT COALESCE(card_coins,0)::int AS c FROM users WHERE user_id = $1::int`,
+    [a],
+  );
+  const { rows: wB } = await client.query(
+    `SELECT COALESCE(card_coins,0)::int AS c FROM users WHERE user_id = $1::int`,
+    [b],
+  );
+  if ((wA[0]?.c ?? 0) < coinsA) {
+    throw new Error('One player does not have enough card coins for this trade');
+  }
+  if ((wB[0]?.c ?? 0) < coinsB) {
+    throw new Error('One player does not have enough card coins for this trade');
+  }
+
+  for (const instId of offerA) {
+    await client.query(`UPDATE card_instances SET user_id = $1::int WHERE card_instance_id = $2::int`, [
+      b,
+      instId,
+    ]);
+  }
+  for (const instId of offerB) {
+    await client.query(`UPDATE card_instances SET user_id = $1::int WHERE card_instance_id = $2::int`, [
+      a,
+      instId,
+    ]);
+  }
+  if (coinsA > 0) {
+    await client.query(`UPDATE users SET card_coins = COALESCE(card_coins,0) - $1::int WHERE user_id = $2::int`, [
+      coinsA,
+      a,
+    ]);
+    await client.query(`UPDATE users SET card_coins = COALESCE(card_coins,0) + $1::int WHERE user_id = $2::int`, [
+      coinsA,
+      b,
+    ]);
+  }
+  if (coinsB > 0) {
+    await client.query(`UPDATE users SET card_coins = COALESCE(card_coins,0) - $1::int WHERE user_id = $2::int`, [
+      coinsB,
+      b,
+    ]);
+    await client.query(`UPDATE users SET card_coins = COALESCE(card_coins,0) + $1::int WHERE user_id = $2::int`, [
+      coinsB,
+      a,
+    ]);
+  }
+}
+
+/** After both locked in: accept (execute when both accept) or modify (both return to trading). */
+async function tradeSummaryChoiceHandler(req, res) {
+  pruneStaleRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  const choice = req.body?.choice;
+  if (!code || userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  if (choice !== 'accept' && choice !== 'modify') {
+    return res.status(400).json({ error: 'choice must be accept or modify' });
+  }
+  const uid = Number(userId);
+  const room = tradeRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found or expired' });
+  if (room.users.length < 2) return res.status(400).json({ error: 'Waiting for second player' });
+  if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member of this room' });
+  const peerId = room.users.find((u) => u !== uid);
+  ensureRoomTradeFields(room);
+  if (!room.ready[uid] || !room.ready[peerId]) {
+    return res.status(400).json({ error: 'Both players must confirm their offers first' });
+  }
+
+  if (choice === 'modify') {
+    for (const u of room.users) {
+      room.ready[u] = false;
+      room.finalize[u] = false;
+      room.summary_choice[u] = null;
+    }
+    room.rev = (room.rev ?? 0) + 1;
+    return res.json({ status: 'returned_to_trading', rev: room.rev });
+  }
+
+  room.summary_choice[uid] = 'accept';
+  if (room.summary_choice[peerId] !== 'accept') {
+    room.rev = (room.rev ?? 0) + 1;
+    return res.json({ status: 'waiting_peer_accept', rev: room.rev });
+  }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    async function validateOffer(user, offer) {
-      for (const instId of offer) {
-        const { rows } = await client.query(
-          `SELECT card_id FROM card_instances WHERE card_instance_id = $1::int AND user_id = $2::int`,
-          [instId, user],
-        );
-        if (rows.length === 0) throw new Error('Invalid trade offer');
-        const { rows: cr } = await client.query(
-          `SELECT COUNT(*)::int AS n FROM card_instances WHERE user_id = $1::int AND card_id = $2::int`,
-          [user, rows[0].card_id],
-        );
-        if ((cr[0]?.n ?? 0) < 2) throw new Error('Offer includes a card that is not a duplicate');
-      }
+    await client.query(`SELECT pg_advisory_xact_lock(abs(hashtext($1::text))::bigint)`, [`trade_room:${code}`]);
+    const r = tradeRooms.get(code);
+    if (!r) {
+      await client.query('COMMIT');
+      return res.status(404).json({ error: 'Room not found or expired' });
     }
-    await validateOffer(a, offerA);
-    await validateOffer(b, offerB);
-
-    for (const instId of offerA) {
-      await client.query(`UPDATE card_instances SET user_id = $1::int WHERE card_instance_id = $2::int`, [
-        b,
-        instId,
-      ]);
+    const u0 = r.users[0];
+    const u1 = r.users[1];
+    if (!r.ready[u0] || !r.ready[u1] || r.summary_choice[u0] !== 'accept' || r.summary_choice[u1] !== 'accept') {
+      await client.query('COMMIT');
+      r.rev = (r.rev ?? 0) + 1;
+      return res.json({ status: 'waiting_peer_accept', rev: r.rev });
     }
-    for (const instId of offerB) {
-      await client.query(`UPDATE card_instances SET user_id = $1::int WHERE card_instance_id = $2::int`, [
-        a,
-        instId,
-      ]);
-    }
+    await runTradeExchange(client, r);
     await client.query('COMMIT');
     tradeRooms.delete(code);
-    res.json({ status: 'completed' });
+    return res.json({ status: 'completed' });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
-    res.status(500).json({ error: err.message ?? String(err) });
+    return res.status(500).json({ error: err.message ?? String(err) });
   } finally {
     client.release();
   }
@@ -1268,8 +1398,10 @@ app.post('/trade/rooms/:code/leave', tradeLeaveHandler);
 app.post('/api/trade/rooms/:code/leave', tradeLeaveHandler);
 app.post('/trade/rooms/:code/confirm-ready', tradeConfirmReadyHandler);
 app.post('/api/trade/rooms/:code/confirm-ready', tradeConfirmReadyHandler);
-app.post('/trade/rooms/:code/confirm-finalize', tradeConfirmFinalizeHandler);
-app.post('/api/trade/rooms/:code/confirm-finalize', tradeConfirmFinalizeHandler);
+app.post('/trade/rooms/:code/unconfirm', tradeUnconfirmHandler);
+app.post('/api/trade/rooms/:code/unconfirm', tradeUnconfirmHandler);
+app.post('/trade/rooms/:code/summary-choice', tradeSummaryChoiceHandler);
+app.post('/api/trade/rooms/:code/summary-choice', tradeSummaryChoiceHandler);
 app.put('/trade/rooms/:code/coins', tradeCoinsHandler);
 app.put('/api/trade/rooms/:code/coins', tradeCoinsHandler);
 app.post('/trade/rooms/:code/slot-reaction', tradeSlotReactionHandler);

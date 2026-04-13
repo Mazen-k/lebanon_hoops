@@ -249,9 +249,80 @@ class TradeApiService {
     return _postTradeStep(code, userId, 'confirm-ready');
   }
 
-  /// Returns `waiting_peer_finalize`, `completed`, or throws.
-  Future<String> confirmFinalize({required String code, required int userId}) async {
-    return _postTradeStep(code, userId, 'confirm-finalize', timeout: const Duration(seconds: 30));
+  Future<void> postUnconfirm({required String code, required int userId}) async {
+    await _postTradeJson(code, userId, 'unconfirm', const {});
+  }
+
+  /// Returns `waiting_peer_accept`, `completed`, `returned_to_trading`, or throws.
+  Future<String> postSummaryChoice({
+    required String code,
+    required int userId,
+    required String choice,
+  }) async {
+    if (choice != 'accept' && choice != 'modify') {
+      throw TradeApiException('choice must be accept or modify');
+    }
+    final c = code.trim().toUpperCase();
+    final paths = _pair('trade/rooms/$c/summary-choice');
+    final body = jsonEncode({'user_id': userId, 'choice': choice});
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .post(
+              _rootUri(p),
+              headers: const {'Content-Type': 'application/json', 'Accept': 'application/json'},
+              body: body,
+            )
+            .timeout(const Duration(seconds: 30));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          var msg = 'Trade summary failed (${res.statusCode})';
+          try {
+            final m = jsonDecode(utf8.decode(res.bodyBytes));
+            if (m is Map && m['error'] != null) msg = m['error'].toString();
+          } catch (_) {}
+          throw TradeApiException(msg);
+        }
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is Map && d['status'] != null) return d['status'].toString();
+        return 'ok';
+      }
+      throw TradeApiException('Trade route not found');
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
+
+  Future<void> _postTradeJson(String code, int userId, String segment, Map<String, dynamic> extra) async {
+    final c = code.trim().toUpperCase();
+    final paths = _pair('trade/rooms/$c/$segment');
+    final body = jsonEncode({'user_id': userId, ...extra});
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .post(
+              _rootUri(p),
+              headers: const {'Content-Type': 'application/json', 'Accept': 'application/json'},
+              body: body,
+            )
+            .timeout(const Duration(seconds: 20));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          var msg = 'Trade step failed (${res.statusCode})';
+          try {
+            final m = jsonDecode(utf8.decode(res.bodyBytes));
+            if (m is Map && m['error'] != null) msg = m['error'].toString();
+          } catch (_) {}
+          throw TradeApiException(msg);
+        }
+        return;
+      }
+      throw TradeApiException('Trade route not found');
+    } finally {
+      if (_client == null) own.close();
+    }
   }
 
   Future<String> _postTradeStep(
