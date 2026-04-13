@@ -258,28 +258,76 @@ async function userWalletHandler(req, res) {
 app.get('/user/wallet', userWalletHandler);
 app.get('/api/user/wallet', userWalletHandler);
 
-/** Open a pack: random rows from play_cards, insert card_instances (single query, atomic). */
+const LEBANESE_BASE_PACK_ID = 'lebanese_base';
+const LEBANESE_BASE_PACK_COST = 5;
+
+/** Open a pack: deduct card_coins, insert 4 random Lebanese base card_instances. */
 async function openPackHandler(req, res) {
   const userId = req.body?.userId ?? req.body?.user_id;
-  const packId = req.body?.packId ?? req.body?.pack_id ?? 'standard';
+  const packId = req.body?.packId ?? req.body?.pack_id ?? LEBANESE_BASE_PACK_ID;
   if (userId == null || Number.isNaN(Number(userId))) {
     return res.status(400).json({ error: 'userId (integer) is required in JSON body.' });
   }
   const uid = Number(userId);
-  if (packId !== 'standard') {
+  if (packId !== LEBANESE_BASE_PACK_ID && packId !== 'standard') {
     return res.status(400).json({ error: `Unknown pack: ${packId}` });
   }
 
   const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
+    const { rows: balRows } = await client.query(
+      `SELECT COALESCE(card_coins, 0)::int AS c FROM users WHERE user_id = $1::int FOR UPDATE`,
+      [uid],
+    );
+    if (balRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    const balance = balRows[0].c;
+    if (balance < LEBANESE_BASE_PACK_COST) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `Not enough card coins (need ${LEBANESE_BASE_PACK_COST}, you have ${balance}).`,
+      });
+    }
+
+    const { rows: picked } = await client.query(
+      `
+      SELECT pc.card_id
+      FROM play_cards pc
+      INNER JOIN players p ON p.player_id = pc.player_id
+      WHERE LOWER(TRIM(pc.card_type::text)) = 'base'
+        AND (
+          UPPER(TRIM(COALESCE(p.nationality, ''))) = 'LB'
+          OR LOWER(TRIM(COALESCE(p.nationality, ''))) LIKE '%lebanon%'
+        )
+      ORDER BY RANDOM()
+      LIMIT 4
+      `,
+    );
+
+    if (picked.length < 4) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error:
+          'Not enough Lebanese base cards in the pool (need 4). Add play_cards with card_type base and players with nationality LB or Lebanon.',
+      });
+    }
+
+    const cardIds = picked.map((r) => r.card_id);
+
+    await client.query(
+      `UPDATE users SET card_coins = card_coins - $1::int WHERE user_id = $2::int`,
+      [LEBANESE_BASE_PACK_COST, uid],
+    );
+
     const { rows } = await client.query(
       `
-      WITH picked AS (
-        SELECT * FROM play_cards ORDER BY RANDOM() LIMIT 4
-      ),
-      ins AS (
+      WITH ins AS (
         INSERT INTO card_instances (card_id, user_id)
-        SELECT card_id, $1::int FROM picked
+        SELECT x, $1::int FROM unnest($2::int[]) AS t(x)
         RETURNING card_instance_id, card_id
       )
       SELECT
@@ -293,24 +341,17 @@ async function openPackHandler(req, res) {
       FROM ins
       JOIN play_cards pc ON pc.card_id = ins.card_id
       `,
-      [uid],
+      [uid, cardIds],
     );
 
-    if (rows.length === 0) {
-      const { rows: cnt } = await client.query(
-        'SELECT COUNT(*)::int AS n FROM play_cards',
-      );
-      if (cnt[0]?.n === 0) {
-        return res.status(400).json({
-          error:
-            'No rows in play_cards. Insert cards before opening packs.',
-        });
-      }
-      return res.status(500).json({ error: 'Pack open returned no cards.' });
-    }
-
-    res.json({ packId, cards: rows });
+    await client.query('COMMIT');
+    res.json({ packId: LEBANESE_BASE_PACK_ID, cards: rows, card_coins_spent: LEBANESE_BASE_PACK_COST });
   } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
     console.error(err);
     if (err.code === '23503') {
       return res.status(400).json({
