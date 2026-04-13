@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
 
@@ -7,9 +8,20 @@ import '../../../models/tradeable_instance.dart';
 import '../../../services/session_store.dart';
 import '../../../services/trade_api_service.dart';
 import '../../../services/user_wallet_api_service.dart';
-import '../../../theme/colors.dart';
 import '../../../util/card_image_url.dart' show BundledPlayCardImage;
 import 'card_game_ui_theme.dart';
+import 'trade_slot_picker_page.dart';
+
+/// Pacwyn-inspired online trade chrome (dark + neon accents).
+abstract final class _TradeRoomVisual {
+  static const Color bg = Color(0xFF0B0B10);
+  static const Color panel = Color(0xFF16161F);
+  static const Color panelLine = Color(0xFF2A2A38);
+  static const Color neonGreen = Color(0xFF39FF14);
+  static const Color cyan = Color(0xFF00D4FF);
+  static const Color gold = Color(0xFFFFD700);
+  static const Color onMuted = Color(0xFFB8B8C8);
+}
 
 class TradeRoomPage extends StatefulWidget {
   const TradeRoomPage({super.key, required this.roomCode});
@@ -20,7 +32,8 @@ class TradeRoomPage extends StatefulWidget {
   State<TradeRoomPage> createState() => _TradeRoomPageState();
 }
 
-class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProviderStateMixin {
+class _TradeRoomPageState extends State<TradeRoomPage>
+    with SingleTickerProviderStateMixin {
   final _api = TradeApiService();
   final _walletApi = UserWalletApiService();
   Timer? _poll;
@@ -31,25 +44,117 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
   bool _finalizeBusy = false;
   int? _myUid;
   late final AnimationController _pulse;
+
   /// After we finalize, partner may complete the trade; next 404 is treated as success, not "left".
   bool _awaitingCompleted404 = false;
   int? _cardCoins;
   bool _walletLoading = true;
 
+  final _coinsCtrl = TextEditingController(text: '0');
+  final _coinsFocus = FocusNode();
+  Timer? _coinsDebounce;
+  bool _suppressCoinsListener = false;
+
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+    _coinsCtrl.addListener(_onCoinsTextChanged);
     _refresh();
     _loadWallet();
-    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh(silent: true));
+    _poll = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _refresh(silent: true),
+    );
   }
 
   @override
   void dispose() {
+    _coinsDebounce?.cancel();
+    _coinsCtrl.removeListener(_onCoinsTextChanged);
+    _coinsCtrl.dispose();
+    _coinsFocus.dispose();
     _poll?.cancel();
     _pulse.dispose();
     super.dispose();
+  }
+
+  void _onCoinsTextChanged() {
+    if (_suppressCoinsListener) return;
+    _coinsDebounce?.cancel();
+    _coinsDebounce = Timer(
+      const Duration(milliseconds: 650),
+      _flushCoinsToServer,
+    );
+  }
+
+  Future<void> _flushCoinsToServer() async {
+    if (!mounted) return;
+    var v = int.tryParse(_coinsCtrl.text.trim());
+    v ??= 0;
+    final maxC = _cardCoins ?? 999999999;
+    if (v < 0) v = 0;
+    if (v > maxC) v = maxC;
+    if (_suppressCoinsListener) return;
+    final uid = await _userId();
+    try {
+      await _api.putTradeCoins(code: widget.roomCode, userId: uid, coins: v);
+      await _refresh(silent: true);
+    } on TradeApiException catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {}
+  }
+
+  void _syncCoinsControllerFromState() {
+    if (_coinsFocus.hasFocus) return;
+    final c = _state?['your_coins'];
+    final v = c is int ? c : int.tryParse(c?.toString() ?? '') ?? 0;
+    final t = '$v';
+    if (_coinsCtrl.text != t) {
+      _suppressCoinsListener = true;
+      _coinsCtrl.text = t;
+      _suppressCoinsListener = false;
+    }
+  }
+
+  List<String?> _parseSlotReactions(dynamic list) {
+    final out = <String?>[null, null, null];
+    if (list is! List) return out;
+    for (var i = 0; i < 3 && i < list.length; i++) {
+      final v = list[i];
+      if (v == null) continue;
+      final s = v.toString().toLowerCase();
+      if (s == 'up' || s == 'down') out[i] = s;
+    }
+    return out;
+  }
+
+  Future<void> _setPeerSlotReaction(int slotIndex, String vote) async {
+    final cur = _parseSlotReactions(
+      _state?['your_reactions_on_peer_slots'],
+    )[slotIndex];
+    final next = cur == vote ? 'clear' : vote;
+    final uid = await _userId();
+    try {
+      await _api.postSlotReaction(
+        code: widget.roomCode,
+        userId: uid,
+        slotIndex: slotIndex,
+        reaction: next,
+      );
+      await _refresh(silent: true);
+    } on TradeApiException catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<int> _userId() async {
@@ -96,16 +201,19 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
     final peer = _peerUserId();
     final me = _myUid;
     if (peer == null || me == null) return false;
-    return _mapFlag(_state?['ready_confirm'], me) && _mapFlag(_state?['ready_confirm'], peer);
+    return _mapFlag(_state?['ready_confirm'], me) &&
+        _mapFlag(_state?['ready_confirm'], peer);
   }
 
-  bool _iAmReady() => _myUid != null && _mapFlag(_state?['ready_confirm'], _myUid!);
+  bool _iAmReady() =>
+      _myUid != null && _mapFlag(_state?['ready_confirm'], _myUid!);
   bool _peerReady() {
     final p = _peerUserId();
     return p != null && _mapFlag(_state?['ready_confirm'], p);
   }
 
-  bool _iAmFinalized() => _myUid != null && _mapFlag(_state?['final_confirm'], _myUid!);
+  bool _iAmFinalized() =>
+      _myUid != null && _mapFlag(_state?['final_confirm'], _myUid!);
   bool _peerFinalized() {
     final p = _peerUserId();
     return p != null && _mapFlag(_state?['final_confirm'], p);
@@ -113,8 +221,10 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
 
   void _syncPulseAnimation() {
     if (!mounted) return;
-    final waitingPeerLock = _iAmReady() && !_peerReady() && _peerUserId() != null;
-    final waitingPeerFinalize = _iAmFinalized() && !_peerFinalized() && _peerUserId() != null;
+    final waitingPeerLock =
+        _iAmReady() && !_peerReady() && _peerUserId() != null;
+    final waitingPeerFinalize =
+        _iAmFinalized() && !_peerFinalized() && _peerUserId() != null;
     final show = waitingPeerLock || waitingPeerFinalize;
     if (show) {
       if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
@@ -145,6 +255,7 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
         _myUid = uid;
         _error = null;
       });
+      _syncCoinsControllerFromState();
       _syncPulseAnimation();
     } on TradeApiException catch (e) {
       if (!mounted) return;
@@ -199,11 +310,6 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
     return false;
   }
 
-  Map<String, dynamic>? _slotMap(dynamic el) {
-    if (el is Map) return Map<String, dynamic>.from(el);
-    return null;
-  }
-
   Future<void> _loadTradeable() async {
     final uid = await _userId();
     final list = await _api.tradeableInstances(userId: uid);
@@ -220,7 +326,10 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
         title: const Text('Trade complete'),
         content: const Text('Cards have been exchanged.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
         ],
       ),
     );
@@ -231,7 +340,10 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
     setState(() => _readyBusy = true);
     try {
       final uid = await _userId();
-      final status = await _api.confirmReady(code: widget.roomCode, userId: uid);
+      final status = await _api.confirmReady(
+        code: widget.roomCode,
+        userId: uid,
+      );
       if (!mounted) return;
       if (status == 'both_ready') {
         await _refresh();
@@ -239,14 +351,18 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
         await _refresh();
       }
     } on TradeApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _readyBusy = false);
     }
   }
 
   Future<void> _openFinalizeAreYouSure() async {
-    final ok = await showDialog<bool>(
+    final ok =
+        await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Finalize trade?'),
@@ -254,8 +370,14 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
               'This cannot be undone. The cards currently locked in by both players will be swapped.',
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes, finalize')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Yes, finalize'),
+              ),
             ],
           ),
         ) ??
@@ -264,7 +386,10 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
     setState(() => _finalizeBusy = true);
     try {
       final uid = await _userId();
-      final status = await _api.confirmFinalize(code: widget.roomCode, userId: uid);
+      final status = await _api.confirmFinalize(
+        code: widget.roomCode,
+        userId: uid,
+      );
       if (!mounted) return;
       if (status == 'completed') {
         await _onTradeCompleted();
@@ -275,7 +400,10 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
         await _refresh();
       }
     } on TradeApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _finalizeBusy = false);
     }
@@ -285,90 +413,47 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
     final raw = _state?['peer_wishlist'];
     if (raw is! List || raw.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No cards on their wishlist (or still connecting).')),
+        const SnackBar(
+          content: Text('No cards on their wishlist (or still connecting).'),
+        ),
       );
       return;
     }
 
     final messenger = ScaffoldMessenger.of(context);
+    final rows = <Map<String, dynamic>>[];
+    for (final e in raw) {
+      if (e is Map) rows.add(Map<String, dynamic>.from(e));
+    }
 
     showDialog<void>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text("${_state?['peer_username'] ?? 'Player'}'s wishlist"),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 400,
-            child: ListView.separated(
-              itemCount: raw.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (c, i) {
-                final row = Map<String, dynamic>.from(raw[i] as Map);
-                final fn = row['first_name']?.toString() ?? '';
-                final ln = row['last_name']?.toString() ?? '';
-                final name = '$fn $ln'.trim().isEmpty ? 'Card #${row['card_id']}' : '$fn $ln'.trim();
-                final dup = row['you_have_duplicate'] == true || row['you_have_duplicate'] == 't';
-                final cardId = int.tryParse(row['card_id']?.toString() ?? '') ?? 0;
-                return ListTile(
-                  enabled: dup,
-                  onTap: dup
-                      ? () async {
-                          Navigator.pop(ctx);
-                          await _tryAddWishlistCardToOffer(cardId, messenger);
-                        }
-                      : null,
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: BundledPlayCardImage(
-                      cardId: cardId,
-                      width: 44,
-                      height: 44,
-                      fit: BoxFit.cover,
-                      errorPlaceholder: const Icon(Icons.image_not_supported, size: 28),
-                    ),
-                  ),
-                  title: Text(name),
-                  trailing: dup
-                      ? const Icon(Icons.add_circle_outline, color: AppColors.primary)
-                      : null,
-                  subtitle: Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      Chip(
-                        label: Text(dup ? 'Tap to add to your offer' : 'No duplicate to trade'),
-                        backgroundColor: dup ? Colors.green.shade100 : AppColors.surfaceContainerHigh,
-                        labelStyle: TextStyle(
-                          fontSize: 11,
-                          color: dup ? Colors.green.shade900 : AppColors.secondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        padding: EdgeInsets.zero,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-          ],
-        );
-      },
+      barrierColor: Colors.black.withAlpha(210),
+      builder: (ctx) => _PeerWishlistTradeGridDialog(
+        peerUsername: _state?['peer_username']?.toString() ?? 'Player',
+        rows: rows,
+        onCardTap: (cardId) async {
+          final ok = await _tryAddWishlistCardToOffer(cardId, messenger);
+          if (ok && ctx.mounted) Navigator.of(ctx).pop();
+        },
+      ),
     );
   }
 
-  Future<void> _tryAddWishlistCardToOffer(int cardId, ScaffoldMessengerState messenger) async {
-    if (cardId <= 0) return;
+  /// Returns `true` when a card was added to the offer successfully.
+  Future<bool> _tryAddWishlistCardToOffer(
+    int cardId,
+    ScaffoldMessengerState messenger,
+  ) async {
+    if (cardId <= 0) return false;
     if (_alreadyOfferingCard(cardId)) {
-      messenger.showSnackBar(const SnackBar(content: Text('That card is already in your offer.')));
-      return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('That card is already in your offer.')),
+      );
+      return false;
     }
     await _loadTradeable();
-    if (!mounted) return;
+    if (!mounted) return false;
     final current = _parseInstanceSlots(_state?['your_slots']);
     final used = <int>{};
     for (final id in current) {
@@ -382,8 +467,12 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
       }
     }
     if (emptyIndex < 0) {
-      messenger.showSnackBar(const SnackBar(content: Text('All your slots are full. Clear a slot first.')));
-      return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('All your slots are full. Clear a slot first.'),
+        ),
+      );
+      return false;
     }
     TradeableInstance? pick;
     for (final t in _tradeable ?? <TradeableInstance>[]) {
@@ -393,8 +482,12 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
       }
     }
     if (pick == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('No duplicate instance available for that card.')));
-      return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No duplicate instance available for that card.'),
+        ),
+      );
+      return false;
     }
     final uid = await _userId();
     final slots = List<int?>.from(current);
@@ -404,79 +497,33 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
       if (mounted) setState(() => _awaitingCompleted404 = false);
       await _refresh();
       if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text('Added ${pick.label} to slot ${emptyIndex + 1}.')));
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Added ${pick.label} to slot ${emptyIndex + 1}.'),
+          ),
+        );
       }
+      return true;
     } on TradeApiException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      return false;
     }
   }
 
   Future<void> _pickSlotFixed(int index) async {
-    await _loadTradeable();
-    if (!mounted) return;
-    final all = _tradeable ?? [];
     final current = _parseInstanceSlots(_state?['your_slots']);
     final used = <int>{};
     for (var i = 0; i < 3; i++) {
       if (i != index && current[i] != null) used.add(current[i]!);
     }
-    final choices = all.where((t) => !used.contains(t.cardInstanceId)).toList();
 
-    final result = await showModalBottomSheet<_PickResult>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Slot ${index + 1} — pick a duplicate (optional)',
-                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.clear),
-                title: const Text('Clear this slot'),
-                onTap: () => Navigator.pop(ctx, const _PickResult.clear()),
-              ),
-              const Divider(),
-              SizedBox(
-                height: 280,
-                child: choices.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('No tradeable duplicates. Open packs or get duplicates first.'),
-                      )
-                    : ListView.builder(
-                        itemCount: choices.length,
-                        itemBuilder: (c, i) {
-                          final t = choices[i];
-                          return ListTile(
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: BundledPlayCardImage(
-                                cardId: t.cardId,
-                                width: 48,
-                                height: 48,
-                                fit: BoxFit.cover,
-                                errorPlaceholder: const Icon(Icons.style, size: 28),
-                              ),
-                            ),
-                            title: Text(t.label),
-                            subtitle: Text('OVR ${t.overall}'),
-                            onTap: () => Navigator.pop(ctx, _PickResult.card(t)),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        );
-      },
+    final result = await Navigator.of(context).push<TradeSlotPickerResult?>(
+      MaterialPageRoute<TradeSlotPickerResult?>(
+        builder: (_) => TradeSlotPickerPage(
+          slotIndex: index,
+          excludedInstanceIds: Set<int>.from(used),
+        ),
+      ),
     );
 
     if (!mounted || result == null) return;
@@ -493,7 +540,10 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
       if (mounted) setState(() => _awaitingCompleted404 = false);
       await _refresh();
     } on TradeApiException catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
@@ -507,9 +557,24 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
     final peerName = _state?['peer_username']?.toString();
     final theirSlots = _state?['their_slots'];
     final yourSlots = _state?['your_slots'];
+    final yourName = _state?['your_username']?.toString() ?? 'You';
+    final yourMsg = _state?['your_msg']?.toString() ?? 'Best cards Please';
+    final peerMsg = _state?['peer_msg']?.toString() ?? '';
+    final peerOnYou = _parseSlotReactions(
+      _state?['peer_reactions_on_your_slots'],
+    );
+    final youOnPeer = _parseSlotReactions(
+      _state?['your_reactions_on_peer_slots'],
+    );
+    final peerCoinsRaw = _state?['peer_coins'];
+    final peerCoins = peerCoinsRaw is int
+        ? peerCoinsRaw
+        : int.tryParse(peerCoinsRaw?.toString() ?? '') ?? 0;
 
-    final waitingPeerLock = _iAmReady() && !_peerReady() && _peerUserId() != null;
-    final waitingPeerFinalize = _iAmFinalized() && !_peerFinalized() && _peerUserId() != null;
+    final waitingPeerLock =
+        _iAmReady() && !_peerReady() && _peerUserId() != null;
+    final waitingPeerFinalize =
+        _iAmFinalized() && !_peerFinalized() && _peerUserId() != null;
     final showPulse = waitingPeerLock || waitingPeerFinalize;
 
     return PopScope(
@@ -519,278 +584,1102 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
         _handlePop();
       },
       child: Scaffold(
-        backgroundColor: AppColors.surface,
-        appBar: AppBar(
-          title: Text('Trade · ${widget.roomCode}'),
-          backgroundColor: AppColors.surface,
-          foregroundColor: AppColors.onSurface,
-          surfaceTintColor: Colors.transparent,
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: _handlePop,
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded),
-              onPressed: () async {
-                await _refresh();
-                await _loadWallet();
-              },
-            ),
-          ],
-        ),
-        body: _error != null && _state == null
-            ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-                    child: Row(
-                      children: [
-                        const Spacer(),
-                        Icon(
-                          Icons.monetization_on_rounded,
-                          size: 22,
-                          color: CardGameUiTheme.gold,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          _walletLoading ? '…' : '${_cardCoins ?? 0}',
-                          style: const TextStyle(
-                            color: CardGameUiTheme.gold,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                          ),
-                        ),
-                      ],
+        backgroundColor: _TradeRoomVisual.bg,
+        body: SafeArea(
+          child: _error != null && _state == null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70),
                     ),
                   ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 2, 8, 2),
+                      child: Row(
                         children: [
-                    Text(
-                      peerName != null ? '$peerName offers' : 'Waiting for partner…',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: List.generate(3, (i) {
-                        final m = theirSlots is List && i < theirSlots.length ? _slotMap(theirSlots[i]) : null;
-                        return Expanded(child: _TradeSlotTile(map: m, label: 'Their ${i + 1}', onTap: null));
-                      }),
-                    ),
-                    const SizedBox(height: 20),
-                    OutlinedButton.icon(
-                      onPressed: peerName == null ? null : _showPeerWishlist,
-                      icon: const Icon(Icons.list_alt_rounded),
-                      label: const Text("View partner's wishlist"),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        foregroundColor: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'You offer — up to 3 duplicates (optional)',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: List.generate(3, (i) {
-                        final m = yourSlots is List && i < yourSlots.length ? _slotMap(yourSlots[i]) : null;
-                        return Expanded(
-                          child: _TradeSlotTile(
-                            map: m,
-                            label: 'Your ${i + 1}',
-                            onTap: () => _pickSlotFixed(i),
+                          IconButton(
+                            onPressed: _handlePop,
+                            icon: const Icon(Icons.close_rounded),
+                            color: CardGameUiTheme.onDark,
                           ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 20),
-                    if (showPulse)
-                      FadeTransition(
-                        opacity: CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+                          const Spacer(),
+                          Icon(
+                            Icons.monetization_on_rounded,
+                            size: 22,
+                            color: _TradeRoomVisual.gold,
                           ),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  waitingPeerFinalize
-                                      ? 'You finalized — waiting for your partner to confirm…'
-                                      : 'You locked in — waiting for your partner to lock in…',
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.primary,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    if (showPulse) const SizedBox(height: 16),
-                    if (!_bothLockedIn()) ...[
-                      FilledButton(
-                        onPressed: (_readyBusy || _peerUserId() == null || _iAmReady())
-                            ? null
-                            : _lockInOffer,
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: AppColors.primary,
-                        ),
-                        child: _readyBusy
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onPrimary),
-                              )
-                            : Text(_iAmReady() ? 'Offer locked in' : 'Lock in my offer'),
-                      ),
-                      if (_iAmReady() && !_peerReady())
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            'You can change cards anytime; editing your offer clears both lock-ins.',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.secondary),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                    ],
-                    if (_bothLockedIn()) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Both players locked in. Each must finalize below (with a final confirmation).',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.secondary,
-                              fontWeight: FontWeight.w600,
+                          const SizedBox(width: 6),
+                          Text(
+                            _walletLoading ? '…' : '${_cardCoins ?? 0}',
+                            style: const TextStyle(
+                              color: _TradeRoomVisual.gold,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
                             ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: (_finalizeBusy || _iAmFinalized()) ? null : _openFinalizeAreYouSure,
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.deepOrange,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: _finalizeBusy
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : Text(_iAmFinalized() ? 'You finalized' : 'Finalize trade…'),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Text(
-                      'Leave closes the trade for both players. Only duplicate cards can be offered.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.secondary),
-                      textAlign: TextAlign.center,
-                    ),
+                          ),
+                          IconButton(
+                            onPressed: () async {
+                              await _refresh();
+                              await _loadWallet();
+                            },
+                            icon: const Icon(Icons.refresh_rounded),
+                            color: CardGameUiTheme.onDark,
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    Text(
+                      'ONLINE TRADING',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: CardGameUiTheme.onDark.withAlpha(230),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        fontStyle: FontStyle.italic,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.roomCode.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: _TradeRoomVisual.neonGreen,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 3,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+                              child: _TradePlayerColumn(
+                                alignEnd: true,
+                                accentName: _TradeRoomVisual.cyan,
+                                playerName: peerName ?? 'Waiting…',
+                                message: peerMsg.isEmpty ? '—' : peerMsg,
+                                slots: theirSlots,
+                                reactions: youOnPeer,
+                                reactionsInteractive: peerName != null,
+                                onVoteSlot: _setPeerSlotReaction,
+                                onSlotTap: null,
+                                coinLabel: 'OPPONENT GIVES COINS',
+                                peerCoinsText: '$peerCoins',
+                              ),
+                            ),
+                          ),
+                          Container(
+                            height: 1,
+                            margin: const EdgeInsets.symmetric(horizontal: 12),
+                            color: _TradeRoomVisual.panelLine.withAlpha(140),
+                          ),
+                          _TradeCenterRail(
+                            onWishlist: peerName == null
+                                ? null
+                                : _showPeerWishlist,
+                            onMessage: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Messages here are coming soon.',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                          ),
+                          Container(
+                            height: 1,
+                            margin: const EdgeInsets.symmetric(horizontal: 12),
+                            color: _TradeRoomVisual.panelLine.withAlpha(140),
+                          ),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+                              child: _TradePlayerColumn(
+                                alignEnd: false,
+                                accentName: _TradeRoomVisual.neonGreen,
+                                playerName: yourName,
+                                message: yourMsg,
+                                slots: yourSlots,
+                                reactions: peerOnYou,
+                                reactionsInteractive: false,
+                                onVoteSlot: null,
+                                onSlotTap: (i) => _pickSlotFixed(i),
+                                coinLabel: 'YOU GIVE COINS',
+                                coinsEditor: TextField(
+                                  controller: _coinsCtrl,
+                                  focusNode: _coinsFocus,
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: CardGameUiTheme.onDark,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  cursorColor: _TradeRoomVisual.gold,
+                                  decoration: _tradeCoinInputDecoration(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (showPulse)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                        child: FadeTransition(
+                          opacity: CurvedAnimation(
+                            parent: _pulse,
+                            curve: Curves.easeInOut,
+                          ),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _TradeRoomVisual.panel,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _TradeRoomVisual.cyan.withAlpha(90),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: _TradeRoomVisual.cyan,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    waitingPeerFinalize
+                                        ? 'You finalized — waiting for partner…'
+                                        : 'You locked in — waiting for partner…',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: CardGameUiTheme.onDark,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                      child: _TradeConfirmBar(
+                        bothLocked: _bothLockedIn(),
+                        readyBusy: _readyBusy,
+                        finalizeBusy: _finalizeBusy,
+                        iAmReady: _iAmReady(),
+                        peerReady: _peerReady(),
+                        peerPresent: peerName != null,
+                        iAmFinalized: _iAmFinalized(),
+                        onLockIn: _lockInOffer,
+                        onFinalize: _openFinalizeAreYouSure,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
+                      child: Text(
+                        'Close (top left) ends the trade for both. Only duplicate cards can be offered.',
+                        style: TextStyle(
+                          color: CardGameUiTheme.onDark.withAlpha(120),
+                          fontSize: 11,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _tradeCoinInputDecoration() {
+    return InputDecoration(
+      isDense: true,
+      filled: true,
+      fillColor: _TradeRoomVisual.panel,
+      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(
+          color: _TradeRoomVisual.panelLine.withAlpha(220),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _TradeRoomVisual.gold, width: 1.4),
       ),
     );
   }
 }
 
-class _PickResult {
-  const _PickResult.card(this.instance) : clearSlot = false;
-  const _PickResult.clear() : instance = null, clearSlot = true;
+typedef _TradeVoteCallback = Future<void> Function(int slotIndex, String vote);
 
-  final TradeableInstance? instance;
-  final bool clearSlot;
-}
+class _TradePlayerColumn extends StatelessWidget {
+  const _TradePlayerColumn({
+    required this.alignEnd,
+    required this.accentName,
+    required this.playerName,
+    required this.message,
+    required this.slots,
+    required this.reactions,
+    required this.reactionsInteractive,
+    this.onVoteSlot,
+    this.onSlotTap,
+    required this.coinLabel,
+    this.coinsEditor,
+    this.peerCoinsText,
+  });
 
-class _TradeSlotTile extends StatelessWidget {
-  const _TradeSlotTile({required this.map, required this.label, required this.onTap});
+  final bool alignEnd;
+  final Color accentName;
+  final String playerName;
+  final String message;
+  final dynamic slots;
+  final List<String?> reactions;
+  final bool reactionsInteractive;
+  final _TradeVoteCallback? onVoteSlot;
+  final void Function(int slotIndex)? onSlotTap;
+  final String coinLabel;
+  final Widget? coinsEditor;
+  final String? peerCoinsText;
 
-  final Map<String, dynamic>? map;
-  final String label;
-  final VoidCallback? onTap;
+  Map<String, dynamic>? _slotMap(dynamic el) {
+    if (el is Map) return Map<String, dynamic>.from(el);
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final cardId = map == null ? 0 : int.tryParse(map!['card_id']?.toString() ?? '') ?? 0;
-    final child = map == null
-        ? ColoredBox(
-            color: AppColors.surfaceContainerHigh,
-            child: Center(
-              child: Text(
-                onTap != null ? '+\nTap' : '—',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.secondary),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      decoration: BoxDecoration(
+        color: _TradeRoomVisual.panel.withAlpha(200),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _TradeRoomVisual.panelLine.withAlpha(180)),
+      ),
+      child: Column(
+        crossAxisAlignment: alignEnd
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Text(
+            playerName.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: accentName,
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+              fontStyle: FontStyle.italic,
+              letterSpacing: 0.4,
+            ),
+            textAlign: alignEnd ? TextAlign.right : TextAlign.left,
+          ),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.black.withAlpha(90),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _TradeRoomVisual.panelLine.withAlpha(160),
               ),
             ),
-          )
-        : BundledPlayCardImage(
-            cardId: cardId,
-            fit: BoxFit.cover,
-            errorPlaceholder: ColoredBox(
-              color: AppColors.surfaceContainerHigh,
-              child: Center(
-                child: Text(
-                  '#${map!['card_id']}',
-                  style: Theme.of(context).textTheme.labelSmall,
+            child: Text(
+              message,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: CardGameUiTheme.onDark.withAlpha(210),
+                fontSize: 11.5,
+                height: 1.25,
+              ),
+              textAlign: alignEnd ? TextAlign.right : TextAlign.left,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < 3; i++)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: i == 0 ? 0 : 3,
+                      right: i == 2 ? 0 : 3,
+                    ),
+                    child: _TradeSlotRow(
+                      alignReactionsEnd: alignEnd,
+                      slotMap: slots is List && i < slots.length
+                          ? _slotMap(slots[i])
+                          : null,
+                      reaction: i < reactions.length ? reactions[i] : null,
+                      reactionsInteractive: reactionsInteractive,
+                      onVoteUp: reactionsInteractive && onVoteSlot != null
+                          ? () => onVoteSlot!(i, 'up')
+                          : null,
+                      onVoteDown: reactionsInteractive && onVoteSlot != null
+                          ? () => onVoteSlot!(i, 'down')
+                          : null,
+                      onSlotTap: onSlotTap != null ? () => onSlotTap!(i) : null,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            coinLabel,
+            style: TextStyle(
+              color: _TradeRoomVisual.onMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+            ),
+            textAlign: alignEnd ? TextAlign.right : TextAlign.left,
+          ),
+          const SizedBox(height: 6),
+          if (coinsEditor != null)
+            coinsEditor!
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(100),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _TradeRoomVisual.panelLine.withAlpha(160),
                 ),
               ),
-            ),
-          );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Column(
-        children: [
-          Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.secondary)),
-          const SizedBox(height: 4),
-          AspectRatio(
-            aspectRatio: 0.72,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.outlineVariant),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.monetization_on_rounded,
+                    color: _TradeRoomVisual.gold,
+                    size: 22,
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: child,
+                  const SizedBox(width: 6),
+                  Text(
+                    peerCoinsText ?? '0',
+                    style: const TextStyle(
+                      color: CardGameUiTheme.onDark,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TradeSlotRow extends StatelessWidget {
+  const _TradeSlotRow({
+    required this.alignReactionsEnd,
+    required this.slotMap,
+    required this.reaction,
+    required this.reactionsInteractive,
+    this.onVoteUp,
+    this.onVoteDown,
+    this.onSlotTap,
+  });
+
+  final bool alignReactionsEnd;
+  final Map<String, dynamic>? slotMap;
+  final String? reaction;
+  final bool reactionsInteractive;
+  final VoidCallback? onVoteUp;
+  final VoidCallback? onVoteDown;
+  final VoidCallback? onSlotTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCard = slotMap != null;
+    final cardId = hasCard
+        ? int.tryParse(slotMap!['card_id']?.toString() ?? '') ?? 0
+        : 0;
+
+    final slot = LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth;
+        final h = w / 0.72;
+        return SizedBox(
+          width: w,
+          height: h,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onSlotTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Ink(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: hasCard
+                        ? _TradeRoomVisual.gold.withAlpha(140)
+                        : _TradeRoomVisual.panelLine,
+                    width: hasCard ? 1.4 : 1,
+                  ),
+                  color: Colors.black.withAlpha(120),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: !hasCard
+                      ? Center(
+                          child: Text(
+                            onSlotTap != null ? '+\nTap' : '—',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: CardGameUiTheme.onDark.withAlpha(100),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        )
+                      : BundledPlayCardImage(
+                          cardId: cardId,
+                          fit: BoxFit.cover,
+                          errorPlaceholder: Center(
+                            child: Text(
+                              '#$cardId',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
                 ),
               ),
             ),
           ),
+        );
+      },
+    );
+
+    final reactionCol = !hasCard
+        ? const SizedBox.shrink()
+        : _TradeReactionColumn(
+            interactive: reactionsInteractive,
+            state: reaction,
+            onUp: onVoteUp,
+            onDown: onVoteDown,
+          );
+
+    if (alignReactionsEnd) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          reactionCol,
+          const SizedBox(width: 4),
+          Expanded(child: slot),
         ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: slot),
+        const SizedBox(width: 4),
+        reactionCol,
+      ],
+    );
+  }
+}
+
+class _TradeReactionColumn extends StatelessWidget {
+  const _TradeReactionColumn({
+    required this.interactive,
+    required this.state,
+    this.onUp,
+    this.onDown,
+  });
+
+  final bool interactive;
+  final String? state;
+  final VoidCallback? onUp;
+  final VoidCallback? onDown;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!interactive) {
+      return SizedBox(
+        width: 28,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.thumb_up_alt_outlined,
+              size: 15,
+              color: state == 'up'
+                  ? _TradeRoomVisual.neonGreen
+                  : Colors.white24,
+            ),
+            const SizedBox(height: 6),
+            Icon(
+              Icons.thumb_down_alt_outlined,
+              size: 15,
+              color: state == 'down' ? const Color(0xFFFF4444) : Colors.white24,
+            ),
+          ],
+        ),
+      );
+    }
+    return SizedBox(
+      width: 30,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _RoundThumb(selected: state == 'up', positive: true, onTap: onUp),
+          const SizedBox(height: 6),
+          _RoundThumb(
+            selected: state == 'down',
+            positive: false,
+            onTap: onDown,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoundThumb extends StatelessWidget {
+  const _RoundThumb({
+    required this.selected,
+    required this.positive,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final bool positive;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = positive
+        ? _TradeRoomVisual.neonGreen
+        : const Color(0xFFFF4444);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Ink(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? active : Colors.white38,
+              width: selected ? 2 : 1.1,
+            ),
+            color: selected ? active.withAlpha(55) : Colors.black.withAlpha(80),
+          ),
+          child: Icon(
+            positive
+                ? Icons.thumb_up_alt_rounded
+                : Icons.thumb_down_alt_rounded,
+            size: 14,
+            color: selected ? active : Colors.white70,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TradeCenterRail extends StatelessWidget {
+  const _TradeCenterRail({required this.onWishlist, required this.onMessage});
+
+  final VoidCallback? onWishlist;
+  final VoidCallback onMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _PillAction(
+            color: _TradeRoomVisual.gold,
+            icon: Icons.grid_view_rounded,
+            onTap: onWishlist,
+            dimmed: onWishlist == null,
+          ),
+          const SizedBox(width: 20),
+          _PillAction(
+            color: _TradeRoomVisual.cyan,
+            icon: Icons.chat_bubble_outline_rounded,
+            onTap: onMessage,
+            dimmed: false,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PillAction extends StatelessWidget {
+  const _PillAction({
+    required this.color,
+    required this.icon,
+    required this.onTap,
+    required this.dimmed,
+  });
+
+  final Color color;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool dimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = dimmed ? color.withAlpha(90) : color;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: dimmed ? null : onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            color: c.withAlpha(dimmed ? 40 : 100),
+            border: Border.all(
+              color: c.withAlpha(dimmed ? 60 : 200),
+              width: 1.4,
+            ),
+            boxShadow: dimmed
+                ? null
+                : [
+                    BoxShadow(
+                      color: c.withAlpha(70),
+                      blurRadius: 14,
+                      spreadRadius: 0,
+                    ),
+                  ],
+          ),
+          child: Icon(
+            icon,
+            color: dimmed ? Colors.white38 : Colors.black87,
+            size: 22,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Two-column scrollable grid: peer wishlist + how many you own / whether you can trade.
+class _PeerWishlistTradeGridDialog extends StatelessWidget {
+  const _PeerWishlistTradeGridDialog({
+    required this.peerUsername,
+    required this.rows,
+    required this.onCardTap,
+  });
+
+  final String peerUsername;
+  final List<Map<String, dynamic>> rows;
+  final Future<void> Function(int cardId) onCardTap;
+
+  static int _ownCount(Map<String, dynamic> row) {
+    final v = row['you_own_count'] ?? row['youOwnCount'];
+    if (v is int) return v;
+    return int.tryParse(v?.toString() ?? '0') ?? 0;
+  }
+
+  static bool _canTrade(Map<String, dynamic> row) {
+    final d = row['you_have_duplicate'];
+    return d == true || d == 't';
+  }
+
+  static int _overall(Map<String, dynamic> row) {
+    final v = row['overall'];
+    if (v is int) return v;
+    return int.tryParse(v?.toString() ?? '0') ?? 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.sizeOf(context).height * 0.78;
+    final w = min(520.0, MediaQuery.sizeOf(context).width - 16);
+    final sorted = List<Map<String, dynamic>>.from(rows)
+      ..sort((a, b) => _overall(b).compareTo(_overall(a)));
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 20),
+      child: Container(
+        width: w,
+        height: h,
+        decoration: BoxDecoration(
+          color: CardGameUiTheme.bg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: CardGameUiTheme.gold.withAlpha(100),
+            width: 1.4,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: CardGameUiTheme.orangeGlow.withAlpha(50),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$peerUsername\'s wishlist',
+                          style: const TextStyle(
+                            color: CardGameUiTheme.onDark,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 17,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'You own counts include all copies. Tap when you have 2+ to trade.',
+                          style: TextStyle(
+                            color: CardGameUiTheme.onDark.withAlpha(150),
+                            fontSize: 11.5,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                    color: CardGameUiTheme.onDark,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: sorted.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No wishlist cards.',
+                        style: TextStyle(
+                          color: CardGameUiTheme.onDark.withAlpha(180),
+                        ),
+                      ),
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 0.72,
+                          ),
+                      itemCount: sorted.length,
+                      itemBuilder: (context, i) {
+                        final row = sorted[i];
+                        final cardId =
+                            int.tryParse(row['card_id']?.toString() ?? '') ?? 0;
+                        final fn = row['first_name']?.toString() ?? '';
+                        final ln = row['last_name']?.toString() ?? '';
+                        final name = '$fn $ln'.trim().isEmpty
+                            ? 'Card #$cardId'
+                            : '$fn $ln'.trim();
+                        final own = _ownCount(row);
+                        final can = _canTrade(row);
+                        return _WishlistTradeTile(
+                          cardId: cardId,
+                          name: name,
+                          overall: _overall(row),
+                          ownCount: own,
+                          canTrade: can,
+                          onTap: can
+                              ? () async {
+                                  await onCardTap(cardId);
+                                }
+                              : null,
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WishlistTradeTile extends StatelessWidget {
+  const _WishlistTradeTile({
+    required this.cardId,
+    required this.name,
+    required this.overall,
+    required this.ownCount,
+    required this.canTrade,
+    this.onTap,
+  });
+
+  final int cardId;
+  final String name;
+  final int overall;
+  final int ownCount;
+  final bool canTrade;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Opacity(
+          opacity: canTrade ? 1 : 0.55,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: CardGameUiTheme.gold.withAlpha(canTrade ? 100 : 45),
+                width: 1.2,
+              ),
+              boxShadow: [
+                if (canTrade)
+                  BoxShadow(
+                    color: CardGameUiTheme.orangeGlow.withAlpha(30),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned.fill(
+                  child: BundledPlayCardImage(
+                    cardId: cardId,
+                    fit: BoxFit.cover,
+                    errorPlaceholder: ColoredBox(
+                      color: CardGameUiTheme.panel,
+                      child: Center(
+                        child: Text(
+                          name,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: CardGameUiTheme.onDark.withAlpha(170),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Material(
+                    elevation: 3,
+                    color: ownCount >= 2
+                        ? CardGameUiTheme.orangeGlow
+                        : Colors.black.withAlpha(170),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        '×$ownCount',
+                        style: TextStyle(
+                          color: ownCount >= 2 ? Colors.black : Colors.white70,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(6, 22, 6, 6),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withAlpha(220),
+                        ],
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11,
+                          ),
+                        ),
+                        Text(
+                          'OVR $overall · Own $ownCount${canTrade ? '' : ' · need 2+'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: canTrade
+                                ? Colors.greenAccent
+                                : Colors.white70,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TradeConfirmBar extends StatelessWidget {
+  const _TradeConfirmBar({
+    required this.bothLocked,
+    required this.readyBusy,
+    required this.finalizeBusy,
+    required this.iAmReady,
+    required this.peerReady,
+    required this.peerPresent,
+    required this.iAmFinalized,
+    required this.onLockIn,
+    required this.onFinalize,
+  });
+
+  final bool bothLocked;
+  final bool readyBusy;
+  final bool finalizeBusy;
+  final bool iAmReady;
+  final bool peerReady;
+  final bool peerPresent;
+  final bool iAmFinalized;
+  final VoidCallback onLockIn;
+  final VoidCallback onFinalize;
+
+  String _label() {
+    if (!bothLocked) {
+      if (!peerPresent) return 'WAITING…';
+      if (iAmReady && !peerReady) return 'WAITING FOR PARTNER';
+      if (iAmReady) return 'LOCKED IN';
+      return 'CONFIRM';
+    }
+    if (iAmFinalized) return 'WAITING…';
+    return 'CONFIRM';
+  }
+
+  VoidCallback? _onPressed() {
+    if (!bothLocked) {
+      if (readyBusy || !peerPresent || iAmReady) return null;
+      return onLockIn;
+    }
+    if (finalizeBusy || iAmFinalized) return null;
+    return onFinalize;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final busy = !bothLocked ? readyBusy : finalizeBusy;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _TradeRoomVisual.neonGreen, width: 2),
+        color: _TradeRoomVisual.panel.withAlpha(180),
+      ),
+      child: TextButton(
+        onPressed: _onPressed(),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          foregroundColor: _TradeRoomVisual.neonGreen,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: busy
+            ? const SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _TradeRoomVisual.neonGreen,
+                ),
+              )
+            : Text(
+                _label(),
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  fontStyle: FontStyle.italic,
+                  letterSpacing: 1.4,
+                ),
+              ),
       ),
     );
   }

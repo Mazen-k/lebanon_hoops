@@ -833,6 +833,9 @@ async function tradeCreateHandler(req, res) {
     offers: { [uid]: [null, null, null] },
     ready: { [uid]: false },
     finalize: { [uid]: false },
+    coins: { [uid]: 0 },
+    /** targetUserId -> viewerUserId -> [null | 'up' | 'down'] for each slot */
+    slotReactions: {},
   });
   res.status(201).json({ code, host: true });
 }
@@ -860,7 +863,37 @@ async function tradeJoinHandler(req, res) {
   room.offers[uid] = [null, null, null];
   room.ready[uid] = false;
   room.finalize[uid] = false;
+  if (!room.coins) room.coins = {};
+  room.coins[uid] = 0;
+  if (!room.slotReactions) room.slotReactions = {};
   res.json({ code, joined: true, peer: room.users[0] });
+}
+
+function ensureRoomTradeFields(room) {
+  if (!room.coins) room.coins = {};
+  for (const u of room.users) {
+    if (room.coins[u] == null) room.coins[u] = 0;
+  }
+  if (!room.slotReactions) room.slotReactions = {};
+}
+
+function slotReactionArray(room, targetUid, viewerUid) {
+  if (!room.slotReactions[targetUid]) room.slotReactions[targetUid] = {};
+  if (!room.slotReactions[targetUid][viewerUid]) {
+    room.slotReactions[targetUid][viewerUid] = [null, null, null];
+  }
+  return room.slotReactions[targetUid][viewerUid];
+}
+
+async function loadWishlistMsg(client, userId) {
+  const { rows } = await client.query(
+    `SELECT COALESCE(NULLIF(TRIM(w.msg), ''), 'Best cards Please') AS m
+     FROM wishlists w WHERE w.user_id = $1::int LIMIT 1`,
+    [userId],
+  );
+  if (rows.length === 0) return 'Best cards Please';
+  const s = rows[0]?.m != null ? String(rows[0].m) : 'Best cards Please';
+  return s.trim() === '' ? 'Best cards Please' : s.trim().slice(0, 50);
 }
 
 async function loadWishlistCardRows(client, userId) {
@@ -906,6 +939,7 @@ async function tradeStateHandler(req, res) {
   if (!room.users.includes(userId)) {
     return res.status(403).json({ error: 'Not a member of this room' });
   }
+  ensureRoomTradeFields(room);
   const peerId = room.users.find((u) => u !== userId) ?? null;
   const client = await pool.connect();
   try {
@@ -957,13 +991,28 @@ async function tradeStateHandler(req, res) {
     const theirSlots =
       peerId != null ? await slotDetails(peerId, room.offers[peerId] ?? [null, null, null]) : [null, null, null];
 
+    const yourMsg = await loadWishlistMsg(client, userId);
+    const peerMsg = peerId != null ? await loadWishlistMsg(client, peerId) : '';
+
+    const peerOnYou = peerId != null ? slotReactionArray(room, userId, peerId) : [null, null, null];
+    const youOnPeer = peerId != null ? slotReactionArray(room, peerId, userId) : [null, null, null];
+
     res.json({
       code,
       rev: room.rev ?? 0,
       peer_user_id: peerId,
       peer_username: peerId != null ? room.usernames[peerId] : null,
+      your_username: room.usernames[userId] ?? 'Player',
       your_slots: yourSlots,
       their_slots: theirSlots,
+      your_msg: yourMsg,
+      peer_msg: peerMsg,
+      your_coins: room.coins[userId] ?? 0,
+      peer_coins: peerId != null ? room.coins[peerId] ?? 0 : 0,
+      /** How the peer rated each of your slots (same order as your_slots). */
+      peer_reactions_on_your_slots: peerOnYou,
+      /** How you rated each of the peer's slots (same order as their_slots). */
+      your_reactions_on_peer_slots: youOnPeer,
       peer_wishlist: peerWishlistMeta,
       ready_confirm: room.ready,
       final_confirm: room.finalize,
@@ -991,6 +1040,7 @@ async function tradeOfferHandler(req, res) {
   const room = tradeRooms.get(code);
   if (!room) return res.status(404).json({ error: 'Room not found or expired' });
   if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member of this room' });
+  ensureRoomTradeFields(room);
 
   const normalized = slots.map((x) => (x == null || x === '' ? null : Number(x)));
   if (normalized.some((x) => x !== null && Number.isNaN(x))) {
@@ -1021,6 +1071,7 @@ async function tradeOfferHandler(req, res) {
       }
     }
     room.offers[uid] = normalized;
+    room.slotReactions = {};
     for (const u of room.users) {
       room.ready[u] = false;
       room.finalize[u] = false;
@@ -1048,6 +1099,66 @@ async function tradeLeaveHandler(req, res) {
   }
   tradeRooms.delete(code);
   return res.json({ ok: true, closed_for_all: true });
+}
+
+/** Set coins this user offers in the trade (display / future settlement). Resets lock-in. */
+async function tradeCoinsHandler(req, res) {
+  pruneStaleRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  const rawCoins = req.body?.coins ?? req.body?.card_coins;
+  if (!code || userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  const uid = Number(userId);
+  const coins = Number(rawCoins);
+  if (!Number.isFinite(coins) || coins < 0) {
+    return res.status(400).json({ error: 'coins must be a non-negative number' });
+  }
+  const c = Math.min(Math.floor(coins), 999_999_999);
+  const room = tradeRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found or expired' });
+  if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member of this room' });
+  ensureRoomTradeFields(room);
+  room.coins[uid] = c;
+  for (const u of room.users) {
+    room.ready[u] = false;
+    room.finalize[u] = false;
+  }
+  room.rev = (room.rev ?? 0) + 1;
+  return res.json({ ok: true, rev: room.rev });
+}
+
+/** Viewer rates peer's card in slot_index: reaction `up` | `down` | `clear`. */
+async function tradeSlotReactionHandler(req, res) {
+  pruneStaleRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  const slotRaw = req.body?.slot_index ?? req.body?.slotIndex;
+  const rawReaction = req.body?.reaction ?? req.body?.vote;
+  if (!code || userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  const uid = Number(userId);
+  const slotIndex = Number(slotRaw);
+  if (slotIndex !== 0 && slotIndex !== 1 && slotIndex !== 2) {
+    return res.status(400).json({ error: 'slot_index must be 0, 1, or 2' });
+  }
+  const reaction =
+    rawReaction === 'up' || rawReaction === 'down' || rawReaction === 'clear' ? rawReaction : null;
+  if (reaction == null) {
+    return res.status(400).json({ error: 'reaction must be up, down, or clear' });
+  }
+  const room = tradeRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found or expired' });
+  if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member of this room' });
+  const peerId = room.users.find((u) => u !== uid);
+  if (peerId == null) return res.status(400).json({ error: 'Waiting for second player' });
+  ensureRoomTradeFields(room);
+  const arr = slotReactionArray(room, peerId, uid);
+  arr[slotIndex] = reaction === 'clear' ? null : reaction;
+  room.rev = (room.rev ?? 0) + 1;
+  return res.json({ ok: true, rev: room.rev });
 }
 
 /** Phase 1: lock in current offer (0–3 cards). Both must do this before finalize. */
@@ -1159,6 +1270,10 @@ app.post('/trade/rooms/:code/confirm-ready', tradeConfirmReadyHandler);
 app.post('/api/trade/rooms/:code/confirm-ready', tradeConfirmReadyHandler);
 app.post('/trade/rooms/:code/confirm-finalize', tradeConfirmFinalizeHandler);
 app.post('/api/trade/rooms/:code/confirm-finalize', tradeConfirmFinalizeHandler);
+app.put('/trade/rooms/:code/coins', tradeCoinsHandler);
+app.put('/api/trade/rooms/:code/coins', tradeCoinsHandler);
+app.post('/trade/rooms/:code/slot-reaction', tradeSlotReactionHandler);
+app.post('/api/trade/rooms/:code/slot-reaction', tradeSlotReactionHandler);
 
 /** All [card_instance_id] rows the user may put in a trade offer (owned + that card_id is duplicated). */
 async function tradeableInstancesHandler(req, res) {
