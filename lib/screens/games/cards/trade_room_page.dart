@@ -6,8 +6,10 @@ import '../../../config/backend_config.dart';
 import '../../../models/tradeable_instance.dart';
 import '../../../services/session_store.dart';
 import '../../../services/trade_api_service.dart';
+import '../../../services/user_wallet_api_service.dart';
 import '../../../theme/colors.dart';
 import '../../../util/card_image_url.dart' show BundledPlayCardImage;
+import 'card_game_ui_theme.dart';
 
 class TradeRoomPage extends StatefulWidget {
   const TradeRoomPage({super.key, required this.roomCode});
@@ -20,6 +22,7 @@ class TradeRoomPage extends StatefulWidget {
 
 class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProviderStateMixin {
   final _api = TradeApiService();
+  final _walletApi = UserWalletApiService();
   Timer? _poll;
   Map<String, dynamic>? _state;
   String? _error;
@@ -30,12 +33,15 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
   late final AnimationController _pulse;
   /// After we finalize, partner may complete the trade; next 404 is treated as success, not "left".
   bool _awaitingCompleted404 = false;
+  int? _cardCoins;
+  bool _walletLoading = true;
 
   @override
   void initState() {
     super.initState();
     _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
     _refresh();
+    _loadWallet();
     _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh(silent: true));
   }
 
@@ -49,6 +55,27 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
   Future<int> _userId() async {
     final s = await SessionStore.instance.load();
     return s?.userId ?? BackendConfig.devUserId;
+  }
+
+  Future<void> _loadWallet() async {
+    setState(() => _walletLoading = true);
+    final userId = await _userId();
+    try {
+      final w = await _walletApi.fetchWallet(userId: userId);
+      if (mounted) {
+        setState(() {
+          _cardCoins = w.cardCoins;
+          _walletLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _cardCoins ??= 0;
+          _walletLoading = false;
+        });
+      }
+    }
   }
 
   bool _mapFlag(dynamic m, int uid) {
@@ -503,16 +530,48 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
             onPressed: _handlePop,
           ),
           actions: [
-            IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: () => _refresh()),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: () async {
+                await _refresh();
+                await _loadWallet();
+              },
+            ),
           ],
         ),
         body: _error != null && _state == null
             ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
-            : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                    child: Row(
+                      children: [
+                        const Spacer(),
+                        Icon(
+                          Icons.monetization_on_rounded,
+                          size: 22,
+                          color: CardGameUiTheme.gold,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _walletLoading ? '…' : '${_cardCoins ?? 0}',
+                          style: const TextStyle(
+                            color: CardGameUiTheme.gold,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                     Text(
                       peerName != null ? '$peerName offers' : 'Waiting for partner…',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -653,8 +712,11 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.secondary),
                       textAlign: TextAlign.center,
                     ),
-                  ],
-                ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
       ),
     );

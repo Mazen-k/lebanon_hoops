@@ -677,13 +677,18 @@ async function wishlistGetHandler(req, res) {
       throw e;
     }
     const { rows: wrows } = await client.query(
-      `SELECT wishlist_id FROM wishlists WHERE user_id = $1::int`,
+      `SELECT wishlist_id, msg FROM wishlists WHERE user_id = $1::int`,
       [userId],
     );
     const wishlistId = wrows[0]?.wishlist_id;
     if (wishlistId == null) {
-      return res.json({ wishlist_id: null, card_ids: [] });
+      return res.json({ wishlist_id: null, card_ids: [], msg: 'Best cards Please' });
     }
+    const rawMsg = wrows[0]?.msg;
+    const msg =
+      rawMsg == null || String(rawMsg).trim() === ''
+        ? 'Best cards Please'
+        : String(rawMsg).trim().slice(0, 50);
     const { rows: crows } = await client.query(
       `SELECT card_id FROM wishlist_cards WHERE wishlist_id = $1::int ORDER BY added_at ASC`,
       [wishlistId],
@@ -691,6 +696,7 @@ async function wishlistGetHandler(req, res) {
     res.json({
       wishlist_id: wishlistId,
       card_ids: crows.map((r) => r.card_id),
+      msg,
     });
   } catch (err) {
     console.error(err);
@@ -727,6 +733,12 @@ async function wishlistPutHandler(req, res) {
         [wid, cid],
       );
     }
+    const msgRaw = req.body?.msg ?? req.body?.message;
+    if (typeof msgRaw === 'string') {
+      let m = String(msgRaw).trim().slice(0, 50);
+      if (m === '') m = 'Best cards Please';
+      await client.query(`UPDATE wishlists SET msg = $1::varchar(50) WHERE wishlist_id = $2::int`, [m, wid]);
+    }
     await client.query('COMMIT');
     res.json({ wishlist_id: wid, card_ids: cardIds });
   } catch (err) {
@@ -738,10 +750,52 @@ async function wishlistPutHandler(req, res) {
   }
 }
 
+async function wishlistPatchMsgHandler(req, res) {
+  const userId = req.body?.user_id ?? req.body?.userId;
+  const msgRaw = req.body?.msg;
+  if (userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'user_id is required' });
+  }
+  if (typeof msgRaw !== 'string') {
+    return res.status(400).json({ error: 'msg must be a string' });
+  }
+  const uid = Number(userId);
+  let m = String(msgRaw).trim().slice(0, 50);
+  if (m === '') m = 'Best cards Please';
+  const client = await pool.connect();
+  try {
+    try {
+      await ensureWishlistRow(client, uid);
+    } catch (e) {
+      if (e.code === '23503') {
+        return res.status(404).json({
+          error:
+            'No user row for this user_id (foreign key). Use a valid users.user_id or register/login first.',
+        });
+      }
+      throw e;
+    }
+    const { rows: wrows } = await client.query(`SELECT wishlist_id FROM wishlists WHERE user_id = $1::int`, [uid]);
+    const wid = wrows[0]?.wishlist_id;
+    if (wid == null) {
+      return res.status(500).json({ error: 'Could not resolve wishlist' });
+    }
+    await client.query(`UPDATE wishlists SET msg = $1::varchar(50) WHERE wishlist_id = $2::int`, [m, wid]);
+    res.json({ wishlist_id: wid, msg: m });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  } finally {
+    client.release();
+  }
+}
+
 app.get('/wishlist', wishlistGetHandler);
 app.get('/api/wishlist', wishlistGetHandler);
 app.put('/wishlist', wishlistPutHandler);
 app.put('/api/wishlist', wishlistPutHandler);
+app.patch('/wishlist', wishlistPatchMsgHandler);
+app.patch('/api/wishlist', wishlistPatchMsgHandler);
 
 // --- In-memory trade rooms (MVP) ---
 const tradeRooms = new Map();
@@ -1161,5 +1215,5 @@ app.listen(port, '0.0.0.0', () => {
   console.log('  GET /card-image/:id  (Google Drive proxy for card art)');
   console.log('  GET /collection?user_id=…  (&duplicates_only=1 for duplicate stacks)');
   console.log('  GET /collection-duplicates?user_id=…  (alias for duplicates)');
-  console.log('  GET /cards/catalog  PUT /wishlist  trade: /trade/rooms …');
+  console.log('  GET /cards/catalog  PUT/PATCH /wishlist  trade: /trade/rooms …');
 });

@@ -66,7 +66,7 @@ abstract final class BackendConfig {
     return 'cards/catalog';
   }
 
-  /// `GET` / `PUT` wishlist for `user_id`.
+  /// `GET` / `PUT` / `PATCH` wishlist for `user_id` (PATCH updates `msg` only).
   static String get wishlistPath {
     const fromEnv = String.fromEnvironment('API_WISHLIST_PATH', defaultValue: '');
     if (fromEnv.isNotEmpty) return fromEnv.trim().replaceAll(RegExp(r'^/+'), '');

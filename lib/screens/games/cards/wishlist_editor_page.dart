@@ -9,9 +9,9 @@ import '../../../models/team.dart';
 import '../../../services/catalog_api_service.dart';
 import '../../../services/session_store.dart';
 import '../../../services/wishlist_api_service.dart';
-import '../../../theme/colors.dart';
 import '../../../util/card_image_url.dart' show BundledPlayCardImage;
 import 'card_filter_bar.dart';
+import 'card_game_ui_theme.dart';
 
 class WishlistEditorPage extends StatefulWidget {
   const WishlistEditorPage({super.key});
@@ -118,13 +118,25 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
       await _wishlistApi.putWishlist(userId: userId, cardIds: list);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Wishlist saved'), behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: const Text('Wishlist saved'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: CardGameUiTheme.panel,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: CardGameUiTheme.gold.withAlpha(120)),
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save wishlist: $e'), behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text('Could not save wishlist: $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: CardGameUiTheme.panel,
+          ),
         );
       }
     }
@@ -163,39 +175,31 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: CardGameUiTheme.bg,
       appBar: AppBar(
         title: const Text('Edit wishlist'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: CardGameUiTheme.bg,
+        foregroundColor: CardGameUiTheme.onDark,
         surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             onPressed: _loading ? null : _load,
+            tooltip: 'Refresh',
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: CardGameUiTheme.gold),
+            )
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        FilledButton(onPressed: _load, child: const Text('Retry')),
-                      ],
-                    ),
-                  ),
-                )
+              ? _WishlistErrorBody(message: _error!, onRetry: _load)
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     CardCatalogFilterBar(
+                      cardGameStyle: true,
                       positionOptions: _positionOptions,
                       teams: _teams,
                       positionFilter: _positionFilter,
@@ -214,22 +218,24 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
                         _load();
                       },
                     ),
-                    SwitchListTile(
-                      title: const Text('Only cards I don\'t own'),
-                      subtitle: const Text('Hide cards already in your collection'),
+                    _OnlyMissingToggleBar(
                       value: _onlyMissing,
-                      activeThumbColor: AppColors.primary,
-                      onChanged: (v) {
-                        setState(() => _onlyMissing = v);
-                        _load();
-                      },
+                      onChanged: _loading
+                          ? null
+                          : (v) {
+                              setState(() => _onlyMissing = v);
+                              _load();
+                            },
                     ),
                     Expanded(
                       child: _visibleCards.isEmpty
                           ? Center(
                               child: Text(
                                 'No cards match these filters.',
-                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.secondary),
+                                style: TextStyle(
+                                  color: CardGameUiTheme.onDark.withAlpha(180),
+                                  fontSize: 16,
+                                ),
                               ),
                             )
                           : GridView.builder(
@@ -258,6 +264,78 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
   }
 }
 
+/// Styled like the card-game chrome; keeps “only cards I don’t own” as a compact bar + switch.
+class _OnlyMissingToggleBar extends StatelessWidget {
+  const _OnlyMissingToggleBar({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: CardGameUiTheme.elevated,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Only cards I don\'t own',
+                    style: TextStyle(
+                      color: value ? CardGameUiTheme.gold : CardGameUiTheme.onDark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Hide cards already in your collection',
+                    style: TextStyle(
+                      color: CardGameUiTheme.onDark.withAlpha(140),
+                      fontSize: 11.5,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            SwitchTheme(
+              data: SwitchThemeData(
+                thumbColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return CardGameUiTheme.gold;
+                  }
+                  return CardGameUiTheme.onDark.withAlpha(200);
+                }),
+                trackColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return CardGameUiTheme.gold.withAlpha(90);
+                  }
+                  return CardGameUiTheme.panelBorder.withAlpha(180);
+                }),
+              ),
+              child: Switch(
+                value: value,
+                onChanged: onChanged,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _WishlistCatalogTile extends StatelessWidget {
   const _WishlistCatalogTile({
     required this.card,
@@ -271,23 +349,25 @@ class _WishlistCatalogTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final borderColor =
+        onWishlist ? CardGameUiTheme.gold : CardGameUiTheme.gold.withAlpha(90);
+    final borderWidth = onWishlist ? 2.0 : 1.2;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: onWishlist ? AppColors.primary : AppColors.outlineVariant,
-              width: onWishlist ? 2.5 : 1,
-            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: borderColor, width: borderWidth),
             boxShadow: [
               BoxShadow(
-                color: AppColors.onSurface.withAlpha(20),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
+                color: CardGameUiTheme.orangeGlow.withAlpha(35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+                spreadRadius: -2,
               ),
             ],
           ),
@@ -299,41 +379,132 @@ class _WishlistCatalogTile extends StatelessWidget {
                 cardId: card.cardId,
                 fit: BoxFit.cover,
                 errorPlaceholder: ColoredBox(
-                  color: AppColors.surfaceContainerHigh,
-                  child: Center(child: Text(card.playerLabel, textAlign: TextAlign.center)),
-                ),
-              ),
-              Positioned(
-                left: 6,
-                top: 6,
-                child: Material(
-                  color: card.owned ? Colors.green.shade700 : AppColors.surface.withAlpha(230),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    child: Text(
-                      card.owned ? 'OWNED' : 'NOT OWNED',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: card.owned ? Colors.white : AppColors.onSurface,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 10,
-                          ),
+                  color: CardGameUiTheme.panel,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(
+                        card.playerLabel,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: CardGameUiTheme.onDark.withAlpha(170),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
               Positioned(
+                left: 6,
+                top: 6,
+                child: _OwnedPill(owned: card.owned),
+              ),
+              Positioned(
                 right: 4,
                 top: 4,
                 child: Icon(
-                  onWishlist ? Icons.favorite : Icons.favorite_border,
-                  color: onWishlist ? AppColors.primary : Colors.white,
-                  shadows: const [Shadow(blurRadius: 4, color: Colors.black54)],
+                  onWishlist ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  color: onWishlist ? CardGameUiTheme.gold : CardGameUiTheme.onDark.withAlpha(220),
+                  shadows: const [
+                    Shadow(blurRadius: 6, color: Colors.black87),
+                    Shadow(blurRadius: 2, color: Colors.black54),
+                  ],
                   size: 28,
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Matches duplicate-pack “×N” energy: orange pill + black label for owned; gold-outline pill for missing.
+class _OwnedPill extends StatelessWidget {
+  const _OwnedPill({required this.owned});
+
+  final bool owned;
+
+  @override
+  Widget build(BuildContext context) {
+    if (owned) {
+      return Material(
+        elevation: 4,
+        color: CardGameUiTheme.orangeGlow,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Text(
+            'OWNED',
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w900,
+              fontSize: 10,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: CardGameUiTheme.elevated.withAlpha(230),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: CardGameUiTheme.gold.withAlpha(100), width: 1),
+      ),
+      child: Text(
+        'NEED',
+        style: TextStyle(
+          color: CardGameUiTheme.onDark.withAlpha(230),
+          fontWeight: FontWeight.w800,
+          fontSize: 10,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+}
+
+class _WishlistErrorBody extends StatelessWidget {
+  const _WishlistErrorBody({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cloud_off_outlined, size: 48, color: CardGameUiTheme.onDark.withAlpha(160)),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: CardGameUiTheme.onDark.withAlpha(220),
+                fontSize: 15,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton(
+              onPressed: onRetry,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: CardGameUiTheme.gold,
+                side: const BorderSide(color: CardGameUiTheme.gold, width: 1.5),
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+              ),
+              child: const Text('Retry'),
+            ),
+          ],
         ),
       ),
     );

@@ -232,6 +232,7 @@ ALTER TABLE public.wishlist_cards OWNER TO postgres;
 CREATE TABLE public.wishlists (
     wishlist_id integer NOT NULL,
     user_id integer NOT NULL,
+    msg character varying(50) DEFAULT 'Best cards Please'::character varying,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -436,8 +437,8 @@ INSERT INTO public.wishlist_cards VALUES (6, 8, '2026-04-11 22:26:47.185795');
 -- Data for Name: wishlists; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO public.wishlists VALUES (1, 1, '2026-04-11 22:13:37.120937');
-INSERT INTO public.wishlists VALUES (6, 2, '2026-04-11 22:26:39.916748');
+INSERT INTO public.wishlists VALUES (1, 1, 'Best cards Please', '2026-04-11 22:13:37.120937');
+INSERT INTO public.wishlists VALUES (6, 2, 'Best cards Please', '2026-04-11 22:26:39.916748');
 
 
 --

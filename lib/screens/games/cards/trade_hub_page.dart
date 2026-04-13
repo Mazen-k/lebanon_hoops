@@ -6,6 +6,7 @@ import '../../../models/catalog_card.dart';
 import '../../../services/catalog_api_service.dart';
 import '../../../services/session_store.dart';
 import '../../../services/trade_api_service.dart';
+import '../../../services/user_wallet_api_service.dart';
 import '../../../services/wishlist_api_service.dart';
 import '../../../util/card_image_url.dart' show BundledPlayCardImage;
 import 'card_game_ui_theme.dart';
@@ -25,6 +26,7 @@ class TradeHubPage extends StatefulWidget {
 class _TradeHubPageState extends State<TradeHubPage> {
   final _wishlistApi = WishlistApiService();
   final _catalogApi = CatalogApiService();
+  final _walletApi = UserWalletApiService();
   final _tradeMessageCtrl = TextEditingController();
 
   List<CatalogCard> _wishlistPreview = [];
@@ -32,10 +34,39 @@ class _TradeHubPageState extends State<TradeHubPage> {
   bool _loadingWishlist = true;
   String? _wishlistError;
 
+  int? _cardCoins;
+  bool _walletLoading = true;
+
+  bool _savingTradeMsg = false;
+
   @override
   void initState() {
     super.initState();
     _loadWishlistPreview();
+    _loadWallet();
+  }
+
+  Future<void> _loadWallet() async {
+    setState(() => _walletLoading = true);
+    final userId = await _userId();
+    try {
+      final w = await _walletApi.fetchWallet(userId: userId);
+      if (!mounted) return;
+      setState(() {
+        _cardCoins = w.cardCoins;
+        _walletLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _cardCoins ??= 0;
+        _walletLoading = false;
+      });
+    }
+  }
+
+  Future<void> _onPullRefresh() async {
+    await Future.wait<void>([_loadWishlistPreview(), _loadWallet()]);
   }
 
   @override
@@ -56,7 +87,9 @@ class _TradeHubPageState extends State<TradeHubPage> {
     });
     final userId = await _userId();
     try {
-      final ids = await _wishlistApi.getWishlist(userId: userId);
+      final snap = await _wishlistApi.fetchWishlist(userId: userId);
+      final ids = snap.cardIds;
+      if (mounted) _tradeMessageCtrl.text = snap.msg;
       final count = ids.length;
       final previewIds = ids.take(3).toList();
       List<CatalogCard> preview = [];
@@ -82,6 +115,41 @@ class _TradeHubPageState extends State<TradeHubPage> {
         _wishlistPreview = [];
         _loadingWishlist = false;
       });
+    }
+  }
+
+  Future<void> _saveTradeMessage() async {
+    if (_savingTradeMsg) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _savingTradeMsg = true);
+    final userId = await _userId();
+    try {
+      await _wishlistApi.patchWishlistMessage(
+        userId: userId,
+        msg: _tradeMessageCtrl.text,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Trading message saved'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: CardGameUiTheme.panel,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: CardGameUiTheme.gold.withAlpha(120)),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not save message: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _savingTradeMsg = false);
     }
   }
 
@@ -112,54 +180,90 @@ class _TradeHubPageState extends State<TradeHubPage> {
         foregroundColor: CardGameUiTheme.onDark,
         surfaceTintColor: Colors.transparent,
       ),
-      body: RefreshIndicator(
-        color: CardGameUiTheme.gold,
-        onRefresh: _loadWishlistPreview,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _TradeHubTopTile(
-                      icon: Icons.shuffle_rounded,
-                      title: 'Random trade',
-                      subtitle: 'Match with any player looking to trade',
-                      onTap: _onRandomTrade,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _TradeHubTopTile(
-                      icon: Icons.group_rounded,
-                      title: 'Trade with a friend',
-                      subtitle: 'Room code',
-                      onTap: _showFriendTradeDialog,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _WishlistPreviewPanel(
-                loading: _loadingWishlist,
-                error: _wishlistError,
-                count: _wishlistCount,
-                maxCount: kTradeHubWishlistMax,
-                previewCards: _wishlistPreview,
-                onOpenFullWishlist: () => Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(builder: (_) => const WishlistEditorPage()),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+            child: Row(
+              children: [
+                const Spacer(),
+                Icon(
+                  Icons.monetization_on_rounded,
+                  size: 22,
+                  color: CardGameUiTheme.gold,
                 ),
-                onRetry: _loadWishlistPreview,
-              ),
-              const SizedBox(height: 22),
-              _TradeMessageSection(controller: _tradeMessageCtrl),
-            ],
+                const SizedBox(width: 6),
+                Text(
+                  _walletLoading ? '…' : '${_cardCoins ?? 0}',
+                  style: const TextStyle(
+                    color: CardGameUiTheme.gold,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+          Expanded(
+            child: RefreshIndicator(
+              color: CardGameUiTheme.gold,
+              onRefresh: _onPullRefresh,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _TradeHubTopTile(
+                            icon: Icons.shuffle_rounded,
+                            title: 'Random trade',
+                            subtitle: 'Match with any player looking to trade',
+                            onTap: _onRandomTrade,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _TradeHubTopTile(
+                            icon: Icons.group_rounded,
+                            title: 'Trade with a friend',
+                            subtitle: 'Room code',
+                            onTap: _showFriendTradeDialog,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    _WishlistPreviewPanel(
+                      loading: _loadingWishlist,
+                      error: _wishlistError,
+                      count: _wishlistCount,
+                      maxCount: kTradeHubWishlistMax,
+                      previewCards: _wishlistPreview,
+                      onOpenFullWishlist: () =>
+                          Navigator.of(context).push<void>(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const WishlistEditorPage(),
+                            ),
+                          ),
+                      onRetry: _loadWishlistPreview,
+                    ),
+                    const SizedBox(height: 22),
+                    _TradeMessageSection(
+                      controller: _tradeMessageCtrl,
+                      saving: _savingTradeMsg,
+                      onSave: _saveTradeMessage,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -190,7 +294,10 @@ class _TradeHubTopTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             color: CardGameUiTheme.panel.withAlpha(240),
-            border: Border.all(color: CardGameUiTheme.gold.withAlpha(90), width: 1.2),
+            border: Border.all(
+              color: CardGameUiTheme.gold.withAlpha(90),
+              width: 1.2,
+            ),
             boxShadow: [
               BoxShadow(
                 color: CardGameUiTheme.orangeGlow.withAlpha(35),
@@ -266,7 +373,10 @@ class _WishlistPreviewPanel extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             color: CardGameUiTheme.panel.withAlpha(235),
-            border: Border.all(color: CardGameUiTheme.gold.withAlpha(85), width: 1.2),
+            border: Border.all(
+              color: CardGameUiTheme.gold.withAlpha(85),
+              width: 1.2,
+            ),
             boxShadow: [
               BoxShadow(
                 color: CardGameUiTheme.orangeGlow.withAlpha(30),
@@ -281,7 +391,11 @@ class _WishlistPreviewPanel extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.favorite_rounded, color: CardGameUiTheme.gold.withAlpha(230), size: 22),
+                  Icon(
+                    Icons.favorite_rounded,
+                    color: CardGameUiTheme.gold.withAlpha(230),
+                    size: 22,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -303,7 +417,11 @@ class _WishlistPreviewPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Icon(Icons.chevron_right_rounded, color: CardGameUiTheme.onDark.withAlpha(160), size: 22),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: CardGameUiTheme.onDark.withAlpha(160),
+                    size: 22,
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -323,17 +441,23 @@ class _WishlistPreviewPanel extends StatelessWidget {
                     children: [
                       Text(
                         'Could not load wishlist',
-                        style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(200), fontSize: 13),
+                        style: TextStyle(
+                          color: CardGameUiTheme.onDark.withAlpha(200),
+                          fontSize: 13,
+                        ),
                       ),
                       TextButton(
                         onPressed: onRetry,
-                        child: const Text('Retry', style: TextStyle(color: CardGameUiTheme.gold)),
+                        child: const Text(
+                          'Retry',
+                          style: TextStyle(color: CardGameUiTheme.gold),
+                        ),
                       ),
                     ],
                   ),
                 ),
               SizedBox(
-                height: 118,
+                height: 196,
                 child: loading
                     ? const Center(
                         child: SizedBox(
@@ -347,10 +471,15 @@ class _WishlistPreviewPanel extends StatelessWidget {
                       )
                     : Row(
                         children: List.generate(3, (i) {
-                          final card = i < previewCards.length ? previewCards[i] : null;
+                          final card = i < previewCards.length
+                              ? previewCards[i]
+                              : null;
                           return Expanded(
                             child: Padding(
-                              padding: EdgeInsets.only(left: i == 0 ? 0 : 6, right: i == 2 ? 0 : 6),
+                              padding: EdgeInsets.only(
+                                left: i == 0 ? 0 : 6,
+                                right: i == 2 ? 0 : 6,
+                              ),
                               child: _WishlistThumb(card: card),
                             ),
                           );
@@ -377,7 +506,10 @@ class _WishlistThumb extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: CardGameUiTheme.gold.withAlpha(70), width: 1),
+          border: Border.all(
+            color: CardGameUiTheme.gold.withAlpha(70),
+            width: 1,
+          ),
           color: CardGameUiTheme.elevated,
         ),
         clipBehavior: Clip.antiAlias,
@@ -415,9 +547,15 @@ class _WishlistThumb extends StatelessWidget {
 }
 
 class _TradeMessageSection extends StatelessWidget {
-  const _TradeMessageSection({required this.controller});
+  const _TradeMessageSection({
+    required this.controller,
+    required this.saving,
+    required this.onSave,
+  });
 
   final TextEditingController controller;
+  final bool saving;
+  final Future<void> Function() onSave;
 
   @override
   Widget build(BuildContext context) {
@@ -433,37 +571,77 @@ class _TradeMessageSection extends StatelessWidget {
             letterSpacing: 0.2,
           ),
         ),
+        const SizedBox(height: 6),
+        Text(
+          'Stored on your wishlist (up to 50 characters). Trade room will use this later.',
+          style: TextStyle(
+            color: CardGameUiTheme.onDark.withAlpha(130),
+            fontSize: 11.5,
+            height: 1.3,
+          ),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
+          maxLength: 50,
           maxLines: 4,
           minLines: 3,
-          style: const TextStyle(color: CardGameUiTheme.onDark, fontSize: 14, height: 1.35),
+          style: const TextStyle(
+            color: CardGameUiTheme.onDark,
+            fontSize: 14,
+            height: 1.35,
+          ),
           cursorColor: CardGameUiTheme.gold,
           decoration: InputDecoration(
-            hintText: 'Type a message to your trade partner…',
+            hintText: 'e.g. Looking for Lebanese base dupes…',
             hintStyle: TextStyle(color: CardGameUiTheme.onDark.withAlpha(120)),
             filled: true,
             fillColor: CardGameUiTheme.elevated.withAlpha(240),
             contentPadding: const EdgeInsets.all(14),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: CardGameUiTheme.panelBorder.withAlpha(200)),
+              borderSide: BorderSide(
+                color: CardGameUiTheme.panelBorder.withAlpha(200),
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: CardGameUiTheme.gold.withAlpha(180), width: 1.4),
+              borderSide: BorderSide(
+                color: CardGameUiTheme.gold.withAlpha(180),
+                width: 1.4,
+              ),
             ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            counterStyle: TextStyle(
+              color: CardGameUiTheme.onDark.withAlpha(140),
+              fontSize: 11,
+            ),
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Messaging is not connected yet — you can type for now; sending will be added later.',
-          style: TextStyle(
-            color: CardGameUiTheme.onDark.withAlpha(130),
-            fontSize: 11.5,
-            height: 1.3,
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: saving ? null : () => onSave(),
+            icon: saving
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: CardGameUiTheme.bg,
+                    ),
+                  )
+                : const Icon(Icons.save_rounded, size: 20),
+            label: Text(saving ? 'Saving…' : 'Save message'),
+            style: FilledButton.styleFrom(
+              backgroundColor: CardGameUiTheme.gold,
+              foregroundColor: CardGameUiTheme.bg,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
           ),
         ),
       ],
@@ -510,7 +688,10 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
         context: parent,
         builder: (ctx) => AlertDialog(
           backgroundColor: CardGameUiTheme.panel,
-          title: const Text('Room created', style: TextStyle(color: CardGameUiTheme.onDark)),
+          title: const Text(
+            'Room created',
+            style: TextStyle(color: CardGameUiTheme.onDark),
+          ),
           content: SelectableText(
             'Share this code:\n\n$code',
             style: const TextStyle(
@@ -523,7 +704,10 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK', style: TextStyle(color: CardGameUiTheme.gold)),
+              child: const Text(
+                'OK',
+                style: TextStyle(color: CardGameUiTheme.gold),
+              ),
             ),
           ],
         ),
@@ -535,7 +719,10 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text(e.toString()),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
@@ -546,9 +733,9 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
   Future<void> _join() async {
     final raw = _codeCtrl.text.trim().toUpperCase();
     if (raw.length < 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the room code')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter the room code')));
       return;
     }
     setState(() => _busy = true);
@@ -566,7 +753,10 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text(e.toString()),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
@@ -610,7 +800,11 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
             Text(
               'Create a room and share the code, or join with your partner\'s code.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(150), fontSize: 12.5, height: 1.3),
+              style: TextStyle(
+                color: CardGameUiTheme.onDark.withAlpha(150),
+                fontSize: 12.5,
+                height: 1.3,
+              ),
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
@@ -619,7 +813,10 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black87),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black87,
+                      ),
                     )
                   : const Icon(Icons.add_circle_outline_rounded),
               label: const Text('Create room'),
@@ -627,7 +824,9 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
                 backgroundColor: CardGameUiTheme.gold.withAlpha(230),
                 foregroundColor: Colors.black87,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -644,24 +843,39 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
               controller: _codeCtrl,
               textCapitalization: TextCapitalization.characters,
               autocorrect: false,
-              style: const TextStyle(color: CardGameUiTheme.onDark, letterSpacing: 2, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: CardGameUiTheme.onDark,
+                letterSpacing: 2,
+                fontWeight: FontWeight.w600,
+              ),
               cursorColor: CardGameUiTheme.gold,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]'))],
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+              ],
               decoration: InputDecoration(
                 hintText: 'e.g. AB3K9M',
-                hintStyle: TextStyle(color: CardGameUiTheme.onDark.withAlpha(100)),
+                hintStyle: TextStyle(
+                  color: CardGameUiTheme.onDark.withAlpha(100),
+                ),
                 filled: true,
                 fillColor: CardGameUiTheme.elevated.withAlpha(230),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: CardGameUiTheme.panelBorder),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: CardGameUiTheme.gold.withAlpha(180)),
+                  borderSide: BorderSide(
+                    color: CardGameUiTheme.gold.withAlpha(180),
+                  ),
                 ),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -671,14 +885,22 @@ class _FriendTradeDialogState extends State<_FriendTradeDialog> {
                 foregroundColor: CardGameUiTheme.gold,
                 side: BorderSide(color: CardGameUiTheme.gold.withAlpha(160)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-              child: const Text('Join room', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Join room',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: _busy ? null : () => Navigator.of(context).pop(),
-              child: Text('Cancel', style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(180))),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(180)),
+              ),
             ),
           ],
         ),
