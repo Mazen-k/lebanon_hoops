@@ -7,7 +7,7 @@ import '../../../models/tradeable_instance.dart';
 import '../../../services/session_store.dart';
 import '../../../services/trade_api_service.dart';
 import '../../../theme/colors.dart';
-import '../../../util/card_image_url.dart';
+import '../../../util/card_image_url.dart' show BundledPlayCardImage;
 
 class TradeRoomPage extends StatefulWidget {
   const TradeRoomPage({super.key, required this.roomCode});
@@ -278,7 +278,6 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (c, i) {
                 final row = Map<String, dynamic>.from(raw[i] as Map);
-                final url = displayableCardImageUrl(row['card_image']?.toString());
                 final fn = row['first_name']?.toString() ?? '';
                 final ln = row['last_name']?.toString() ?? '';
                 final name = '$fn $ln'.trim().isEmpty ? 'Card #${row['card_id']}' : '$fn $ln'.trim();
@@ -292,12 +291,16 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
                           await _tryAddWishlistCardToOffer(cardId, messenger);
                         }
                       : null,
-                  leading: url != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.network(url, width: 44, height: 44, fit: BoxFit.cover),
-                        )
-                      : const Icon(Icons.image_not_supported),
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: BundledPlayCardImage(
+                      cardId: cardId,
+                      width: 44,
+                      height: 44,
+                      fit: BoxFit.cover,
+                      errorPlaceholder: const Icon(Icons.image_not_supported, size: 28),
+                    ),
+                  ),
                   title: Text(name),
                   trailing: dup
                       ? const Icon(Icons.add_circle_outline, color: AppColors.primary)
@@ -425,14 +428,17 @@ class _TradeRoomPageState extends State<TradeRoomPage> with SingleTickerProvider
                         itemCount: choices.length,
                         itemBuilder: (c, i) {
                           final t = choices[i];
-                          final url = displayableCardImageUrl(t.cardImage);
                           return ListTile(
-                            leading: url != null
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: Image.network(url, width: 48, height: 48, fit: BoxFit.cover),
-                                  )
-                                : const Icon(Icons.style),
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: BundledPlayCardImage(
+                                cardId: t.cardId,
+                                width: 48,
+                                height: 48,
+                                fit: BoxFit.cover,
+                                errorPlaceholder: const Icon(Icons.style, size: 28),
+                              ),
+                            ),
                             title: Text(t.label),
                             subtitle: Text('OVR ${t.overall}'),
                             onTap: () => Navigator.pop(ctx, _PickResult.card(t)),
@@ -672,7 +678,7 @@ class _TradeSlotTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = map == null ? null : displayableCardImageUrl(map!['card_image']?.toString());
+    final cardId = map == null ? 0 : int.tryParse(map!['card_id']?.toString() ?? '') ?? 0;
     final child = map == null
         ? ColoredBox(
             color: AppColors.surfaceContainerHigh,
@@ -684,17 +690,19 @@ class _TradeSlotTile extends StatelessWidget {
               ),
             ),
           )
-        : url != null
-            ? Image.network(url, fit: BoxFit.cover)
-            : ColoredBox(
-                color: AppColors.surfaceContainerHigh,
-                child: Center(
-                  child: Text(
-                    '#${map!['card_id']}',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
+        : BundledPlayCardImage(
+            cardId: cardId,
+            fit: BoxFit.cover,
+            errorPlaceholder: ColoredBox(
+              color: AppColors.surfaceContainerHigh,
+              child: Center(
+                child: Text(
+                  '#${map!['card_id']}',
+                  style: Theme.of(context).textTheme.labelSmall,
                 ),
-              );
+              ),
+            ),
+          );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),

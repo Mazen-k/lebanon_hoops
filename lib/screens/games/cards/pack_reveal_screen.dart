@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/opened_card.dart';
-import '../../../util/card_image_url.dart';
+import '../../../util/card_image_url.dart' show BundledPlayCardImage;
 import '../../../theme/colors.dart';
 
 const double _kRevealCardW = 150;
@@ -385,11 +385,12 @@ class _CardFront extends StatelessWidget {
 
   final OpenedCard card;
 
-  String? _imageUrl() => displayableCardImageUrl(card.cardImage);
-
   @override
   Widget build(BuildContext context) {
-    final url = _imageUrl();
+    const err = ColoredBox(
+      color: AppColors.surfaceContainerHigh,
+      child: Icon(Icons.person, size: 48, color: AppColors.secondary),
+    );
 
     return Container(
       width: _kRevealCardW,
@@ -407,21 +408,13 @@ class _CardFront extends StatelessWidget {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: url != null
-          ? Image.network(
-              url,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              errorBuilder: (_, __, ___) => ColoredBox(
-                color: AppColors.surfaceContainerHigh,
-                child: Icon(Icons.person, size: 48, color: AppColors.secondary),
-              ),
-            )
-          : ColoredBox(
-              color: AppColors.surfaceContainerHigh,
-              child: Icon(Icons.person, size: 48, color: AppColors.secondary),
-            ),
+      child: BundledPlayCardImage(
+        cardId: card.cardId,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorPlaceholder: err,
+      ),
     );
   }
 }

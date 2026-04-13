@@ -10,7 +10,7 @@ import '../../../services/catalog_api_service.dart';
 import '../../../services/session_store.dart';
 import '../../../services/wishlist_api_service.dart';
 import '../../../theme/colors.dart';
-import '../../../util/card_image_url.dart';
+import '../../../util/card_image_url.dart' show BundledPlayCardImage;
 import 'card_filter_bar.dart';
 
 class WishlistEditorPage extends StatefulWidget {
@@ -271,7 +271,6 @@ class _WishlistCatalogTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = displayableCardImageUrl(card.cardImage);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -296,20 +295,14 @@ class _WishlistCatalogTile extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (url != null)
-                Image.network(
-                  url,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => ColoredBox(
-                    color: AppColors.surfaceContainerHigh,
-                    child: Center(child: Text(card.playerLabel, textAlign: TextAlign.center)),
-                  ),
-                )
-              else
-                ColoredBox(
+              BundledPlayCardImage(
+                cardId: card.cardId,
+                fit: BoxFit.cover,
+                errorPlaceholder: ColoredBox(
                   color: AppColors.surfaceContainerHigh,
                   child: Center(child: Text(card.playerLabel, textAlign: TextAlign.center)),
                 ),
+              ),
               Positioned(
                 left: 6,
                 top: 6,

@@ -6,9 +6,9 @@ import '../../../models/collection_card.dart';
 import '../../../models/team.dart';
 import '../../../services/collection_api_service.dart';
 import '../../../services/session_store.dart';
-import '../../../theme/colors.dart';
-import '../../../util/card_image_url.dart';
+import '../../../util/card_image_url.dart' show BundledPlayCardImage;
 import 'card_filter_bar.dart';
+import 'card_game_ui_theme.dart';
 
 class ViewCollectionPage extends StatefulWidget {
   const ViewCollectionPage({super.key, this.duplicatesOnly = false});
@@ -115,11 +115,11 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: CardGameUiTheme.bg,
       appBar: AppBar(
         title: Text(widget.duplicatesOnly ? 'Duplicates' : 'Collection'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: CardGameUiTheme.bg,
+        foregroundColor: CardGameUiTheme.onDark,
         surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
@@ -130,13 +130,16 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: CardGameUiTheme.gold),
+            )
           : _error != null
               ? _ErrorBody(message: _error!, onRetry: _load)
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     CardCatalogFilterBar(
+                      cardGameStyle: true,
                       positionOptions: _positionOptions,
                       teams: _teams,
                       positionFilter: _positionFilter,
@@ -156,7 +159,11 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
                                       ? 'No duplicate cards yet.\nYou need at least two copies of the same card.'
                                       : 'No cards yet.\nOpen packs to build your collection.',
                                   textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.secondary),
+                                  style: TextStyle(
+                                    color: CardGameUiTheme.onDark.withAlpha(180),
+                                    fontSize: 16,
+                                    height: 1.35,
+                                  ),
                                 ),
                               ),
                             )
@@ -164,7 +171,10 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
                               ? Center(
                                   child: Text(
                                     'No cards match these filters.',
-                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.secondary),
+                                    style: TextStyle(
+                                      color: CardGameUiTheme.onDark.withAlpha(180),
+                                      fontSize: 16,
+                                    ),
                                   ),
                                 )
                               : GridView.builder(
@@ -179,6 +189,11 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
                                   itemBuilder: (context, i) => _CollectionCardTile(
                                         card: _visibleCards[i],
                                         showDuplicateBadge: widget.duplicatesOnly,
+                                        onOpenPreview: () => _showCollectionCardPreview(
+                                          context,
+                                          _visibleCards[i],
+                                          showDuplicateBadge: widget.duplicatesOnly,
+                                        ),
                                       ),
                                 ),
                     ),
@@ -188,90 +203,234 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
   }
 }
 
+void _showCollectionCardPreview(
+  BuildContext context,
+  CollectionCard card, {
+  required bool showDuplicateBadge,
+}) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withAlpha(210),
+    builder: (ctx) {
+      final w = MediaQuery.sizeOf(ctx).width;
+      final cardW = (w * 0.88).clamp(260.0, 400.0);
+      final count = card.instanceCount ?? 0;
+      final badge = showDuplicateBadge && count >= 2;
+
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: cardW,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: CardGameUiTheme.gold.withAlpha(110),
+                  width: 1.4,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: CardGameUiTheme.orangeGlow.withAlpha(55),
+                    blurRadius: 28,
+                    offset: const Offset(0, 12),
+                    spreadRadius: -4,
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: AspectRatio(
+                aspectRatio: 0.72,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned.fill(
+                      child: _CollectionCardImageFill(
+                        card: card,
+                        placeholderFontSize: 15,
+                      ),
+                    ),
+                    if (badge)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Material(
+                          elevation: 6,
+                          color: CardGameUiTheme.orangeGlow,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            child: Text(
+                              '×$count',
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              card.playerLabel,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: CardGameUiTheme.onDark,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              [
+                'OVR ${card.overall}',
+                if (card.position.trim().isNotEmpty && card.position != '?') card.position,
+                if ((card.teamName ?? '').trim().isNotEmpty) card.teamName!.trim(),
+              ].join(' · '),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: CardGameUiTheme.onDark.withAlpha(175),
+                fontSize: 13.5,
+                height: 1.25,
+              ),
+            ),
+            const SizedBox(height: 18),
+            OutlinedButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: CardGameUiTheme.onDark.withAlpha(230),
+                side: BorderSide(color: CardGameUiTheme.gold.withAlpha(130)),
+                padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+/// Full-bleed card art (network or name placeholder).
+class _CollectionCardImageFill extends StatelessWidget {
+  const _CollectionCardImageFill({
+    required this.card,
+    this.placeholderFontSize = 12,
+  });
+
+  final CollectionCard card;
+  final double placeholderFontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholderStyle = TextStyle(
+      color: CardGameUiTheme.onDark.withAlpha(170),
+      fontSize: placeholderFontSize,
+      fontWeight: FontWeight.w600,
+    );
+    final placeholder = ColoredBox(
+      color: CardGameUiTheme.panel,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(
+            card.playerLabel,
+            textAlign: TextAlign.center,
+            style: placeholderStyle,
+          ),
+        ),
+      ),
+    );
+
+    return BundledPlayCardImage(
+      cardId: card.cardId,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      errorPlaceholder: placeholder,
+    );
+  }
+}
+
 class _CollectionCardTile extends StatelessWidget {
   const _CollectionCardTile({
     required this.card,
     required this.showDuplicateBadge,
+    required this.onOpenPreview,
   });
 
   final CollectionCard card;
   final bool showDuplicateBadge;
+  final VoidCallback onOpenPreview;
 
   @override
   Widget build(BuildContext context) {
-    final url = displayableCardImageUrl(card.cardImage);
     final count = card.instanceCount ?? 0;
     final badge = showDuplicateBadge && count >= 2;
 
-    Widget imageLayer;
-    if (url != null) {
-      imageLayer = Image.network(
-        url,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        errorBuilder: (context, error, stackTrace) => ColoredBox(
-          color: AppColors.surfaceContainerHigh,
-          child: Center(
-            child: Text(
-              card.playerLabel,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.secondary),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpenPreview,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: CardGameUiTheme.gold.withAlpha(90),
+              width: 1.2,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: CardGameUiTheme.orangeGlow.withAlpha(35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+                spreadRadius: -2,
+              ),
+            ],
           ),
-        ),
-      );
-    } else {
-      imageLayer = ColoredBox(
-        color: AppColors.surfaceContainerHigh,
-        child: Center(
-          child: Text(
-            card.playerLabel,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(color: AppColors.secondary),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.onSurface.withAlpha(20),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(child: imageLayer),
-          if (badge)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Material(
-                elevation: 3,
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  child: Text(
-                    '×$count',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppColors.onPrimary,
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(
+                child: _CollectionCardImageFill(card: card),
+              ),
+              if (badge)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Material(
+                    elevation: 4,
+                    color: CardGameUiTheme.orangeGlow,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      child: Text(
+                        '×$count',
+                        style: const TextStyle(
+                          color: Colors.black,
                           fontWeight: FontWeight.w900,
+                          fontSize: 14,
                         ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -291,16 +450,25 @@ class _ErrorBody extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.secondary),
+            Icon(Icons.cloud_off_outlined, size: 48, color: CardGameUiTheme.onDark.withAlpha(160)),
             const SizedBox(height: 16),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.onSurface),
+              style: TextStyle(
+                color: CardGameUiTheme.onDark.withAlpha(220),
+                fontSize: 15,
+                height: 1.35,
+              ),
             ),
             const SizedBox(height: 20),
-            FilledButton(
+            OutlinedButton(
               onPressed: onRetry,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: CardGameUiTheme.gold,
+                side: const BorderSide(color: CardGameUiTheme.gold, width: 1.5),
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+              ),
               child: const Text('Retry'),
             ),
           ],
