@@ -41,6 +41,9 @@ class CollectionCard {
     return '$a $b'.trim();
   }
 
+  /// Lowercase [card_type] from DB for filters (`base`, `import`, …).
+  static String normalizedCardType(String raw) => raw.trim().toLowerCase();
+
   /// Maps DB codes to filter buckets (Lebanon / USA / Other).
   static String nationalityBucket(String raw) {
     final u = raw.trim().toUpperCase();

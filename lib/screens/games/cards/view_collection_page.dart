@@ -30,6 +30,7 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
   String? _error;
 
   String? _positionFilter;
+  String? _cardTypeFilter;
   String? _nationalityFilter;
   int? _teamIdFilter;
 
@@ -94,6 +95,13 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
     if (_positionFilter != null) {
       list = list.where((c) => c.position == _positionFilter).toList();
     }
+    if (_cardTypeFilter != null) {
+      list = list
+          .where(
+            (c) => CollectionCard.normalizedCardType(c.cardType) == _cardTypeFilter,
+          )
+          .toList();
+    }
     if (_nationalityFilter != null) {
       list = list.where((c) => CollectionCard.nationalityBucket(c.nationality) == _nationalityFilter).toList();
     }
@@ -143,9 +151,11 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
                       positionOptions: _positionOptions,
                       teams: _teams,
                       positionFilter: _positionFilter,
+                      cardTypeFilter: _cardTypeFilter,
                       nationalityFilter: _nationalityFilter,
                       teamIdFilter: _teamIdFilter,
                       onPosition: (v) => setState(() => _positionFilter = v),
+                      onCardType: (v) => setState(() => _cardTypeFilter = v),
                       onNationality: (v) => setState(() => _nationalityFilter = v),
                       onClub: (v) => setState(() => _teamIdFilter = v),
                     ),

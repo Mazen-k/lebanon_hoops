@@ -36,6 +36,7 @@ class CatalogApiService {
     String? position,
     String? nationality,
     int? teamId,
+    String? cardType,
     bool onlyMissing = false,
   }) async {
     final configured = BackendConfig.catalogPath;
@@ -48,6 +49,7 @@ class CatalogApiService {
       if (position != null && position.isNotEmpty) 'position': position,
       if (nationality != null && nationality.isNotEmpty) 'nationality': nationality,
       if (teamId != null) 'team_id': '$teamId',
+      if (cardType != null && cardType.isNotEmpty) 'card_type': cardType,
       if (onlyMissing) 'only_missing': '1',
     };
 

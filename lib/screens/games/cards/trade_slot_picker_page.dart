@@ -49,6 +49,7 @@ class _TradeSlotPickerPageState extends State<TradeSlotPickerPage> {
   String? _error;
 
   String? _positionFilter;
+  String? _cardTypeFilter;
   String? _nationalityFilter;
   int? _teamIdFilter;
 
@@ -122,6 +123,13 @@ class _TradeSlotPickerPageState extends State<TradeSlotPickerPage> {
     var list = List<CollectionCard>.from(_cards);
     if (_positionFilter != null) {
       list = list.where((c) => c.position == _positionFilter).toList();
+    }
+    if (_cardTypeFilter != null) {
+      list = list
+          .where(
+            (c) => CollectionCard.normalizedCardType(c.cardType) == _cardTypeFilter,
+          )
+          .toList();
     }
     if (_nationalityFilter != null) {
       list = list
@@ -213,9 +221,11 @@ class _TradeSlotPickerPageState extends State<TradeSlotPickerPage> {
                   positionOptions: _positionOptions,
                   teams: _teams,
                   positionFilter: _positionFilter,
+                  cardTypeFilter: _cardTypeFilter,
                   nationalityFilter: _nationalityFilter,
                   teamIdFilter: _teamIdFilter,
                   onPosition: (v) => setState(() => _positionFilter = v),
+                  onCardType: (v) => setState(() => _cardTypeFilter = v),
                   onNationality: (v) => setState(() => _nationalityFilter = v),
                   onClub: (v) => setState(() => _teamIdFilter = v),
                 ),

@@ -578,6 +578,9 @@ async function catalogCardsHandler(req, res) {
     req.query.only_missing === 'true' ||
     req.query.onlyMissing === '1' ||
     req.query.onlyMissing === 'true';
+  const cardTypeRaw = (req.query.card_type ?? req.query.cardType ?? '').trim().toLowerCase();
+  const cardType =
+    cardTypeRaw === 'base' || cardTypeRaw === 'import' ? cardTypeRaw : null;
 
   const params = [userId];
   const cond = [];
@@ -596,6 +599,10 @@ async function catalogCardsHandler(req, res) {
     );
   } else if (nationality === 'USA') {
     cond.push(`UPPER(TRIM(COALESCE(p.nationality, ''))) IN ('US','USA','UNITED STATES')`);
+  }
+  if (cardType != null) {
+    params.push(cardType);
+    cond.push(`LOWER(TRIM(COALESCE(pc.card_type::text, ''))) = $${params.length}`);
   }
 
   if (onlyMissing) {

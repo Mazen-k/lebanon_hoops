@@ -300,7 +300,7 @@ class _TradeRoomPageState extends State<TradeRoomPage>
     if (from == null || preset == null || sent == null) return;
     if (!_TradeQuickPhrases.isValid(preset)) return;
     final ageMs = DateTime.now().millisecondsSinceEpoch - sent;
-    if (ageMs < 0 || ageMs > 18000) return;
+    if (ageMs < 0 || ageMs > 12000) return;
 
     final sig = '$from-$sent-$preset';
     if (sig == _lastQuickMsgSignature) return;
@@ -312,7 +312,7 @@ class _TradeRoomPageState extends State<TradeRoomPage>
       _bubblePreset = preset;
       _bubbleFromUsername = name;
     });
-    _quickMsgBubbleTimer = Timer(const Duration(seconds: 6), () {
+    _quickMsgBubbleTimer = Timer(const Duration(seconds: 4), () {
       if (!mounted) return;
       setState(() {
         _bubbleFromUserId = null;
@@ -323,93 +323,134 @@ class _TradeRoomPageState extends State<TradeRoomPage>
   }
 
   Future<void> _showQuickMessagePicker() async {
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: _TradeRoomVisual.panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      barrierColor: Colors.black.withAlpha(210),
       builder: (ctx) {
-        final h = min(520.0, MediaQuery.sizeOf(context).height * 0.72);
-        return SafeArea(
-          child: SizedBox(
-            height: h,
+        final maxW = min(400.0, MediaQuery.sizeOf(context).width - 28);
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
+          child: Container(
+            width: maxW,
+            padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
+            decoration: BoxDecoration(
+              color: _TradeRoomVisual.panel,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _TradeRoomVisual.cyan.withAlpha(110),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(120),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 4),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Quick message',
-                          style: TextStyle(
-                            color: CardGameUiTheme.onDark,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 17,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        icon: const Icon(
-                          Icons.close_rounded,
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Quick message',
+                        style: TextStyle(
                           color: CardGameUiTheme.onDark,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 17,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: CardGameUiTheme.onDark,
+                      ),
+                    ),
+                  ],
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  padding: const EdgeInsets.only(right: 4, bottom: 10),
                   child: Text(
-                    'Choose a line to show next to your side for your partner.',
+                    'Tap a line — it appears next to your side for your partner.',
                     style: TextStyle(
-                      color: CardGameUiTheme.onDark.withAlpha(160),
-                      fontSize: 12,
+                      color: CardGameUiTheme.onDark.withAlpha(150),
+                      fontSize: 11.5,
                       height: 1.3,
                     ),
                   ),
                 ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-                    children: [
-                      for (final preset in _TradeQuickPhrases.presetsInOrder)
-                        ListTile(
-                          shape: RoundedRectangleBorder(
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _TradeQuickPhrases.presetsInOrder.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    mainAxisExtent: 72,
+                  ),
+                  itemBuilder: (context, i) {
+                    final preset = _TradeQuickPhrases.presetsInOrder[i];
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          Navigator.pop(ctx);
+                          try {
+                            final uid = await _userId();
+                            await _api.postQuickMessage(
+                              code: widget.roomCode,
+                              userId: uid,
+                              preset: preset,
+                            );
+                            if (mounted) await _refresh(silent: true);
+                          } on TradeApiException catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.message)),
+                              );
+                            }
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Ink(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withAlpha(100),
                             borderRadius: BorderRadius.circular(10),
-                          ),
-                          title: Text(
-                            _TradeQuickPhrases.textFor(preset),
-                            style: const TextStyle(
-                              color: CardGameUiTheme.onDark,
-                              fontWeight: FontWeight.w600,
+                            border: Border.all(
+                              color: _TradeRoomVisual.panelLine.withAlpha(200),
                             ),
                           ),
-                          onTap: () async {
-                            Navigator.pop(ctx);
-                            try {
-                              final uid = await _userId();
-                              await _api.postQuickMessage(
-                                code: widget.roomCode,
-                                userId: uid,
-                                preset: preset,
-                              );
-                              if (mounted) await _refresh(silent: true);
-                            } on TradeApiException catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(e.message)),
-                                );
-                              }
-                            }
-                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            child: Center(
+                              child: Text(
+                                _TradeQuickPhrases.textFor(preset),
+                                textAlign: TextAlign.center,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: CardGameUiTheme.onDark,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11.5,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                    ],
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

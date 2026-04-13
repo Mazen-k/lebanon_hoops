@@ -4,6 +4,12 @@ import '../../../models/team.dart';
 import '../../../theme/colors.dart';
 import 'card_game_ui_theme.dart';
 
+/// Bundled art for card type filter (`base` / `import` in DB).
+const String kCardTypeAssetBase = 'assets/images/card_type/base.png';
+const String kCardTypeAssetImport = 'assets/images/card_type/Import.png';
+
+String clubLogoAssetPath(int teamId) => 'assets/images/club_logo/$teamId.png';
+
 String? _nationalityFlagEmoji(String country) {
   switch (country) {
     case 'Lebanon':
@@ -15,24 +21,68 @@ String? _nationalityFlagEmoji(String country) {
   }
 }
 
-String _clubBarLabel(List<Team> teams, int? teamId) {
-  if (teamId == null) return 'Club';
-  for (final t in teams) {
-    if (t.teamId == teamId) return t.teamName;
-  }
-  return 'Club';
+String _cardTypeBarLabel(String? canonical) {
+  if (canonical == null) return 'Type';
+  if (canonical == 'base') return 'Base';
+  if (canonical == 'import') return 'Import';
+  return 'Type';
 }
 
-/// Position / nation / club filters (same row as collection).
+Widget? _cardTypeBarTop(String? canonical) {
+  String? asset;
+  if (canonical == 'base') {
+    asset = kCardTypeAssetBase;
+  } else if (canonical == 'import') {
+    asset = kCardTypeAssetImport;
+  }
+  if (asset == null) return null;
+  return SizedBox(
+    height: 26,
+    width: 34,
+    child: Image.asset(
+      asset,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) =>
+          const Icon(Icons.style_outlined, size: 22, color: CardGameUiTheme.onDark),
+    ),
+  );
+}
+
+Widget _clubBarTop(List<Team> teams, int? teamId, Color iconColor) {
+  if (teamId == null) {
+    return Icon(Icons.groups_outlined, size: 24, color: iconColor);
+  }
+  return SizedBox(
+    height: 26,
+    width: 34,
+    child: Center(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(5),
+        child: Image.asset(
+          clubLogoAssetPath(teamId),
+          width: 28,
+          height: 28,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              Icon(Icons.groups_outlined, size: 22, color: iconColor),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Position / card type / nation / club filters (collection, duplicates, wishlist, trading).
 class CardCatalogFilterBar extends StatelessWidget {
   const CardCatalogFilterBar({
     super.key,
     required this.positionOptions,
     required this.teams,
     required this.positionFilter,
+    required this.cardTypeFilter,
     required this.nationalityFilter,
     required this.teamIdFilter,
     required this.onPosition,
+    required this.onCardType,
     required this.onNationality,
     required this.onClub,
     this.cardGameStyle = false,
@@ -41,9 +91,12 @@ class CardCatalogFilterBar extends StatelessWidget {
   final List<String> positionOptions;
   final List<Team> teams;
   final String? positionFilter;
+  /// Lowercase `base` or `import` to match [play_cards.card_type].
+  final String? cardTypeFilter;
   final String? nationalityFilter;
   final int? teamIdFilter;
   final void Function(String?) onPosition;
+  final void Function(String?) onCardType;
   final void Function(String?) onNationality;
   final void Function(int?) onClub;
   /// When true, matches card hub / store dark styling ([CardGameUiTheme]).
@@ -52,10 +105,13 @@ class CardCatalogFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (cardGameStyle) {
+      final clubActive = teamIdFilter != null;
+      final clubIconColor =
+          clubActive ? CardGameUiTheme.gold : CardGameUiTheme.onDark.withAlpha(160);
       return Material(
         color: CardGameUiTheme.elevated,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Row(
             children: [
               Expanded(
@@ -73,12 +129,25 @@ class CardCatalogFilterBar extends StatelessWidget {
               ),
               Expanded(
                 child: CardFilterBoxTrigger(
+                  icon: Icons.style_outlined,
+                  topOverride: _cardTypeBarTop(cardTypeFilter),
+                  label: _cardTypeBarLabel(cardTypeFilter),
+                  active: cardTypeFilter != null,
+                  onTap: () => _showCardTypeBoxPicker(
+                    context,
+                    current: cardTypeFilter,
+                    onPick: onCardType,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: CardFilterBoxTrigger(
                   icon: Icons.flag_outlined,
                   topOverride: nationalityFilter != null
                       ? Text(
                           _nationalityFlagEmoji(nationalityFilter!) ?? '🏳️',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 24, height: 1.1),
+                          style: const TextStyle(fontSize: 22, height: 1.05),
                         )
                       : null,
                   label: nationalityFilter ?? 'Nation',
@@ -93,8 +162,9 @@ class CardCatalogFilterBar extends StatelessWidget {
               Expanded(
                 child: CardFilterBoxTrigger(
                   icon: Icons.groups_outlined,
-                  label: _clubBarLabel(teams, teamIdFilter),
-                  active: teamIdFilter != null,
+                  topOverride: _clubBarTop(teams, teamIdFilter, clubIconColor),
+                  label: 'Club',
+                  active: clubActive,
                   onTap: () => _showClubBoxPicker(
                     context,
                     teams: teams,
@@ -112,7 +182,7 @@ class CardCatalogFilterBar extends StatelessWidget {
     return Material(
       color: AppColors.surfaceContainerLow,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -134,6 +204,55 @@ class CardCatalogFilterBar extends StatelessWidget {
                   onPosition(null);
                 } else {
                   onPosition(v);
+                }
+              },
+            ),
+            CardFilterPopupButton<String>(
+              icon: Icons.style_outlined,
+              label: 'Type',
+              active: cardTypeFilter != null,
+              itemBuilder: (ctx) => [
+                const PopupMenuItem<String>(value: '__clear__', child: Text('All types')),
+                PopupMenuItem<String>(
+                  value: 'base',
+                  child: Row(
+                    children: [
+                      Image.asset(
+                        kCardTypeAssetBase,
+                        width: 32,
+                        height: 32,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.image_not_supported_outlined, size: 28),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text('Base'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<String>(
+                  value: 'import',
+                  child: Row(
+                    children: [
+                      Image.asset(
+                        kCardTypeAssetImport,
+                        width: 32,
+                        height: 32,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.image_not_supported_outlined, size: 28),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text('Import'),
+                    ],
+                  ),
+                ),
+              ],
+              onSelected: (v) {
+                if (v == '__clear__') {
+                  onCardType(null);
+                } else {
+                  onCardType(v);
                 }
               },
             ),
@@ -161,7 +280,25 @@ class CardCatalogFilterBar extends StatelessWidget {
               itemBuilder: (ctx) => [
                 const PopupMenuItem<int>(value: -1, child: Text('All clubs')),
                 ...teams.map(
-                  (t) => PopupMenuItem<int>(value: t.teamId, child: Text(t.teamName)),
+                  (t) => PopupMenuItem<int>(
+                    value: t.teamId,
+                    child: Semantics(
+                      label: t.teamName,
+                      child: SizedBox(
+                        height: 40,
+                        width: 40,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.asset(
+                            clubLogoAssetPath(t.teamId),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                Icon(Icons.groups_2_outlined, color: AppColors.primary),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
               onSelected: (v) {
@@ -185,14 +322,42 @@ Future<void> _showPositionBoxPicker(
   required String? current,
   required void Function(String?) onPick,
 }) {
-  final entries = <({String label, String value, String? flagEmoji})>[
-    for (final p in options) (label: p, value: p, flagEmoji: null),
+  final entries = <_FilterBoxEntry<String>>[
+    for (final p in options) _FilterBoxEntry(value: p, label: p),
   ];
   return _showFilterBoxDialog<String>(
     context: context,
     title: 'Position',
     entries: entries,
     clearLabel: 'All positions',
+    onClear: () => onPick(null),
+    isSelected: (v) => v == current,
+    onSelect: (v) => onPick(v),
+  );
+}
+
+Future<void> _showCardTypeBoxPicker(
+  BuildContext context, {
+  required String? current,
+  required void Function(String?) onPick,
+}) {
+  const entries = <_FilterBoxEntry<String>>[
+    _FilterBoxEntry(
+      value: 'base',
+      label: 'Base',
+      imageAsset: kCardTypeAssetBase,
+    ),
+    _FilterBoxEntry(
+      value: 'import',
+      label: 'Import',
+      imageAsset: kCardTypeAssetImport,
+    ),
+  ];
+  return _showFilterBoxDialog<String>(
+    context: context,
+    title: 'Card type',
+    entries: entries,
+    clearLabel: 'All types',
     onClear: () => onPick(null),
     isSelected: (v) => v == current,
     onSelect: (v) => onPick(v),
@@ -207,9 +372,9 @@ Future<void> _showNationalityBoxPicker(
   const nations = ['Lebanon', 'USA'];
   final entries = nations
       .map(
-        (n) => (
-          label: n,
+        (n) => _FilterBoxEntry<String>(
           value: n,
+          label: n,
           flagEmoji: _nationalityFlagEmoji(n),
         ),
       )
@@ -231,8 +396,14 @@ Future<void> _showClubBoxPicker(
   required int? currentTeamId,
   required void Function(int?) onPick,
 }) {
-  final entries = <({String label, int value, String? flagEmoji})>[
-    for (final t in teams) (label: t.teamName, value: t.teamId, flagEmoji: null),
+  final entries = <_FilterBoxEntry<int>>[
+    for (final t in teams)
+      _FilterBoxEntry(
+        value: t.teamId,
+        label: '',
+        imageAsset: clubLogoAssetPath(t.teamId),
+        semanticsLabel: t.teamName,
+      ),
   ];
   return _showFilterBoxDialog<int>(
     context: context,
@@ -245,10 +416,28 @@ Future<void> _showClubBoxPicker(
   );
 }
 
+class _FilterBoxEntry<T> {
+  const _FilterBoxEntry({
+    required this.value,
+    required this.label,
+    this.flagEmoji,
+    this.imageAsset,
+    this.imageSize = 56,
+    this.semanticsLabel,
+  });
+
+  final T value;
+  final String label;
+  final String? flagEmoji;
+  final String? imageAsset;
+  final double imageSize;
+  final String? semanticsLabel;
+}
+
 Future<void> _showFilterBoxDialog<T>({
   required BuildContext context,
   required String title,
-  required List<({String label, T value, String? flagEmoji})> entries,
+  required List<_FilterBoxEntry<T>> entries,
   required String clearLabel,
   required VoidCallback onClear,
   required bool Function(T value) isSelected,
@@ -319,6 +508,9 @@ Future<void> _showFilterBoxDialog<T>({
                       return _FilterOptionBox(
                         label: e.label,
                         flagEmoji: e.flagEmoji,
+                        imageAsset: e.imageAsset,
+                        imageSize: e.imageSize,
+                        semanticsLabel: e.semanticsLabel,
                         selected: sel,
                         onTap: () {
                           Navigator.of(ctx).pop();
@@ -360,12 +552,18 @@ class _FilterOptionBox extends StatelessWidget {
   const _FilterOptionBox({
     required this.label,
     this.flagEmoji,
+    this.imageAsset,
+    this.imageSize = 56,
+    this.semanticsLabel,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
   final String? flagEmoji;
+  final String? imageAsset;
+  final double imageSize;
+  final String? semanticsLabel;
   final bool selected;
   final VoidCallback onTap;
 
@@ -378,58 +576,83 @@ class _FilterOptionBox extends StatelessWidget {
       height: 1.2,
     );
 
+    final inner = AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      constraints: BoxConstraints(
+        minWidth: imageAsset != null && label.isEmpty ? imageSize + 16 : 96,
+        maxWidth: imageAsset != null && label.isEmpty ? imageSize + 24 : 160,
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: imageAsset != null ? 10 : (flagEmoji != null ? 14 : 12),
+      ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          width: selected ? 2 : 1.2,
+          color: selected ? CardGameUiTheme.gold : CardGameUiTheme.panelBorder.withAlpha(200),
+        ),
+        color: selected
+            ? CardGameUiTheme.gold.withAlpha(42)
+            : CardGameUiTheme.elevated.withAlpha(230),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: CardGameUiTheme.orangeGlow.withAlpha(50),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (imageAsset != null) ...[
+            SizedBox(
+              width: imageSize,
+              height: imageSize,
+              child: Image.asset(
+                imageAsset!,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.image_not_supported_outlined,
+                  size: imageSize * 0.45,
+                  color: CardGameUiTheme.onDark.withAlpha(120),
+                ),
+              ),
+            ),
+            if (label.isNotEmpty) const SizedBox(height: 8),
+          ] else if (flagEmoji != null) ...[
+            Text(
+              flagEmoji!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 32, height: 1.05),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (label.isNotEmpty)
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: nameStyle,
+            ),
+        ],
+      ),
+    );
+
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          constraints: const BoxConstraints(minWidth: 96, maxWidth: 160),
-          padding: EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: flagEmoji != null ? 14 : 12,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              width: selected ? 2 : 1.2,
-              color: selected ? CardGameUiTheme.gold : CardGameUiTheme.panelBorder.withAlpha(200),
-            ),
-            color: selected
-                ? CardGameUiTheme.gold.withAlpha(42)
-                : CardGameUiTheme.elevated.withAlpha(230),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: CardGameUiTheme.orangeGlow.withAlpha(50),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (flagEmoji != null) ...[
-                Text(
-                  flagEmoji!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 32, height: 1.05),
-                ),
-                const SizedBox(height: 8),
-              ],
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: nameStyle,
-              ),
-            ],
-          ),
+      child: Semantics(
+        label: semanticsLabel ?? (label.isEmpty ? 'Club logo' : label),
+        button: true,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: inner,
         ),
       ),
     );

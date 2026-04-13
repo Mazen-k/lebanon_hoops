@@ -33,6 +33,7 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
   Timer? _saveDebounce;
 
   String? _positionFilter;
+  String? _cardTypeFilter;
   String? _nationalityFilter;
   int? _teamIdFilter;
   bool _onlyMissing = false;
@@ -75,6 +76,7 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
         position: _positionFilter,
         nationality: _nationalityFilter,
         teamId: _teamIdFilter,
+        cardType: _cardTypeFilter,
         onlyMissing: _onlyMissing,
       );
       final resolvedWish = wishIds ??
@@ -203,10 +205,15 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
                       positionOptions: _positionOptions,
                       teams: _teams,
                       positionFilter: _positionFilter,
+                      cardTypeFilter: _cardTypeFilter,
                       nationalityFilter: _nationalityFilter,
                       teamIdFilter: _teamIdFilter,
                       onPosition: (v) {
                         setState(() => _positionFilter = v);
+                        _load();
+                      },
+                      onCardType: (v) {
+                        setState(() => _cardTypeFilter = v);
                         _load();
                       },
                       onNationality: (v) {
