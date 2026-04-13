@@ -293,10 +293,16 @@ async function openPackHandler(req, res) {
       });
     }
 
+    const basePackOnly = packId === LEBANESE_BASE_PACK_ID;
+    const typeWhere = basePackOnly
+      ? `WHERE LOWER(TRIM(COALESCE(card_type, ''))) = 'base'`
+      : '';
+
     const { rows: picked } = await client.query(
       `
       SELECT card_id
       FROM play_cards
+      ${typeWhere}
       ORDER BY RANDOM()
       LIMIT 4
       `,
@@ -305,8 +311,9 @@ async function openPackHandler(req, res) {
     if (picked.length < 4) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        error:
-          'Not enough cards in the pool (need 4). Add at least four rows to play_cards.',
+        error: basePackOnly
+          ? 'Not enough base cards in the pool (need 4). Add at least four play_cards rows with card_type = base.'
+          : 'Not enough cards in the pool (need 4). Add at least four rows to play_cards.',
       });
     }
 
@@ -339,7 +346,7 @@ async function openPackHandler(req, res) {
     );
 
     await client.query('COMMIT');
-    res.json({ packId: LEBANESE_BASE_PACK_ID, cards: rows, card_coins_spent: LEBANESE_BASE_PACK_COST });
+    res.json({ packId, cards: rows, card_coins_spent: LEBANESE_BASE_PACK_COST });
   } catch (err) {
     try {
       await client.query('ROLLBACK');

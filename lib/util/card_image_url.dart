@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../config/backend_config.dart';
 
-/// Bundled play card art: `assets/images/<card_id>.png` (e.g. card 7 → `assets/images/7.png`).
-String bundledPlayCardAssetPath(int cardId) => 'assets/images/$cardId.png';
+/// Bundled play card art: `assets/images/cards/<card_id>.png` (e.g. card 1 → `assets/images/cards/1.png`).
+String bundledPlayCardAssetPath(int cardId) => 'assets/images/cards/$cardId.png';
 
 /// Fills space with the local card PNG, or [errorPlaceholder] if the asset is missing or [cardId] ≤ 0.
 class BundledPlayCardImage extends StatelessWidget {
