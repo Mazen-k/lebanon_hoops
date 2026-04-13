@@ -37,7 +37,7 @@ const List<PackShopItem> kPackShopCatalog = [
     imageFileName: 'LebaneseBasePack.png',
     title: 'Lebanese Base Pack',
     descriptionLines: [
-      'Four random base cards.',
+      'Guranteed 4 Lebanese base cards.',
     ],
     priceCoins: 5,
   ),
@@ -47,7 +47,7 @@ const List<PackShopItem> kPackShopCatalog = [
     imageFileName: 'ImportChancePick.png',
     title: 'Import Chance Pick',
     descriptionLines: [
-      'Four players: the first slot has a 10% chance to be an import; the other three are always base.',
+      'Guranteed 3 Base cards with chance of 1 import',
     ],
     priceCoins: 7,
   ),

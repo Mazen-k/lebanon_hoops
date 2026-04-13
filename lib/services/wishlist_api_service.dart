@@ -37,13 +37,29 @@ class WishlistApiService {
       var res = await getP(path);
       if (res.statusCode == 404) res = await getP(alt);
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw WishlistApiException('Wishlist GET failed (${res.statusCode})');
+        var msg = 'Wishlist GET failed (${res.statusCode}) at ${res.request?.url}';
+        try {
+          final m = jsonDecode(utf8.decode(res.bodyBytes, allowMalformed: true));
+          if (m is Map && m['error'] != null) msg = m['error'].toString();
+        } catch (_) {
+          final preview = utf8.decode(res.bodyBytes, allowMalformed: true).trim();
+          if (preview.isNotEmpty && preview.length < 200) msg = '$msg — $preview';
+        }
+        throw WishlistApiException(msg);
       }
-      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
-      if (decoded is! Map) throw WishlistApiException('Invalid wishlist response');
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes, allowMalformed: true));
+      if (decoded is! Map) throw WishlistApiException('Invalid wishlist response (not JSON object)');
       final ids = decoded['card_ids'] ?? decoded['cardIds'];
-      if (ids is! List) return [];
-      return ids.map((e) => int.parse(e.toString())).toList();
+      if (ids == null) return [];
+      if (ids is! List) {
+        throw WishlistApiException('Wishlist response missing card_ids array');
+      }
+      final out = <int>[];
+      for (final e in ids) {
+        final n = int.tryParse(e.toString());
+        if (n != null) out.add(n);
+      }
+      return out;
     } finally {
       if (_client == null) own.close();
     }

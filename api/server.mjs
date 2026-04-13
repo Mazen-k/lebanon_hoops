@@ -665,12 +665,25 @@ async function wishlistGetHandler(req, res) {
   const userId = Number(raw);
   const client = await pool.connect();
   try {
-    await ensureWishlistRow(client, userId);
+    try {
+      await ensureWishlistRow(client, userId);
+    } catch (e) {
+      if (e.code === '23503') {
+        return res.status(404).json({
+          error:
+            'No user row for this user_id (foreign key). Use a valid users.user_id or register/login first.',
+        });
+      }
+      throw e;
+    }
     const { rows: wrows } = await client.query(
       `SELECT wishlist_id FROM wishlists WHERE user_id = $1::int`,
       [userId],
     );
     const wishlistId = wrows[0]?.wishlist_id;
+    if (wishlistId == null) {
+      return res.json({ wishlist_id: null, card_ids: [] });
+    }
     const { rows: crows } = await client.query(
       `SELECT card_id FROM wishlist_cards WHERE wishlist_id = $1::int ORDER BY added_at ASC`,
       [wishlistId],
