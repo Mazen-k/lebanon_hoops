@@ -37,7 +37,7 @@ const List<PackShopItem> kPackShopCatalog = [
     imageFileName: 'LebaneseBasePack.png',
     title: 'Lebanese Base Pack',
     descriptionLines: [
-      'Contains 4 random Lebanese base cards.',
+      'Contains 4 random cards from the play_cards pool.',
     ],
     priceCoins: 5,
   ),

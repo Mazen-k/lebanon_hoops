@@ -261,7 +261,7 @@ app.get('/api/user/wallet', userWalletHandler);
 const LEBANESE_BASE_PACK_ID = 'lebanese_base';
 const LEBANESE_BASE_PACK_COST = 5;
 
-/** Open a pack: deduct card_coins, insert 4 random base play_cards as card_instances. */
+/** Open a pack: deduct card_coins, insert 4 random play_cards as card_instances. */
 async function openPackHandler(req, res) {
   const userId = req.body?.userId ?? req.body?.user_id;
   const packId = req.body?.packId ?? req.body?.pack_id ?? LEBANESE_BASE_PACK_ID;
@@ -297,7 +297,6 @@ async function openPackHandler(req, res) {
       `
       SELECT card_id
       FROM play_cards
-      WHERE LOWER(TRIM(card_type::text)) = 'base'
       ORDER BY RANDOM()
       LIMIT 4
       `,
@@ -307,7 +306,7 @@ async function openPackHandler(req, res) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         error:
-          'Not enough base cards in the pool (need 4). Add at least four play_cards rows with card_type base.',
+          'Not enough cards in the pool (need 4). Add at least four rows to play_cards.',
       });
     }
 
