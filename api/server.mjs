@@ -261,10 +261,22 @@ app.get('/api/user/wallet', userWalletHandler);
 const LEBANESE_BASE_PACK_ID = 'lebanese_base';
 const LEBANESE_BASE_PACK_COST = 5;
 
+/** Canonical pack id from JSON (trim + lowercase aliases). */
+function normalizeOpenPackId(body) {
+  const raw = body?.packId ?? body?.pack_id;
+  if (raw == null) return LEBANESE_BASE_PACK_ID;
+  const s = String(raw).trim();
+  if (s === '') return LEBANESE_BASE_PACK_ID;
+  const lower = s.toLowerCase();
+  if (lower === 'standard') return 'standard';
+  if (lower === LEBANESE_BASE_PACK_ID) return LEBANESE_BASE_PACK_ID;
+  return s;
+}
+
 /** Open a pack: deduct card_coins, insert 4 random play_cards as card_instances. */
 async function openPackHandler(req, res) {
   const userId = req.body?.userId ?? req.body?.user_id;
-  const packId = req.body?.packId ?? req.body?.pack_id ?? LEBANESE_BASE_PACK_ID;
+  const packId = normalizeOpenPackId(req.body);
   if (userId == null || Number.isNaN(Number(userId))) {
     return res.status(400).json({ error: 'userId (integer) is required in JSON body.' });
   }
@@ -294,19 +306,23 @@ async function openPackHandler(req, res) {
     }
 
     const basePackOnly = packId === LEBANESE_BASE_PACK_ID;
-    const typeWhere = basePackOnly
-      ? `WHERE LOWER(TRIM(COALESCE(card_type, ''))) = 'base'`
-      : '';
 
-    const { rows: picked } = await client.query(
-      `
+    const pickSql = basePackOnly
+      ? `
       SELECT card_id
       FROM play_cards
-      ${typeWhere}
+      WHERE LOWER(TRIM(COALESCE(card_type::text, ''))) = 'base'
       ORDER BY RANDOM()
       LIMIT 4
-      `,
-    );
+      `
+      : `
+      SELECT card_id
+      FROM play_cards
+      ORDER BY RANDOM()
+      LIMIT 4
+      `;
+
+    const { rows: picked } = await client.query(pickSql);
 
     if (picked.length < 4) {
       await client.query('ROLLBACK');
@@ -318,6 +334,25 @@ async function openPackHandler(req, res) {
     }
 
     const cardIds = picked.map((r) => r.card_id);
+
+    if (basePackOnly) {
+      const { rows: leak } = await client.query(
+        `
+        SELECT card_id, card_type
+        FROM play_cards
+        WHERE card_id = ANY($1::int[])
+          AND LOWER(TRIM(COALESCE(card_type::text, ''))) <> 'base'
+        `,
+        [cardIds],
+      );
+      if (leak.length > 0) {
+        await client.query('ROLLBACK');
+        console.error('[open-pack] Lebanese base pool returned non-base rows', leak);
+        return res.status(500).json({
+          error: 'Pack pool misconfigured: non-base cards matched base filter. Check play_cards.card_type in the database.',
+        });
+      }
+    }
 
     await client.query(
       `UPDATE users SET card_coins = card_coins - $1::int WHERE user_id = $2::int`,
