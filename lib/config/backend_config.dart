@@ -96,4 +96,11 @@ abstract final class BackendConfig {
     if (fromEnv.isNotEmpty) return fromEnv.trim().replaceAll(RegExp(r'^/+'), '');
     return 'auth/register';
   }
+
+  /// GET `?user_id=…` — returns `username` and `card_coins` for the cards hub header.
+  static String get userWalletPath {
+    const fromEnv = String.fromEnvironment('API_USER_WALLET_PATH', defaultValue: '');
+    if (fromEnv.isNotEmpty) return fromEnv.trim().replaceAll(RegExp(r'^/+'), '');
+    return 'user/wallet';
+  }
 }

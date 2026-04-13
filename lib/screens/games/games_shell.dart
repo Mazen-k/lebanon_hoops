@@ -16,6 +16,7 @@ class GamesShell extends StatefulWidget {
 
 class _GamesShellState extends State<GamesShell> {
   int _index = 0;
+  int _cardsWalletRefreshToken = 0;
 
   static const _labels = [
     'Cards',
@@ -26,23 +27,42 @@ class _GamesShellState extends State<GamesShell> {
     'Coming soon',
   ];
 
-  late final List<Widget> _pages = [
-    const CardsGameHubPage(),
-    const MenuPlaceholderPage(title: 'Fantasy', subtitle: 'Fantasy games — content coming soon.'),
-    const MenuPlaceholderPage(title: 'Predictor', subtitle: 'Predictions — content coming soon.'),
-    const MenuPlaceholderPage(title: 'Redeem', subtitle: 'Redeem rewards — content coming soon.'),
-    const MenuPlaceholderPage(title: 'Coming soon', subtitle: 'New game mode in development.'),
-    const MenuPlaceholderPage(title: 'Coming soon', subtitle: 'New game mode in development.'),
-  ];
+  late final List<Widget> _gamesPages;
+
+  static const Color _cardsHubBg = Color(0xFF0A0A1A);
+  static const Color _cardsHubFg = Color(0xFFF5F5FF);
+
+  @override
+  void initState() {
+    super.initState();
+    _gamesPages = [
+      const MenuPlaceholderPage(title: 'Fantasy', subtitle: 'Fantasy games — content coming soon.'),
+      const MenuPlaceholderPage(title: 'Predictor', subtitle: 'Predictions — content coming soon.'),
+      const MenuPlaceholderPage(title: 'Redeem', subtitle: 'Redeem rewards — content coming soon.'),
+      const MenuPlaceholderPage(title: 'Coming soon', subtitle: 'New game mode in development.'),
+      const MenuPlaceholderPage(title: 'Coming soon', subtitle: 'New game mode in development.'),
+    ];
+  }
+
+  void _bumpCardsWalletHeader() {
+    if (mounted) setState(() => _cardsWalletRefreshToken++);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cardsTab = _index == 0;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: cardsTab ? _cardsHubBg : AppColors.surface,
       appBar: AppBar(
-        title: Text(_labels[_index]),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        centerTitle: !cardsTab,
+        title: cardsTab
+            ? const Text(
+                'Card Game',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              )
+            : Text(_labels[_index]),
+        backgroundColor: cardsTab ? _cardsHubBg : AppColors.surface,
+        foregroundColor: cardsTab ? _cardsHubFg : AppColors.onSurface,
         surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (scaffoldContext) => IconButton(
@@ -58,39 +78,53 @@ class _GamesShellState extends State<GamesShell> {
       ),
       body: IndexedStack(
         index: _index,
-        children: _pages,
+        children: [
+          CardsGameHubPage(
+            key: ValueKey(_cardsWalletRefreshToken),
+            onCardsActivity: _bumpCardsWalletHeader,
+          ),
+          ..._gamesPages,
+        ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface.withAlpha((255 * 0.9).round()),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.onSurface.withAlpha((255 * 0.05).round()),
-              blurRadius: 16,
-              offset: const Offset(0, -4),
+      bottomNavigationBar: cardsTab
+          ? null
+          : Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface.withAlpha((255 * 0.9).round()),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.onSurface.withAlpha((255 * 0.05).round()),
+                    blurRadius: 16,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: BottomNavigationBar(
+                currentIndex: _index,
+                onTap: (i) {
+                  setState(() {
+                    _index = i;
+                    if (i == 0) _cardsWalletRefreshToken++;
+                  });
+                },
+                type: BottomNavigationBarType.fixed,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                selectedItemColor: AppColors.primary,
+                unselectedItemColor: AppColors.secondary,
+                selectedLabelStyle:
+                    Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
+                unselectedLabelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 10),
+                items: const [
+                  BottomNavigationBarItem(icon: Icon(Icons.style_outlined), label: 'Cards'),
+                  BottomNavigationBarItem(icon: Icon(Icons.auto_awesome_outlined), label: 'Fantasy'),
+                  BottomNavigationBarItem(icon: Icon(Icons.query_stats_outlined), label: 'Predictor'),
+                  BottomNavigationBarItem(icon: Icon(Icons.redeem_outlined), label: 'Redeem'),
+                  BottomNavigationBarItem(icon: Icon(Icons.hourglass_empty_rounded), label: 'Coming soon'),
+                  BottomNavigationBarItem(icon: Icon(Icons.more_horiz_rounded), label: 'Coming soon'),
+                ],
+              ),
             ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _index,
-          onTap: (i) => setState(() => _index = i),
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.secondary,
-          selectedLabelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
-          unselectedLabelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 10),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.style_outlined), label: 'Cards'),
-            BottomNavigationBarItem(icon: Icon(Icons.auto_awesome_outlined), label: 'Fantasy'),
-            BottomNavigationBarItem(icon: Icon(Icons.query_stats_outlined), label: 'Predictor'),
-            BottomNavigationBarItem(icon: Icon(Icons.redeem_outlined), label: 'Redeem'),
-            BottomNavigationBarItem(icon: Icon(Icons.hourglass_empty_rounded), label: 'Coming soon'),
-            BottomNavigationBarItem(icon: Icon(Icons.more_horiz_rounded), label: 'Coming soon'),
-          ],
-        ),
-      ),
     );
   }
 }

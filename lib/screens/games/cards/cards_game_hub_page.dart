@@ -1,139 +1,89 @@
 import 'package:flutter/material.dart';
 
-import '../../../theme/colors.dart';
-import 'open_packs_page.dart';
 import 'card_mode_placeholders.dart';
+import 'cards_hub_image_paths.dart';
+import 'cards_hub_wallet_row.dart';
+import 'open_packs_page.dart';
 import 'trade_hub_page.dart';
 import 'view_collection_page.dart';
 
-/// Entry points into the card game modes.
-class CardsGameHubPage extends StatelessWidget {
-  const CardsGameHubPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Card game',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  fontStyle: FontStyle.italic,
-                  color: AppColors.onSurface,
-                ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Choose a mode',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.secondary),
-          ),
-          const SizedBox(height: 20),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 14,
-            childAspectRatio: 1.05,
-            children: [
-              _HubBox(
-                icon: Icons.inventory_2_outlined,
-                label: 'Open packs',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const OpenPacksPage()),
-                ),
-              ),
-              _HubBox(
-                icon: Icons.collections_bookmark_outlined,
-                label: 'View collection',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const ViewCollectionPage()),
-                ),
-              ),
-              _HubBox(
-                icon: Icons.layers_outlined,
-                label: 'Duplicates',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const ViewCollectionPage(duplicatesOnly: true)),
-                ),
-              ),
-              _HubBox(
-                icon: Icons.sports_esports_outlined,
-                label: '1v1',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const OneVOnePage()),
-                ),
-              ),
-              _HubBox(
-                icon: Icons.swap_horiz_rounded,
-                label: 'Trade',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const TradeHubPage()),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+/// Dark card-hub aesthetic (purple/black, orange/gold accents).
+abstract final class _CardHubTheme {
+  static const Color bgDeep = Color(0xFF0A0A1A);
+  static const Color bgElevated = Color(0xFF12122A);
+  static const Color orange = Color(0xFFFF8C00);
+  static const Color gold = Color(0xFFFFD700);
 }
 
-class _HubBox extends StatelessWidget {
-  const _HubBox({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+/// Entry points into the card game modes. Fixed viewport (no scroll); wallet row sits under the app bar.
+class CardsGameHubPage extends StatelessWidget {
+  const CardsGameHubPage({super.key, this.onCardsActivity});
 
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
+  /// Notifies [GamesShell] to refresh wallet/coins after a child route pops.
+  final VoidCallback? onCardsActivity;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              colors: [
-                AppColors.surfaceContainerLow,
-                AppColors.surfaceContainerHighest,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(color: AppColors.outlineVariant),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.onSurface.withAlpha(18),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+    final bump = onCardsActivity;
+    return ColoredBox(
+      color: _CardHubTheme.bgDeep,
+      child: CustomPaint(
+        painter: _GridPatternPainter(),
+        child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(icon, size: 40, color: AppColors.primary),
-                const SizedBox(height: 12),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.onSurface,
-                      ),
+                const CardsHubWalletRow(),
+                const SizedBox(height: 8),
+                Expanded(
+                  flex: 5,
+                  child: _FeaturedPacksHero(
+                    onOpenPacks: () => _pushCardsRoute(
+                      context,
+                      bump,
+                      const OpenPacksPage(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 76,
+                  width: double.infinity,
+                  child: _OneVOneCta(
+                    onTap: () => _pushCardsRoute(
+                      context,
+                      bump,
+                      const OneVOnePage(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  flex: 4,
+                  child: _SecondaryGrid(
+                    onCollection: () => _pushCardsRoute(
+                      context,
+                      bump,
+                      const ViewCollectionPage(),
+                    ),
+                    onDuplicates: () => _pushCardsRoute(
+                      context,
+                      bump,
+                      const ViewCollectionPage(duplicatesOnly: true),
+                    ),
+                    onTrading: () => _pushCardsRoute(
+                      context,
+                      bump,
+                      const TradeHubPage(),
+                    ),
+                    onSbc: () => _pushCardsRoute(
+                      context,
+                      bump,
+                      const SbcPage(),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -142,4 +92,222 @@ class _HubBox extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _pushCardsRoute(
+  BuildContext context,
+  VoidCallback? onCardsActivity,
+  Widget page,
+) async {
+  await Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(builder: (_) => page),
+  );
+  onCardsActivity?.call();
+}
+
+class _FeaturedPacksHero extends StatelessWidget {
+  const _FeaturedPacksHero({required this.onOpenPacks});
+
+  final VoidCallback onOpenPacks;
+
+  @override
+  Widget build(BuildContext context) {
+    return _HubTappableImage(
+      imageAsset: CardsHubImagePaths.packsHero,
+      onTap: onOpenPacks,
+      height: null,
+      borderRadius: 22,
+      strongBorder: true,
+    );
+  }
+}
+
+class _OneVOneCta extends StatelessWidget {
+  const _OneVOneCta({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _HubTappableImage(
+      imageAsset: CardsHubImagePaths.oneVOne,
+      onTap: onTap,
+      height: 76,
+      borderRadius: 20,
+      strongBorder: true,
+    );
+  }
+}
+
+class _SecondaryGrid extends StatelessWidget {
+  const _SecondaryGrid({
+    required this.onCollection,
+    required this.onDuplicates,
+    required this.onTrading,
+    required this.onSbc,
+  });
+
+  final VoidCallback onCollection;
+  final VoidCallback onDuplicates;
+  final VoidCallback onTrading;
+  final VoidCallback onSbc;
+
+  static const double _gap = 12;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _HubTappableImage(
+                  imageAsset: CardsHubImagePaths.collection,
+                  onTap: onCollection,
+                  borderRadius: 18,
+                ),
+              ),
+              const SizedBox(width: _gap),
+              Expanded(
+                child: _HubTappableImage(
+                  imageAsset: CardsHubImagePaths.duplicates,
+                  onTap: onDuplicates,
+                  borderRadius: 18,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: _gap),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _HubTappableImage(
+                  imageAsset: CardsHubImagePaths.trading,
+                  onTap: onTrading,
+                  borderRadius: 18,
+                ),
+              ),
+              const SizedBox(width: _gap),
+              Expanded(
+                child: _HubTappableImage(
+                  imageAsset: CardsHubImagePaths.sbc,
+                  onTap: onSbc,
+                  borderRadius: 18,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Framed tap target; shows [imageAsset] or an empty interior if the file is missing.
+class _HubTappableImage extends StatelessWidget {
+  const _HubTappableImage({
+    required this.imageAsset,
+    required this.onTap,
+    this.height,
+    this.borderRadius = 20,
+    this.strongBorder = false,
+  });
+
+  final String imageAsset;
+  final VoidCallback onTap;
+  final double? height;
+  final double borderRadius;
+  final bool strongBorder;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderW = strongBorder ? 1.5 : 1.2;
+    final gold = _CardHubTheme.gold.withAlpha(strongBorder ? 200 : 100);
+    final decoration = BoxDecoration(
+      borderRadius: BorderRadius.circular(borderRadius),
+      color: _CardHubTheme.bgElevated,
+      border: Border.all(width: borderW, color: gold),
+      boxShadow: [
+        BoxShadow(
+          color: _CardHubTheme.orange.withAlpha(strongBorder ? 55 : 28),
+          blurRadius: strongBorder ? 24 : 14,
+          spreadRadius: strongBorder ? -2 : 0,
+          offset: Offset(0, strongBorder ? 10 : 6),
+        ),
+      ],
+    );
+
+    Widget imageFill() => Image.asset(
+          imageAsset,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          errorBuilder: (context, error, stackTrace) => const SizedBox.expand(),
+        );
+
+    if (height != null) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: Ink(
+            height: height,
+            decoration: decoration,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(borderRadius - 1),
+              child: SizedBox(width: double.infinity, height: height, child: imageFill()),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final h = constraints.maxHeight;
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(borderRadius),
+            child: Ink(
+              width: w,
+              height: h,
+              decoration: decoration,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(borderRadius - 1),
+                child: SizedBox(width: w, height: h, child: imageFill()),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GridPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = Colors.white.withAlpha(10)
+      ..strokeWidth = 1;
+    const step = 28.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

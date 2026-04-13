@@ -229,6 +229,35 @@ app.post('/api/auth/register', registerHandler);
 app.post('/auth/login', loginHandler);
 app.post('/api/auth/login', loginHandler);
 
+/** GET ?user_id= — username + card_coins for cards hub header. */
+async function userWalletHandler(req, res) {
+  const raw = req.query.user_id ?? req.query.userId;
+  if (raw == null || raw === '' || Number.isNaN(Number(raw))) {
+    return res.status(400).json({ error: 'user_id query parameter is required (integer).' });
+  }
+  const userId = Number(raw);
+  try {
+    const { rows } = await pool.query(
+      `SELECT username, COALESCE(card_coins, 0)::int AS card_coins
+       FROM users WHERE user_id = $1::int`,
+      [userId],
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({
+      username: rows[0].username,
+      card_coins: rows[0].card_coins,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/user/wallet', userWalletHandler);
+app.get('/api/user/wallet', userWalletHandler);
+
 /** Open a pack: random rows from play_cards, insert card_instances (single query, atomic). */
 async function openPackHandler(req, res) {
   const userId = req.body?.userId ?? req.body?.user_id;

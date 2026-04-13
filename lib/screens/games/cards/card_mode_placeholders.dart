@@ -24,3 +24,24 @@ class OneVOnePage extends StatelessWidget {
   }
 }
 
+class SbcPage extends StatelessWidget {
+  const SbcPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      appBar: AppBar(
+        title: const Text('SBC'),
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.onSurface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      body: const MenuPlaceholderPage(
+        title: 'SBC',
+        subtitle: 'Squad building challenges — coming soon.',
+      ),
+    );
+  }
+}
+

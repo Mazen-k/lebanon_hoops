@@ -1,0 +1,23 @@
+Pack tile images (Open packs screen)
+=====================================
+
+Put your PNG (or JPG — then update Flutter code to use .jpg) files in this folder:
+
+  lebanon_hoops/assets/images/pack_tiles/
+
+Required filenames (match exactly):
+
+  standard_pack.png   — Standard pack slot (tap opens packs today).
+  premium_pack.png    — Reserved for a future premium pack.
+  special_pack.png    — Reserved for a future special pack.
+  event_pack.png      — Reserved for a future event pack.
+
+Until you add a file, that slot shows an empty framed box.
+
+After adding or renaming files, run:
+  flutter pub get
+(if you changed pubspec.yaml), then hot restart the app.
+
+Optional: use a coin icon in the app bar — add
+  assets/images/coin_icon.png
+and wire it in code if you want a custom coin instead of the built-in icon.

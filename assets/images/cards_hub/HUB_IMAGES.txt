@@ -1,0 +1,24 @@
+Card games MAIN HUB images
+==========================
+
+Folder (create it if needed):
+
+  lebanon_hoops/assets/images/cards_hub/
+
+Put PNG files here using these exact names:
+
+  packs_hero.png      — Large pack banner at the top (tap → open packs).
+  hub_1v1.png         — Wide 1v1 strip below the banner.
+  hub_collection.png  — Collection tile (2×2 grid, top-left).
+  hub_duplicates.png  — Duplicates tile (top-right).
+  hub_trading.png     — Trading tile (bottom-left).
+  hub_sbc.png         — SBC tile (bottom-right).
+
+If a file is missing, that box stays empty (framed) until you add the image.
+
+Tip: Put text and icons inside your PNGs so the UI stays image-only.
+
+After adding files: hot restart the app (assets are loaded at startup).
+
+If you still have an old hero at assets/images/cards_hub_hero.png, copy or
+rename it to assets/images/cards_hub/packs_hero.png.

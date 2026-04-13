@@ -3,8 +3,15 @@ import 'package:flutter/material.dart';
 import '../../../config/backend_config.dart';
 import '../../../services/packs_api_service.dart';
 import '../../../services/session_store.dart';
-import '../../../theme/colors.dart';
+import 'pack_image_paths.dart';
 import 'pack_reveal_screen.dart';
+
+abstract final class _OpenPacksTheme {
+  static const Color bg = Color(0xFF0A0A1A);
+  static const Color elevated = Color(0xFF12122A);
+  static const Color gold = Color(0xFFFFD700);
+  static const Color onDark = Color(0xFFF5F5FF);
+}
 
 class OpenPacksPage extends StatefulWidget {
   const OpenPacksPage({super.key});
@@ -45,29 +52,50 @@ class _OpenPacksPageState extends State<OpenPacksPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: _OpenPacksTheme.bg,
       appBar: AppBar(
         title: const Text('Open packs'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: _OpenPacksTheme.bg,
+        foregroundColor: _OpenPacksTheme.onDark,
         surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
           Text(
-            'Tap a pack to open. Cards are drawn at random from the database and saved to your account.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.secondary),
+            'Tap a pack slot to open (standard pack is wired today). Add artwork under assets/images/pack_tiles/ — see PACK_IMAGES.txt there.',
+            style: TextStyle(
+              color: _OpenPacksTheme.onDark.withAlpha(200),
+              height: 1.35,
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Packs save to your logged-in user. Fallback id: ${BackendConfig.devUserId} if no session.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.outline),
-          ),
-          const SizedBox(height: 24),
-          _StandardPackTile(
-            busy: _opening,
-            onOpen: _openStandard,
+          const SizedBox(height: 20),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 14,
+            crossAxisSpacing: 14,
+            childAspectRatio: 0.92,
+            children: [
+              _PackImageSlot(
+                imageAsset: PackImagePaths.standardPack,
+                busy: _opening,
+                onTap: _openStandard,
+              ),
+              const _PackImageSlot(
+                imageAsset: PackImagePaths.premiumPack,
+                onTap: null,
+              ),
+              const _PackImageSlot(
+                imageAsset: PackImagePaths.specialPack,
+                onTap: null,
+              ),
+              const _PackImageSlot(
+                imageAsset: PackImagePaths.eventPack,
+                onTap: null,
+              ),
+            ],
           ),
         ],
       ),
@@ -75,85 +103,62 @@ class _OpenPacksPageState extends State<OpenPacksPage> {
   }
 }
 
-class _StandardPackTile extends StatelessWidget {
-  const _StandardPackTile({
-    required this.busy,
-    required this.onOpen,
+class _PackImageSlot extends StatelessWidget {
+  const _PackImageSlot({
+    required this.imageAsset,
+    this.onTap,
+    this.busy = false,
   });
 
+  final String imageAsset;
+  final VoidCallback? onTap;
   final bool busy;
-  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onTap != null && !busy;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: busy ? null : onOpen,
+        onTap: enabled ? onTap : null,
         borderRadius: BorderRadius.circular(20),
         child: Ink(
-          height: 220,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            gradient: AppColors.signatureGradient,
+            color: _OpenPacksTheme.elevated,
+            border: Border.all(
+              color: _OpenPacksTheme.gold.withAlpha(100),
+              width: 1.2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withAlpha(120),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
+                color: Colors.black.withAlpha(80),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.white.withAlpha(35),
-                        Colors.transparent,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(19),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(
+                  imageAsset,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => const SizedBox.expand(),
+                ),
+                if (busy)
+                  const ColoredBox(
+                    color: Color(0x88000000),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: _OpenPacksTheme.gold,
+                      ),
                     ),
                   ),
-                ),
-              ),
-              if (busy)
-                const CircularProgressIndicator(color: AppColors.onPrimary),
-              if (!busy)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.inventory_2_rounded, size: 64, color: AppColors.onPrimary.withAlpha(240)),
-                      const SizedBox(height: 12),
-                      Text(
-                        'STANDARD PACK',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: AppColors.onPrimary,
-                              fontWeight: FontWeight.w900,
-                              fontStyle: FontStyle.italic,
-                              letterSpacing: 1.2,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tap to open • 4 random cards',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.onPrimary.withAlpha(220),
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
