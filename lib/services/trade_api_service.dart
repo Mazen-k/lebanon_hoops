@@ -180,6 +180,41 @@ class TradeApiService {
     }
   }
 
+  Future<void> postQuickMessage({
+    required String code,
+    required int userId,
+    required String preset,
+  }) async {
+    final c = code.trim().toUpperCase();
+    final paths = _pair('trade/rooms/$c/quick-message');
+    final body = jsonEncode({'user_id': userId, 'preset': preset});
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .post(
+              _rootUri(p),
+              headers: const {'Content-Type': 'application/json', 'Accept': 'application/json'},
+              body: body,
+            )
+            .timeout(const Duration(seconds: 15));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          var msg = 'Quick message failed (${res.statusCode})';
+          try {
+            final m = jsonDecode(utf8.decode(res.bodyBytes));
+            if (m is Map && m['error'] != null) msg = m['error'].toString();
+          } catch (_) {}
+          throw TradeApiException(msg);
+        }
+        return;
+      }
+      throw TradeApiException('Quick message route not found');
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
+
   Future<void> putOffer({required String code, required int userId, required List<int?> slots}) async {
     if (slots.length != 3) throw TradeApiException('Need exactly 3 slots');
     final c = code.trim().toUpperCase();

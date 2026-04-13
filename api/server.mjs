@@ -837,6 +837,7 @@ async function tradeCreateHandler(req, res) {
     coins: { [uid]: 0 },
     /** targetUserId -> viewerUserId -> [null | 'up' | 'down'] for each slot */
     slotReactions: {},
+    lastQuickMessage: null,
   });
   res.status(201).json({ code, host: true });
 }
@@ -1024,6 +1025,7 @@ async function tradeStateHandler(req, res) {
       ready_confirm: room.ready,
       final_confirm: room.finalize,
       summary_choice: room.summary_choice ?? {},
+      last_quick_message: room.lastQuickMessage ?? null,
     });
   } catch (err) {
     console.error(err);
@@ -1031,6 +1033,43 @@ async function tradeStateHandler(req, res) {
   } finally {
     client.release();
   }
+}
+
+const TRADE_QUICK_MSG_PRESETS = new Set([
+  'hello',
+  'cards_only',
+  'coins_only',
+  'how_much',
+  'make_offer',
+  'look_wishlist',
+  'sorry_no_match',
+  'more_coins',
+]);
+
+async function tradeQuickMessageHandler(req, res) {
+  pruneStaleRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  const presetRaw = req.body?.preset ?? req.body?.message_key ?? req.body?.key;
+  if (!code || userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  const preset = presetRaw != null ? String(presetRaw).trim() : '';
+  if (!TRADE_QUICK_MSG_PRESETS.has(preset)) {
+    return res.status(400).json({ error: 'Invalid preset message' });
+  }
+  const uid = Number(userId);
+  const room = tradeRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found or expired' });
+  if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member of this room' });
+  room.lastQuickMessage = {
+    from_user_id: uid,
+    from_username: room.usernames[uid] ?? 'Player',
+    preset,
+    sent_at: Date.now(),
+  };
+  room.rev = (room.rev ?? 0) + 1;
+  return res.json({ ok: true, rev: room.rev });
 }
 
 async function tradeOfferHandler(req, res) {
@@ -1406,6 +1445,8 @@ app.put('/trade/rooms/:code/coins', tradeCoinsHandler);
 app.put('/api/trade/rooms/:code/coins', tradeCoinsHandler);
 app.post('/trade/rooms/:code/slot-reaction', tradeSlotReactionHandler);
 app.post('/api/trade/rooms/:code/slot-reaction', tradeSlotReactionHandler);
+app.post('/trade/rooms/:code/quick-message', tradeQuickMessageHandler);
+app.post('/api/trade/rooms/:code/quick-message', tradeQuickMessageHandler);
 
 /** All [card_instance_id] rows the user may put in a trade offer (owned + that card_id is duplicated). */
 async function tradeableInstancesHandler(req, res) {

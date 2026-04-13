@@ -23,6 +23,35 @@ abstract final class _TradeRoomVisual {
   static const Color onMuted = Color(0xFFB8B8C8);
 }
 
+/// Preset quick chat lines (server stores `preset` key only).
+abstract final class _TradeQuickPhrases {
+  static const List<String> presetsInOrder = [
+    'hello',
+    'cards_only',
+    'coins_only',
+    'how_much',
+    'make_offer',
+    'look_wishlist',
+    'sorry_no_match',
+    'more_coins',
+  ];
+
+  static const Map<String, String> phrase = {
+    'hello': 'Hello',
+    'cards_only': 'I only need cards',
+    'coins_only': 'I only need coins',
+    'how_much': 'How much do you want?',
+    'make_offer': 'Make your offer',
+    'look_wishlist': 'Look at my wishlist',
+    'sorry_no_match': "Sorry, I don't have what you want",
+    'more_coins': 'Please add more coins',
+  };
+
+  static bool isValid(String preset) => phrase.containsKey(preset);
+
+  static String textFor(String preset) => phrase[preset] ?? preset;
+}
+
 class TradeRoomPage extends StatefulWidget {
   const TradeRoomPage({super.key, required this.roomCode});
 
@@ -56,6 +85,12 @@ class _TradeRoomPageState extends State<TradeRoomPage>
   Timer? _coinsDebounce;
   bool _suppressCoinsListener = false;
 
+  Timer? _quickMsgBubbleTimer;
+  int? _bubbleFromUserId;
+  String? _bubblePreset;
+  String? _bubbleFromUsername;
+  String? _lastQuickMsgSignature;
+
   @override
   void initState() {
     super.initState();
@@ -74,6 +109,7 @@ class _TradeRoomPageState extends State<TradeRoomPage>
 
   @override
   void dispose() {
+    _quickMsgBubbleTimer?.cancel();
     _coinsDebounce?.cancel();
     _coinsCtrl.removeListener(_onCoinsTextChanged);
     _coinsCtrl.dispose();
@@ -248,6 +284,141 @@ class _TradeRoomPageState extends State<TradeRoomPage>
     });
   }
 
+  void _syncQuickMessageBubble() {
+    if (!mounted) return;
+    final m = _state?['last_quick_message'];
+    if (m is! Map) {
+      return;
+    }
+    final fromRaw = m['from_user_id'] ?? m['fromUserId'];
+    final from = fromRaw is int ? fromRaw : int.tryParse(fromRaw?.toString() ?? '');
+    final preset = m['preset']?.toString();
+    final sentRaw = m['sent_at'] ?? m['sentAt'];
+    final sent = sentRaw is int ? sentRaw : int.tryParse(sentRaw?.toString() ?? '');
+    final name =
+        m['from_username']?.toString() ?? m['fromUsername']?.toString() ?? 'Player';
+    if (from == null || preset == null || sent == null) return;
+    if (!_TradeQuickPhrases.isValid(preset)) return;
+    final ageMs = DateTime.now().millisecondsSinceEpoch - sent;
+    if (ageMs < 0 || ageMs > 18000) return;
+
+    final sig = '$from-$sent-$preset';
+    if (sig == _lastQuickMsgSignature) return;
+    _lastQuickMsgSignature = sig;
+
+    _quickMsgBubbleTimer?.cancel();
+    setState(() {
+      _bubbleFromUserId = from;
+      _bubblePreset = preset;
+      _bubbleFromUsername = name;
+    });
+    _quickMsgBubbleTimer = Timer(const Duration(seconds: 6), () {
+      if (!mounted) return;
+      setState(() {
+        _bubbleFromUserId = null;
+        _bubblePreset = null;
+        _bubbleFromUsername = null;
+      });
+    });
+  }
+
+  Future<void> _showQuickMessagePicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _TradeRoomVisual.panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        final h = min(520.0, MediaQuery.sizeOf(context).height * 0.72);
+        return SafeArea(
+          child: SizedBox(
+            height: h,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 4),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Quick message',
+                          style: TextStyle(
+                            color: CardGameUiTheme.onDark,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 17,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: CardGameUiTheme.onDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Text(
+                    'Choose a line to show next to your side for your partner.',
+                    style: TextStyle(
+                      color: CardGameUiTheme.onDark.withAlpha(160),
+                      fontSize: 12,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                    children: [
+                      for (final preset in _TradeQuickPhrases.presetsInOrder)
+                        ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          title: Text(
+                            _TradeQuickPhrases.textFor(preset),
+                            style: const TextStyle(
+                              color: CardGameUiTheme.onDark,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          onTap: () async {
+                            Navigator.pop(ctx);
+                            try {
+                              final uid = await _userId();
+                              await _api.postQuickMessage(
+                                code: widget.roomCode,
+                                userId: uid,
+                                preset: preset,
+                              );
+                              if (mounted) await _refresh(silent: true);
+                            } on TradeApiException catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.message)),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _syncPulseAnimation() {
     if (!mounted) return;
     final waitingPeerLock =
@@ -289,6 +460,7 @@ class _TradeRoomPageState extends State<TradeRoomPage>
       _syncCoinsControllerFromState();
       _syncPulseAnimation();
       _scheduleSummaryDialogIfNeeded();
+      _syncQuickMessageBubble();
     } on TradeApiException catch (e) {
       if (!mounted) return;
       if (e.message.contains('not found')) {
@@ -803,24 +975,46 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
-                              child: _TradePlayerColumn(
-                                alignEnd: true,
-                                accentName: _TradeRoomVisual.cyan,
-                                playerName: peerName ?? 'Waiting…',
-                                message: peerMsg.isEmpty ? '—' : peerMsg,
-                                slots: theirSlots,
-                                reactions: youOnPeer,
-                                reactionsInteractive:
-                                    peerName != null && !_iAmReady(),
-                                onVoteSlot: _setPeerSlotReaction,
-                                onSlotTap: null,
-                                coinLabel: 'OPPONENT GIVES COINS',
-                                peerCoinsText: '$peerCoins',
-                                sideConfirmed:
-                                    peerName != null && _peerReady(),
-                              ),
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                SingleChildScrollView(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(10, 4, 10, 4),
+                                  child: _TradePlayerColumn(
+                                    alignEnd: true,
+                                    accentName: _TradeRoomVisual.cyan,
+                                    playerName: peerName ?? 'Waiting…',
+                                    message: peerMsg.isEmpty ? '—' : peerMsg,
+                                    slots: theirSlots,
+                                    reactions: youOnPeer,
+                                    reactionsInteractive:
+                                        peerName != null && !_iAmReady(),
+                                    onVoteSlot: _setPeerSlotReaction,
+                                    onSlotTap: null,
+                                    coinLabel: 'OPPONENT GIVES COINS',
+                                    peerCoinsText: '$peerCoins',
+                                    sideConfirmed:
+                                        peerName != null && _peerReady(),
+                                  ),
+                                ),
+                                if (_bubblePreset != null &&
+                                    _bubbleFromUserId != null &&
+                                    _bubbleFromUserId == _peerUserId())
+                                  Positioned(
+                                    left: 8,
+                                    right: 8,
+                                    bottom: 6,
+                                    child: _TradeQuickChatBubble(
+                                      senderLabel:
+                                          '${_bubbleFromUsername ?? 'Player'} · quick message',
+                                      message: _TradeQuickPhrases.textFor(
+                                        _bubblePreset!,
+                                      ),
+                                      accentPeerSide: true,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                           Container(
@@ -832,16 +1026,7 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                             onWishlist: peerName == null
                                 ? null
                                 : _showPeerWishlist,
-                            onMessage: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Messages here are coming soon.',
-                                  ),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
+                            onMessage: _showQuickMessagePicker,
                           ),
                           Container(
                             height: 1,
@@ -849,39 +1034,64 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                             color: _TradeRoomVisual.panelLine.withAlpha(140),
                           ),
                           Expanded(
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
-                              child: _TradePlayerColumn(
-                                alignEnd: false,
-                                accentName: _TradeRoomVisual.neonGreen,
-                                playerName: yourName,
-                                message: yourMsg,
-                                slots: yourSlots,
-                                reactions: peerOnYou,
-                                reactionsInteractive: false,
-                                onVoteSlot: null,
-                                onSlotTap: _iAmReady() ? null : (i) => _pickSlotFixed(i),
-                                coinLabel: 'YOU GIVE COINS',
-                                coinsEditor: IgnorePointer(
-                                  ignoring: _iAmReady(),
-                                  child: TextField(
-                                    controller: _coinsCtrl,
-                                    focusNode: _coinsFocus,
-                                    keyboardType: TextInputType.number,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: CardGameUiTheme.onDark,
-                                      fontWeight: FontWeight.w700,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                SingleChildScrollView(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(10, 4, 10, 8),
+                                  child: _TradePlayerColumn(
+                                    alignEnd: false,
+                                    accentName: _TradeRoomVisual.neonGreen,
+                                    playerName: yourName,
+                                    message: yourMsg,
+                                    slots: yourSlots,
+                                    reactions: peerOnYou,
+                                    reactionsInteractive: false,
+                                    onVoteSlot: null,
+                                    onSlotTap: _iAmReady()
+                                        ? null
+                                        : (i) => _pickSlotFixed(i),
+                                    coinLabel: 'YOU GIVE COINS',
+                                    coinsEditor: IgnorePointer(
+                                      ignoring: _iAmReady(),
+                                      child: TextField(
+                                        controller: _coinsCtrl,
+                                        focusNode: _coinsFocus,
+                                        keyboardType: TextInputType.number,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: CardGameUiTheme.onDark,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                        cursorColor: _TradeRoomVisual.gold,
+                                        decoration:
+                                            _tradeCoinInputDecoration(),
+                                      ),
                                     ),
-                                    cursorColor: _TradeRoomVisual.gold,
-                                    decoration: _tradeCoinInputDecoration(),
+                                    sideConfirmed: _iAmReady(),
+                                    onUnconfirm:
+                                        peerName != null && _iAmReady()
+                                            ? _unconfirmOffer
+                                            : null,
                                   ),
                                 ),
-                                sideConfirmed: _iAmReady(),
-                                onUnconfirm: peerName != null && _iAmReady()
-                                    ? _unconfirmOffer
-                                    : null,
-                              ),
+                                if (_bubblePreset != null &&
+                                    _bubbleFromUserId != null &&
+                                    _bubbleFromUserId == _myUid)
+                                  Positioned(
+                                    left: 8,
+                                    right: 8,
+                                    top: 4,
+                                    child: _TradeQuickChatBubble(
+                                      senderLabel: 'You · quick message',
+                                      message: _TradeQuickPhrases.textFor(
+                                        _bubblePreset!,
+                                      ),
+                                      accentPeerSide: false,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ],
@@ -1854,6 +2064,75 @@ class _TradeConfirmBar extends StatelessWidget {
                   letterSpacing: 1.4,
                 ),
               ),
+      ),
+    );
+  }
+}
+
+class _TradeQuickChatBubble extends StatelessWidget {
+  const _TradeQuickChatBubble({
+    required this.senderLabel,
+    required this.message,
+    required this.accentPeerSide,
+  });
+
+  final String senderLabel;
+  final String message;
+  final bool accentPeerSide;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent =
+        accentPeerSide ? _TradeRoomVisual.cyan : _TradeRoomVisual.neonGreen;
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: _TradeRoomVisual.panel.withAlpha(252),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: accent.withAlpha(200), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(140),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.chat_bubble_outline_rounded, size: 17, color: accent),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    senderLabel.toUpperCase(),
+                    style: TextStyle(
+                      color: accent,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 10,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: const TextStyle(
+                color: CardGameUiTheme.onDark,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
