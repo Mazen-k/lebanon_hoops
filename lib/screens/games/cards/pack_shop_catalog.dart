@@ -37,9 +37,19 @@ const List<PackShopItem> kPackShopCatalog = [
     imageFileName: 'LebaneseBasePack.png',
     title: 'Lebanese Base Pack',
     descriptionLines: [
-      'Contains 4 random cards from the play_cards pool.',
+      'Four random base cards.',
     ],
     priceCoins: 5,
+  ),
+  PackShopItem(
+    id: 'import_chance',
+    apiPackId: 'import_chance',
+    imageFileName: 'ImportChancePick.png',
+    title: 'Import Chance Pick',
+    descriptionLines: [
+      'Four players: the first slot has a 10% chance to be an import; the other three are always base.',
+    ],
+    priceCoins: 7,
   ),
 ];
 

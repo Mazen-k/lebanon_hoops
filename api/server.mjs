@@ -260,6 +260,116 @@ app.get('/api/user/wallet', userWalletHandler);
 
 const LEBANESE_BASE_PACK_ID = 'lebanese_base';
 const LEBANESE_BASE_PACK_COST = 5;
+const IMPORT_CHANCE_PACK_ID = 'import_chance';
+const IMPORT_CHANCE_PACK_COST = 7;
+
+function packOpenCost(packId) {
+  if (packId === IMPORT_CHANCE_PACK_ID) return IMPORT_CHANCE_PACK_COST;
+  return LEBANESE_BASE_PACK_COST;
+}
+
+function isKnownOpenPack(packId) {
+  return (
+    packId === LEBANESE_BASE_PACK_ID ||
+    packId === 'standard' ||
+    packId === IMPORT_CHANCE_PACK_ID
+  );
+}
+
+/**
+ * Picks 4 card_ids for this pack. Lebanese base = 4× base. Standard = 4× any.
+ * Import chance = slot1: 10% import (else base); if import pool empty on 10% roll, slot1 is base.
+ * Slots 2–4 always base, distinct from slot1.
+ */
+async function pickCardIdsForOpenPack(client, packId) {
+  if (packId === LEBANESE_BASE_PACK_ID) {
+    const { rows } = await client.query(`
+      SELECT card_id FROM play_cards
+      WHERE LOWER(TRIM(COALESCE(card_type::text, ''))) = 'base'
+      ORDER BY RANDOM() LIMIT 4
+    `);
+    if (rows.length < 4) {
+      return {
+        ok: false,
+        error:
+          'Not enough base cards in the pool (need 4). Add at least four play_cards rows with card_type = base.',
+      };
+    }
+    return { ok: true, cardIds: rows.map((r) => r.card_id) };
+  }
+
+  if (packId === IMPORT_CHANCE_PACK_ID) {
+    const firstIds = [];
+    const rollImport = Math.random() < 0.1;
+
+    if (rollImport) {
+      const { rows: imp } = await client.query(`
+        SELECT card_id FROM play_cards
+        WHERE LOWER(TRIM(COALESCE(card_type::text, ''))) = 'import'
+        ORDER BY RANDOM() LIMIT 1
+      `);
+      if (imp.length > 0) {
+        firstIds.push(imp[0].card_id);
+      } else {
+        const { rows: b0 } = await client.query(`
+          SELECT card_id FROM play_cards
+          WHERE LOWER(TRIM(COALESCE(card_type::text, ''))) = 'base'
+          ORDER BY RANDOM() LIMIT 1
+        `);
+        if (b0.length < 1) {
+          return {
+            ok: false,
+            error:
+              'Import Chance pack needs at least one base card (import pool was empty on this roll).',
+          };
+        }
+        firstIds.push(b0[0].card_id);
+      }
+    } else {
+      const { rows: b1 } = await client.query(`
+        SELECT card_id FROM play_cards
+        WHERE LOWER(TRIM(COALESCE(card_type::text, ''))) = 'base'
+        ORDER BY RANDOM() LIMIT 1
+      `);
+      if (b1.length < 1) {
+        return {
+          ok: false,
+          error: 'Not enough base cards for Import Chance pack (need at least 1 for the first slot).',
+        };
+      }
+      firstIds.push(b1[0].card_id);
+    }
+
+    const { rows: rest } = await client.query(
+      `
+      SELECT card_id FROM play_cards
+      WHERE LOWER(TRIM(COALESCE(card_type::text, ''))) = 'base'
+        AND card_id <> ALL($1::int[])
+      ORDER BY RANDOM() LIMIT 3
+      `,
+      [firstIds],
+    );
+    if (rest.length < 3) {
+      return {
+        ok: false,
+        error:
+          'Not enough distinct base cards for slots 2–4 (need 3 base cards besides the first pick). Add more base play_cards.',
+      };
+    }
+    return { ok: true, cardIds: [...firstIds, ...rest.map((r) => r.card_id)] };
+  }
+
+  const { rows } = await client.query(`
+    SELECT card_id FROM play_cards ORDER BY RANDOM() LIMIT 4
+  `);
+  if (rows.length < 4) {
+    return {
+      ok: false,
+      error: 'Not enough cards in the pool (need 4). Add at least four rows to play_cards.',
+    };
+  }
+  return { ok: true, cardIds: rows.map((r) => r.card_id) };
+}
 
 /** Canonical pack id from JSON (trim + lowercase aliases). */
 function normalizeOpenPackId(body) {
@@ -270,6 +380,9 @@ function normalizeOpenPackId(body) {
   const lower = s.toLowerCase();
   if (lower === 'standard') return 'standard';
   if (lower === LEBANESE_BASE_PACK_ID) return LEBANESE_BASE_PACK_ID;
+  if (lower === IMPORT_CHANCE_PACK_ID || lower === 'importchance' || lower === 'import_chance_pick') {
+    return IMPORT_CHANCE_PACK_ID;
+  }
   return s;
 }
 
@@ -281,10 +394,11 @@ async function openPackHandler(req, res) {
     return res.status(400).json({ error: 'userId (integer) is required in JSON body.' });
   }
   const uid = Number(userId);
-  if (packId !== LEBANESE_BASE_PACK_ID && packId !== 'standard') {
+  if (!isKnownOpenPack(packId)) {
     return res.status(400).json({ error: `Unknown pack: ${packId}` });
   }
 
+  const cost = packOpenCost(packId);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -298,44 +412,21 @@ async function openPackHandler(req, res) {
       return res.status(404).json({ error: 'User not found.' });
     }
     const balance = balRows[0].c;
-    if (balance < LEBANESE_BASE_PACK_COST) {
+    if (balance < cost) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        error: `Not enough card coins (need ${LEBANESE_BASE_PACK_COST}, you have ${balance}).`,
+        error: `Not enough card coins (need ${cost}, you have ${balance}).`,
       });
     }
 
-    const basePackOnly = packId === LEBANESE_BASE_PACK_ID;
-
-    const pickSql = basePackOnly
-      ? `
-      SELECT card_id
-      FROM play_cards
-      WHERE LOWER(TRIM(COALESCE(card_type::text, ''))) = 'base'
-      ORDER BY RANDOM()
-      LIMIT 4
-      `
-      : `
-      SELECT card_id
-      FROM play_cards
-      ORDER BY RANDOM()
-      LIMIT 4
-      `;
-
-    const { rows: picked } = await client.query(pickSql);
-
-    if (picked.length < 4) {
+    const picked = await pickCardIdsForOpenPack(client, packId);
+    if (!picked.ok) {
       await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: basePackOnly
-          ? 'Not enough base cards in the pool (need 4). Add at least four play_cards rows with card_type = base.'
-          : 'Not enough cards in the pool (need 4). Add at least four rows to play_cards.',
-      });
+      return res.status(400).json({ error: picked.error });
     }
+    const cardIds = picked.cardIds;
 
-    const cardIds = picked.map((r) => r.card_id);
-
-    if (basePackOnly) {
+    if (packId === LEBANESE_BASE_PACK_ID) {
       const { rows: leak } = await client.query(
         `
         SELECT card_id, card_type
@@ -354,9 +445,28 @@ async function openPackHandler(req, res) {
       }
     }
 
+    if (packId === IMPORT_CHANCE_PACK_ID) {
+      const tail = cardIds.slice(1);
+      const { rows: badTail } = await client.query(
+        `
+        SELECT card_id, card_type FROM play_cards
+        WHERE card_id = ANY($1::int[])
+          AND LOWER(TRIM(COALESCE(card_type::text, ''))) <> 'base'
+        `,
+        [tail],
+      );
+      if (badTail.length > 0) {
+        await client.query('ROLLBACK');
+        console.error('[open-pack] Import chance slots 2–4 must be base', badTail);
+        return res.status(500).json({
+          error: 'Pack pool misconfigured: non-base card in base-only slots.',
+        });
+      }
+    }
+
     await client.query(
       `UPDATE users SET card_coins = card_coins - $1::int WHERE user_id = $2::int`,
-      [LEBANESE_BASE_PACK_COST, uid],
+      [cost, uid],
     );
 
     const { rows } = await client.query(
@@ -381,7 +491,7 @@ async function openPackHandler(req, res) {
     );
 
     await client.query('COMMIT');
-    res.json({ packId, cards: rows, card_coins_spent: LEBANESE_BASE_PACK_COST });
+    res.json({ packId, cards: rows, card_coins_spent: cost });
   } catch (err) {
     try {
       await client.query('ROLLBACK');

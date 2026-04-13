@@ -8,6 +8,7 @@ Folder:
 Current pack artwork:
 
   LebaneseBasePack.png   — Lebanese Base Pack row
+  ImportChancePick.png   — Import Chance Pick row (add this file when you have the art)
 
 Names and text are in:
 
