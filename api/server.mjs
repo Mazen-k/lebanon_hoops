@@ -261,7 +261,7 @@ app.get('/api/user/wallet', userWalletHandler);
 const LEBANESE_BASE_PACK_ID = 'lebanese_base';
 const LEBANESE_BASE_PACK_COST = 5;
 
-/** Open a pack: deduct card_coins, insert 4 random Lebanese base card_instances. */
+/** Open a pack: deduct card_coins, insert 4 random base play_cards as card_instances. */
 async function openPackHandler(req, res) {
   const userId = req.body?.userId ?? req.body?.user_id;
   const packId = req.body?.packId ?? req.body?.pack_id ?? LEBANESE_BASE_PACK_ID;
@@ -295,14 +295,9 @@ async function openPackHandler(req, res) {
 
     const { rows: picked } = await client.query(
       `
-      SELECT pc.card_id
-      FROM play_cards pc
-      INNER JOIN players p ON p.player_id = pc.player_id
-      WHERE LOWER(TRIM(pc.card_type::text)) = 'base'
-        AND (
-          UPPER(TRIM(COALESCE(p.nationality, ''))) = 'LB'
-          OR LOWER(TRIM(COALESCE(p.nationality, ''))) LIKE '%lebanon%'
-        )
+      SELECT card_id
+      FROM play_cards
+      WHERE LOWER(TRIM(card_type::text)) = 'base'
       ORDER BY RANDOM()
       LIMIT 4
       `,
@@ -312,7 +307,7 @@ async function openPackHandler(req, res) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         error:
-          'Not enough Lebanese base cards in the pool (need 4). Add play_cards with card_type base and players with nationality LB or Lebanon.',
+          'Not enough base cards in the pool (need 4). Add at least four play_cards rows with card_type base.',
       });
     }
 

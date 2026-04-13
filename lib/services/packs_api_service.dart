@@ -30,7 +30,12 @@ class PacksApiService {
     return t.startsWith('<!doctype') || t.startsWith('<html');
   }
 
-  Future<http.Response> _postOpen(http.Client own, Uri uri, int userId) {
+  Future<http.Response> _postOpen(
+    http.Client own,
+    Uri uri,
+    int userId,
+    String packId,
+  ) {
     return own
         .post(
           uri,
@@ -40,20 +45,24 @@ class PacksApiService {
           },
           body: jsonEncode({
             'userId': userId,
-            'packId': 'standard',
+            'packId': packId,
           }),
         )
         .timeout(const Duration(seconds: 30));
   }
 
-  Future<List<OpenedCard>> openStandardPack({required int userId}) async {
+  /// Opens [packId] (e.g. `lebanese_base`). Server deducts coins when applicable.
+  Future<List<OpenedCard>> openPack({
+    required int userId,
+    required String packId,
+  }) async {
     final configured = BackendConfig.packsOpenPath;
     final fallback =
         configured == 'packs/open' ? 'api/packs/open' : (configured == 'api/packs/open' ? 'packs/open' : null);
 
     final own = _client ?? http.Client();
     try {
-      http.Response res = await _postOpen(own, _uri(configured), userId);
+      http.Response res = await _postOpen(own, _uri(configured), userId, packId);
 
       final bodyPreview = utf8.decode(res.bodyBytes, allowMalformed: true);
       final looksWrong = _looksLikeHtmlError(bodyPreview) ||
@@ -62,7 +71,7 @@ class PacksApiService {
           res.statusCode == 404 || (res.statusCode >= 400 && looksWrong);
 
       if (shouldRetryFallback && fallback != null) {
-        res = await _postOpen(own, _uri(fallback), userId);
+        res = await _postOpen(own, _uri(fallback), userId, packId);
       }
 
       if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -102,5 +111,10 @@ class PacksApiService {
         own.close();
       }
     }
+  }
+
+  @Deprecated('Use openPack with packId')
+  Future<List<OpenedCard>> openStandardPack({required int userId}) {
+    return openPack(userId: userId, packId: 'lebanese_base');
   }
 }

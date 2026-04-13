@@ -23,4 +23,5 @@ flutter:
   assets:
     - assets/images/
     - assets/images/pack_tiles/
+    - assets/images/pack_shop/
     - assets/images/cards_hub/

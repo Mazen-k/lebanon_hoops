@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'card_mode_placeholders.dart';
 import 'cards_hub_image_paths.dart';
-import 'cards_hub_wallet_row.dart';
 import 'open_packs_page.dart';
 import 'trade_hub_page.dart';
 import 'view_collection_page.dart';
@@ -15,16 +14,12 @@ abstract final class _CardHubTheme {
   static const Color gold = Color(0xFFFFD700);
 }
 
-/// Entry points into the card game modes. Fixed viewport (no scroll); wallet row sits under the app bar.
+/// Entry points into the card game modes. Fixed viewport (no scroll).
 class CardsGameHubPage extends StatelessWidget {
-  const CardsGameHubPage({super.key, this.onCardsActivity});
-
-  /// Notifies [GamesShell] to refresh wallet/coins after a child route pops.
-  final VoidCallback? onCardsActivity;
+  const CardsGameHubPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final bump = onCardsActivity;
     return ColoredBox(
       color: _CardHubTheme.bgDeep,
       child: CustomPaint(
@@ -35,15 +30,11 @@ class CardsGameHubPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const CardsHubWalletRow(),
-                const SizedBox(height: 8),
                 Expanded(
                   flex: 5,
                   child: _FeaturedPacksHero(
-                    onOpenPacks: () => _pushCardsRoute(
-                      context,
-                      bump,
-                      const OpenPacksPage(),
+                    onOpenPacks: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(builder: (_) => const OpenPacksPage()),
                     ),
                   ),
                 ),
@@ -52,10 +43,8 @@ class CardsGameHubPage extends StatelessWidget {
                   height: 76,
                   width: double.infinity,
                   child: _OneVOneCta(
-                    onTap: () => _pushCardsRoute(
-                      context,
-                      bump,
-                      const OneVOnePage(),
+                    onTap: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(builder: (_) => const OneVOnePage()),
                     ),
                   ),
                 ),
@@ -63,25 +52,19 @@ class CardsGameHubPage extends StatelessWidget {
                 Expanded(
                   flex: 4,
                   child: _SecondaryGrid(
-                    onCollection: () => _pushCardsRoute(
-                      context,
-                      bump,
-                      const ViewCollectionPage(),
+                    onCollection: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(builder: (_) => const ViewCollectionPage()),
                     ),
-                    onDuplicates: () => _pushCardsRoute(
-                      context,
-                      bump,
-                      const ViewCollectionPage(duplicatesOnly: true),
+                    onDuplicates: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ViewCollectionPage(duplicatesOnly: true),
+                      ),
                     ),
-                    onTrading: () => _pushCardsRoute(
-                      context,
-                      bump,
-                      const TradeHubPage(),
+                    onTrading: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(builder: (_) => const TradeHubPage()),
                     ),
-                    onSbc: () => _pushCardsRoute(
-                      context,
-                      bump,
-                      const SbcPage(),
+                    onSbc: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(builder: (_) => const SbcPage()),
                     ),
                   ),
                 ),
@@ -92,17 +75,6 @@ class CardsGameHubPage extends StatelessWidget {
       ),
     );
   }
-}
-
-Future<void> _pushCardsRoute(
-  BuildContext context,
-  VoidCallback? onCardsActivity,
-  Widget page,
-) async {
-  await Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(builder: (_) => page),
-  );
-  onCardsActivity?.call();
 }
 
 class _FeaturedPacksHero extends StatelessWidget {

@@ -16,7 +16,6 @@ class GamesShell extends StatefulWidget {
 
 class _GamesShellState extends State<GamesShell> {
   int _index = 0;
-  int _cardsWalletRefreshToken = 0;
 
   static const _labels = [
     'Cards',
@@ -42,10 +41,6 @@ class _GamesShellState extends State<GamesShell> {
       const MenuPlaceholderPage(title: 'Coming soon', subtitle: 'New game mode in development.'),
       const MenuPlaceholderPage(title: 'Coming soon', subtitle: 'New game mode in development.'),
     ];
-  }
-
-  void _bumpCardsWalletHeader() {
-    if (mounted) setState(() => _cardsWalletRefreshToken++);
   }
 
   @override
@@ -79,10 +74,7 @@ class _GamesShellState extends State<GamesShell> {
       body: IndexedStack(
         index: _index,
         children: [
-          CardsGameHubPage(
-            key: ValueKey(_cardsWalletRefreshToken),
-            onCardsActivity: _bumpCardsWalletHeader,
-          ),
+          const CardsGameHubPage(),
           ..._gamesPages,
         ],
       ),
@@ -101,12 +93,7 @@ class _GamesShellState extends State<GamesShell> {
               ),
               child: BottomNavigationBar(
                 currentIndex: _index,
-                onTap: (i) {
-                  setState(() {
-                    _index = i;
-                    if (i == 0) _cardsWalletRefreshToken++;
-                  });
-                },
+                onTap: (i) => setState(() => _index = i),
                 type: BottomNavigationBarType.fixed,
                 backgroundColor: Colors.transparent,
                 elevation: 0,

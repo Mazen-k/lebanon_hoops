@@ -1,0 +1,14 @@
+Pack shop images
+================
+
+Folder:
+
+  lebanon_hoops/assets/images/pack_shop/
+
+Current pack artwork:
+
+  LebaneseBasePack.png   — Lebanese Base Pack row
+
+Names and text are in:
+
+  lib/screens/games/cards/pack_shop_catalog.dart
