@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../navigation/app_nav_shell_key.dart';
+import '../navigation/card_collection_section_route.dart';
 import '../screens/menu_pages.dart';
-import '../screens/games/games_shell.dart';
 
 enum MainDrawerVariant { mainApp, gamesSection }
 
@@ -85,8 +85,8 @@ class MainAppDrawer extends StatelessWidget {
                     },
                   ),
                   _DrawerTile(
-                    icon: Icons.videogame_asset_outlined,
-                    label: 'Games',
+                    icon: Icons.collections_bookmark_outlined,
+                    label: 'Card collection',
                     selected: variant == MainDrawerVariant.gamesSection,
                     onTap: () {
                       if (variant == MainDrawerVariant.gamesSection) {
@@ -95,9 +95,7 @@ class MainAppDrawer extends StatelessWidget {
                       }
                       _closeDrawerThen(context, () {
                         Navigator.of(hostContext).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => GamesShell(onSignOut: onSignOut),
-                          ),
+                          buildCardCollectionSectionRoute(onSignOut: onSignOut),
                         );
                       });
                     },
