@@ -91,7 +91,19 @@ async function getTeamDetails(req, res) {
       console.warn('getTeamDetails trophies skipped:', trophyErr?.message ?? trophyErr);
     }
 
-    res.json({ team, players: playerRows, trophies });
+    let stadium = null;
+    try {
+      const { rows: stRows } = await pool.query(
+        `SELECT stadium_id, stadium_name, location, capacity
+         FROM stadiums WHERE team_id = $1 ORDER BY stadium_id ASC LIMIT 1`,
+        [teamId],
+      );
+      if (stRows.length > 0) stadium = stRows[0];
+    } catch (stadiumErr) {
+      console.warn('getTeamDetails stadium skipped:', stadiumErr?.message ?? stadiumErr);
+    }
+
+    res.json({ team, players: playerRows, trophies, stadium });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message ?? String(err) });
