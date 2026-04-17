@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'theme/colors.dart';
 import 'screens/home_screen.dart';
-import 'screens/team_profile_screen.dart';
+import 'screens/teams_grid_screen.dart';
 import 'screens/standings_screen.dart';
 import 'screens/fan_shop_screen.dart';
 import 'screens/court_booking_screen.dart';
@@ -35,7 +35,7 @@ class AppNavigationShellState extends State<AppNavigationShell> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const StandingsScreen(),
-    const TeamProfileScreen(),
+    const TeamsGridScreen(),
     const CourtBookingScreen(),
     const FanShopScreen(),
     const FantasyScreen(),

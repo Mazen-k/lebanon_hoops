@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
 import '../services/players_api_service.dart';
 import '../models/player.dart';
 import '../models/team.dart';
 import 'ticket_selection_screen.dart';
 
 class TeamProfileScreen extends StatefulWidget {
-  const TeamProfileScreen({super.key});
+  const TeamProfileScreen({super.key, required this.teamId});
+
+  final int teamId;
 
   @override
   State<TeamProfileScreen> createState() => _TeamProfileScreenState();
@@ -27,8 +28,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      // Team ID 1 = Riyadi (only team in database)
-      final data = await _service.fetchTeamWithPlayers(1);
+      final data = await _service.fetchTeamWithPlayers(widget.teamId);
       if (mounted) setState(() { _data = data; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
@@ -73,24 +73,43 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(top: 24, bottom: 96),
-          child: Column(
-            children: [
-              _buildHero(context, team),
-              Transform.translate(
-                offset: const Offset(0, -32),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: _buildBentoStats(context),
-                ),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 0, bottom: 96), // removed top padding since hero should be at top
+              child: Column(
+                children: [
+                  _buildHero(context, team),
+                  Transform.translate(
+                    offset: const Offset(0, -32),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: _buildBentoStats(context),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  _buildActiveRoster(context, players),
+                  const SizedBox(height: 64),
+                  _buildUpcomingMatch(context),
+                ],
               ),
-              const SizedBox(height: 32),
-              _buildActiveRoster(context, players),
-              const SizedBox(height: 64),
-              _buildUpcomingMatch(context),
-            ],
-          ),
+            ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  } else {
+                    // Fallback just in case
+                    Navigator.of(context, rootNavigator: true).pop();
+                  }
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
