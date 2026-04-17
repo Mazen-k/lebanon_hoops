@@ -38,23 +38,25 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: AppColors.surface,
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      final colorScheme = Theme.of(context).colorScheme;
+      return Scaffold(
+        backgroundColor: colorScheme.surface,
+        body: Center(child: CircularProgressIndicator(color: colorScheme.primary)),
       );
     }
     if (_error != null) {
+      final colorScheme = Theme.of(context).colorScheme;
       return Scaffold(
-        backgroundColor: AppColors.surface,
+        backgroundColor: colorScheme.surface,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.secondary),
+                Icon(Icons.wifi_off_rounded, size: 48, color: colorScheme.secondary),
                 const SizedBox(height: 16),
-                Text(_error!, style: const TextStyle(color: AppColors.secondary), textAlign: TextAlign.center),
+                Text(_error!, style: TextStyle(color: colorScheme.secondary), textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 ElevatedButton(onPressed: _load, child: const Text('Retry')),
               ],
@@ -66,9 +68,10 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
 
     final team = _data!.team;
     final players = _data!.players;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(top: 24, bottom: 96),
@@ -94,13 +97,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Widget _buildHero(BuildContext context, Team team) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
           height: 353,
           width: double.infinity,
-          color: AppColors.inverseSurface,
+          color: colorScheme.inverseSurface,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -113,12 +117,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 ),
               ),
               Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppColors.inverseSurface, Colors.transparent],
+                    colors: [colorScheme.inverseSurface, Colors.transparent],
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
-                    stops: [0.0, 0.4],
+                    stops: const [0.0, 0.4],
                   ),
                 ),
               ),
@@ -139,7 +143,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   height: 128,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: colorScheme.surface,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(color: Colors.black.withAlpha((255 * 0.25).round()), blurRadius: 25, offset: const Offset(0, 10))
@@ -160,7 +164,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
+                        color: colorScheme.primary,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
@@ -182,14 +186,14 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Beirut, Lebanon',
                       style: TextStyle(
                         fontFamily: 'Lexend',
                         fontSize: 20,
                         fontWeight: FontWeight.w500,
                         fontStyle: FontStyle.italic,
-                        color: AppColors.primaryFixedDim,
+                        color: colorScheme.primaryContainer,
                         letterSpacing: -0.5,
                       ),
                     ),
@@ -204,25 +208,26 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Widget _buildBentoStats(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         Row(
           children: [
-            Expanded(child: _buildStatBox(label: 'PPG', value: '94.2', sub: '↑ 2.4 vs last season', borderColor: AppColors.primary, subColor: AppColors.primary)),
+            Expanded(child: _buildStatBox(context, label: 'PPG', value: '94.2', sub: '↑ 2.4 vs last season', borderColor: colorScheme.primary, subColor: colorScheme.primary)),
             const SizedBox(width: 16),
-            Expanded(child: _buildStatBox(label: 'RPG', value: '42.8', sub: 'Ranked #1 in League', borderColor: AppColors.secondary, subColor: AppColors.secondary)),
+            Expanded(child: _buildStatBox(context, label: 'RPG', value: '42.8', sub: 'Ranked #1 in League', borderColor: colorScheme.secondary, subColor: colorScheme.secondary)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildStatBox(label: 'APG', value: '21.5', sub: 'Best in postseason', borderColor: AppColors.primary, subColor: AppColors.primary)),
+            Expanded(child: _buildStatBox(context, label: 'APG', value: '21.5', sub: 'Best in postseason', borderColor: colorScheme.primary, subColor: colorScheme.primary)),
             const SizedBox(width: 16),
             Expanded(
               child: Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AppColors.inverseSurface,
+                  color: colorScheme.inverseSurface,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 2, offset: const Offset(0, 1))],
                 ),
@@ -230,7 +235,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('RECORD', style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.surfaceVariant, letterSpacing: 1.0)),
+                    Text('RECORD', style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round()), letterSpacing: 1.0)),
                     const SizedBox(height: 4),
                     const Text('18-2', style: TextStyle(fontFamily: 'Lexend', fontSize: 30, fontWeight: FontWeight.w900, color: Colors.white, height: 1.0)),
                     const SizedBox(height: 16),
@@ -243,7 +248,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           decoration: BoxDecoration(
                             color: Colors.green.shade500,
                             shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.inverseSurface, width: 2),
+                            border: Border.all(color: colorScheme.inverseSurface, width: 2),
                           ),
                         ),
                       )),
@@ -258,11 +263,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     );
   }
 
-  Widget _buildStatBox({required String label, required String value, required String sub, required Color borderColor, required Color subColor}) {
+  Widget _buildStatBox(BuildContext context, {required String label, required String value, required String sub, required Color borderColor, required Color subColor}) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border(left: BorderSide(color: borderColor, width: 4)),
         boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 2, offset: const Offset(0, 1))],
@@ -270,9 +276,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.secondary, letterSpacing: 1.0)),
+          Text(label, style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary, letterSpacing: 1.0)),
           const SizedBox(height: 4),
-          Text(value, style: const TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: AppColors.onSurface, height: 1.0)),
+          Text(value, style: TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: colorScheme.onSurface, height: 1.0)),
           const SizedBox(height: 4),
           Text(sub, style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: subColor)),
         ],
@@ -281,6 +287,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Widget _buildActiveRoster(BuildContext context, List<Player> players) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
@@ -293,36 +300,36 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'ACTIVE ROSTER',
                     style: TextStyle(
                       fontFamily: 'Lexend',
                       fontSize: 30,
                       fontWeight: FontWeight.w900,
                       fontStyle: FontStyle.italic,
-                      color: AppColors.onSurface,
+                      color: colorScheme.onSurface,
                       letterSpacing: -1.0,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Container(height: 6, width: 96, color: AppColors.primary),
+                  Container(height: 6, width: 96, color: colorScheme.primary),
                 ],
               ),
-              const Row(
+              Row(
                 children: [
-                  Text('VIEW FULL STATS', style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary, letterSpacing: 1.0)),
-                  SizedBox(width: 4),
-                  Icon(Icons.arrow_forward, size: 14, color: AppColors.primary),
+                  Text('VIEW FULL STATS', style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.primary, letterSpacing: 1.0)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_forward, size: 14, color: colorScheme.primary),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 32),
           if (players.isEmpty)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text('No players found', style: TextStyle(color: AppColors.secondary)),
+                padding: const EdgeInsets.all(32),
+                child: Text('No players found', style: TextStyle(color: colorScheme.secondary)),
               ),
             )
           else
@@ -330,7 +337,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               children: [
                 for (int i = 0; i < players.length; i++) ...[
                   if (i > 0) const SizedBox(height: 32),
-                  _buildRosterCard(player: players[i]),
+                  _buildRosterCard(context, player: players[i]),
                 ],
               ],
             ),
@@ -339,11 +346,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     );
   }
 
-  Widget _buildRosterCard({required Player player}) {
+  Widget _buildRosterCard(BuildContext context, {required Player player}) {
+    final colorScheme = Theme.of(context).colorScheme;
     final posLabel = _positionLabel(player.position);
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.hardEdge,
@@ -360,11 +368,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 fontWeight: FontWeight.w900,
                 fontStyle: FontStyle.italic,
                 color: Colors.transparent,
-                shadows: const [
-                  Shadow(offset: Offset(-1, -1), color: Color(0x33BB0013)),
-                  Shadow(offset: Offset(1, -1), color: Color(0x33BB0013)),
-                  Shadow(offset: Offset(1, 1), color: Color(0x33BB0013)),
-                  Shadow(offset: Offset(-1, 1), color: Color(0x33BB0013)),
+                shadows: [
+                  Shadow(offset: const Offset(-1, -1), color: colorScheme.primary.withAlpha(50)),
+                  Shadow(offset: const Offset(1, -1), color: colorScheme.primary.withAlpha(50)),
+                  Shadow(offset: const Offset(1, 1), color: colorScheme.primary.withAlpha(50)),
+                  Shadow(offset: const Offset(-1, 1), color: colorScheme.primary.withAlpha(50)),
                 ],
               ),
             ),
@@ -379,26 +387,26 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   children: [
                     Text(
                       posLabel,
-                      style: const TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.primary, letterSpacing: 1.0),
+                      style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.primary, letterSpacing: 1.0),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       player.fullName.toUpperCase(),
-                      style: const TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.onSurface, letterSpacing: -0.5, height: 1.1),
+                      style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w800, color: colorScheme.onSurface, letterSpacing: -0.5, height: 1.1),
                     ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
                         Text(
                           player.nationality.isNotEmpty ? player.nationality : 'Lebanese',
-                          style: const TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.secondary),
+                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary),
                         ),
                         const SizedBox(width: 16),
-                        Container(width: 4, height: 4, decoration: const BoxDecoration(color: AppColors.outlineVariant, shape: BoxShape.circle)),
+                        Container(width: 4, height: 4, decoration: BoxDecoration(color: colorScheme.outlineVariant, shape: BoxShape.circle)),
                         const SizedBox(width: 16),
                         Text(
                           '#${player.jerseyNumber}',
-                          style: const TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.secondary),
+                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary),
                         ),
                       ],
                     ),
@@ -409,7 +417,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               Container(
                 height: 80,
                 width: double.infinity,
-                color: AppColors.surfaceContainerHighest,
+                color: colorScheme.surfaceContainerHighest,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -417,7 +425,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       padding: const EdgeInsets.all(16.0),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppColors.primary,
+                          color: colorScheme.primary,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         padding: const EdgeInsets.all(8),
@@ -446,20 +454,21 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Widget _buildUpcomingMatch(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.inverseSurface,
+          color: colorScheme.inverseSurface,
           borderRadius: BorderRadius.circular(16),
         ),
         padding: const EdgeInsets.all(32),
         width: double.infinity,
         child: Column(
           children: [
-            const Text(
+            Text(
               'NEXT BATTLE',
-              style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.primaryFixedDim, letterSpacing: 3.0),
+              style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.primaryContainer, letterSpacing: 3.0),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -468,9 +477,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Sagesse vs Al Riyadi • Friday, 20:30',
-              style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.surfaceVariant),
+              style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.7).round())),
             ),
             const SizedBox(height: 32),
             Row(
@@ -507,8 +516,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.onPrimary,
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,

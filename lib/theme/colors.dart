@@ -58,7 +58,7 @@ class AppColors {
   );
   
   // Material 3 ColorScheme mapping
-  static const ColorScheme colorScheme = ColorScheme(
+  static const ColorScheme lightColorScheme = ColorScheme(
     brightness: Brightness.light,
     primary: primary,
     onPrimary: onPrimary,
@@ -85,5 +85,52 @@ class AppColors {
     inverseSurface: inverseSurface,
     onInverseSurface: inverseOnSurface,
     inversePrimary: inversePrimary,
+  );
+
+  static const ColorScheme darkColorScheme = ColorScheme(
+    brightness: Brightness.dark,
+    primary: Color(0xFFEF4444),
+    onPrimary: Color(0xFFFFFFFF),
+    primaryContainer: Color(0xFFEF4444),
+    onPrimaryContainer: Color(0xFFFFFFFF),
+    secondary: Color(0xFF94A3B8),
+    onSecondary: Color(0xFFFFFFFF),
+    secondaryContainer: Color(0xFF334155),
+    onSecondaryContainer: Color(0xFF94A3B8),
+    tertiary: Color(0xFF94A3B8),
+    onTertiary: Color(0xFFFFFFFF),
+    tertiaryContainer: Color(0xFF475569),
+    onTertiaryContainer: Color(0xFFFCFCFC),
+    error: Color(0xFFEF4444),
+    onError: Color(0xFFFFFFFF),
+    errorContainer: Color(0xFF991B1B),
+    onErrorContainer: Color(0xFFFECACA),
+    surface: Color(0xFF0F172A),
+    onSurface: Color(0xFFF8FAFC),
+    surfaceContainerHighest: Color(0xFF334155),
+    onSurfaceVariant: Color(0xFF94A3B8),
+    outline: Color(0xFF475569),
+    outlineVariant: Color(0xFF475569),
+    inverseSurface: Color(0xFFF8FAFC),
+    onInverseSurface: Color(0xFF0F172A),
+    inversePrimary: Color(0xFFFFB4AB),
+  );
+
+  // Maintain backward compatibility for existing code that uses AppColors.colorScheme
+  static const ColorScheme colorScheme = lightColorScheme;
+}
+
+extension AppColorScheme on ColorScheme {
+  Color get surfaceContainerLowest => brightness == Brightness.light ? const Color(0xFFFFFFFF) : const Color(0xFF0D1321);
+  Color get surfaceContainerLow => brightness == Brightness.light ? const Color(0xFFF2F3FF) : const Color(0xFF1E293B);
+  Color get surfaceContainer => brightness == Brightness.light ? const Color(0xFFE9EDFF) : const Color(0xFF1E293B);
+  Color get surfaceContainerHigh => brightness == Brightness.light ? const Color(0xFFE2E8FC) : const Color(0xFF1E293B);
+  Color get surfaceContainerHighest => brightness == Brightness.light ? const Color(0xFFDDE2F6) : const Color(0xFF334155);
+  Color get surfaceDim => brightness == Brightness.light ? const Color(0xFFD4D9EE) : const Color(0xFF020617);
+  
+  LinearGradient get signatureGradient => LinearGradient(
+    colors: [primary, primaryContainer],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
   );
 }

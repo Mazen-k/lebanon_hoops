@@ -8,34 +8,21 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.only(top: 16, bottom: 128), // pt-4 pb-32
+          padding: const EdgeInsets.only(top: 24, bottom: 128),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.notifications_none, color: AppColors.primary, size: 28),
-                      onPressed: () {},
-                      splashRadius: 24,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
               _buildLiveGamesSection(context),
-              const SizedBox(height: 32), // mb-8 (4*8) mapped to 32
+              const SizedBox(height: 32),
               _buildBreakingNewsSection(context),
-              const SizedBox(height: 40), // mb-10
+              const SizedBox(height: 40),
               _buildUpcomingBattlesSection(context),
-              const SizedBox(height: 40), // mb-10
+              const SizedBox(height: 40),
               _buildTopPerformersSection(context),
             ],
           ),
@@ -43,16 +30,17 @@ class HomeScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketSelectionScreen())),
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.onPrimary,
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
         shape: const CircleBorder(),
-        elevation: 8, // shadow-lg
+        elevation: 8,
         child: const Icon(Icons.confirmation_number),
       ),
     );
   }
 
   Widget _buildSectionHeader(BuildContext context, String title, {Widget? trailing}) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Row(
@@ -60,19 +48,20 @@ class HomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Container(
-            decoration: const BoxDecoration(
-              border: Border(left: BorderSide(color: AppColors.primary, width: 4)),
+            padding: const EdgeInsets.only(left: 12),
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: colorScheme.primary, width: 4)),
             ),
-            padding: const EdgeInsets.only(left: 12), // pl-3 (3*4)
             child: Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Lexend',
-                fontSize: 24, // text-2xl
-                fontWeight: FontWeight.w800, // font-extrabold
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
                 fontStyle: FontStyle.italic,
-                letterSpacing: -1.0, // tracking-tighter
-                height: 1.0, // tighten vertically relative to native
+                letterSpacing: -1.0,
+                height: 1.0,
+                color: colorScheme.onSurface,
               ),
             ),
           ),
@@ -83,6 +72,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildLiveGamesSection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -90,42 +80,41 @@ class HomeScreen extends StatelessWidget {
           context,
           'LIVE LBL GAMES',
           trailing: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), // px-2 py-1
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.primary.withAlpha((255 * 0.1).round()), // bg-primary/10
-              borderRadius: BorderRadius.circular(16), // rounded-full (pill)
+              color: colorScheme.primary.withAlpha((255 * 0.1).round()),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 8, // w-2
-                  height: 8, // h-2
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary,
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 4), // gap-1
-                const Text(
+                const SizedBox(width: 4),
+                Text(
                   'LIVE',
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 12, // text-xs
-                    fontWeight: FontWeight.bold, // font-bold
-                    color: AppColors.primary, // text-primary
-                    letterSpacing: 0.0,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
                   ),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 16), // mb-4
+        const SizedBox(height: 16),
         SizedBox(
-          height: 156, // Accurate height block
+          height: 156,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 24), // px-6
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             children: [
               _buildLiveGameCard(
                 context: context,
@@ -138,7 +127,7 @@ class HomeScreen extends StatelessWidget {
                 team1Img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBeZhnyferj-0miau0a5BOEYCYhBmM9gCvWP3yHRNpv4Si_AcCoU0lwRW7hLmOevY0Eh_o5C2SjXiuZvB-mthKA1pjq9xWSFS7cc-Qk7IRAVpNjhnm8PG6w7_3tNwh-Sl5nKXeT6JZdltRtBsTJdE833AYv6oHj0RJhhPUYrEiv4cSC8cDKGT9t-2suTaGZPXApcZGC_rmuEmMD48AsRckdOW45rdhqvUzdyGx8EwRW4Xg3vUUy8JbsAzpgZRhSectMoKG739zI0JXd',
                 team2Img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDUecrR3vIHtF6cEprw8zD9yiavYsEputoDcXvW3aymeq9zxNr7N0gT0JNnvYlTq1w8kL6dO0-TzUcscfOF7sXBqdH2uahMaTqx84a5W9wWDePp05ovXdizqswItr1LO4fnIzU92PTvfl1RZA3Rz9bfWDtVHnG0bepiIscjUd3ccJ9Gvs4iNDt8b4tZ8ZyHPMrUNS4hcKA_88kMNPJFI7HZt3FiEjpITO3u3jPfaBjtgJmf24irUBo2Uwu_vtZAPX0v39Ea3AY9c47u',
               ),
-              const SizedBox(width: 16), // gap-4
+              const SizedBox(width: 16),
               _buildLiveGameCard(
                 context: context,
                 isLive: false,
@@ -170,17 +159,19 @@ class HomeScreen extends StatelessWidget {
     required String team1Img,
     required String team2Img,
   }) {
-    final bgColor = isLive ? AppColors.inverseSurface : AppColors.surfaceContainerHighest;
-    final textColor = isLive ? AppColors.inverseOnSurface : AppColors.onSurface;
-    final statusColor = isLive ? AppColors.inverseOnSurface.withAlpha((255 * 0.7).round()) : AppColors.onSurface.withAlpha((255 * 0.7).round()); // opacity-70
-    final vsColor = isLive ? AppColors.primary : const Color(0xFFCBD5E1); // slate-300
+    final colorScheme = Theme.of(context).colorScheme;
+    final bgColor = isLive ? colorScheme.surfaceContainerHighest : colorScheme.surfaceContainerHigh;
+    final textColor = colorScheme.onSurface;
+    final statusColor = colorScheme.onSurface.withAlpha(179);
+    final vsColor = colorScheme.primary;
 
     return Container(
-      width: 280, // min-w-[280px]
-      padding: const EdgeInsets.all(20), // p-5
+      width: 280,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(12), // rounded-xl
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withAlpha(13)), // border-white/5
       ),
       child: Column(
         children: [
@@ -188,41 +179,40 @@ class HomeScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                status,
+                status.toUpperCase(),
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 10, // text-[10px]
+                  fontSize: 10,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0, // tracking-widest (10% of 10px approx 1.0)
+                  letterSpacing: 1.0,
                   color: statusColor,
                 ),
               ),
               if (isLive)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), // px-2 py-0.5
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(4), // rounded
+                    color: colorScheme.primary,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text(
                     'Live',
-                    style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: 12, fontWeight: FontWeight.normal), // mapped approx
+                    style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 )
               else if (badgeText != null)
                 Text(
-                  badgeText,
-                  style: const TextStyle(
+                  badgeText.toUpperCase(),
+                  style: TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 10, // text-[10px] inside badge context
-                    fontWeight: FontWeight.bold, // font-bold
-                    color: AppColors.secondary, // text-secondary
-                    letterSpacing: 0.0,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.secondary,
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 16), // gap-4 
+          const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -234,13 +224,13 @@ class HomeScreen extends StatelessWidget {
                     score1,
                     style: TextStyle(
                       fontFamily: 'Lexend',
-                      fontSize: 30, // text-3xl
-                      fontWeight: FontWeight.w900, // font-black
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
                       color: textColor,
                       height: 1.0,
                     ),
                   ),
-                  const SizedBox(width: 16), // gap-4 inside score
+                  const SizedBox(width: 16),
                   Text(
                     '-',
                     style: TextStyle(
@@ -276,26 +266,22 @@ class HomeScreen extends StatelessWidget {
     return Column(
       children: [
         Container(
-          width: 48, // w-12
-          height: 48, // h-12
-          decoration: BoxDecoration(
+          width: 48,
+          height: 48,
+          decoration: const BoxDecoration(
             color: Colors.white,
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 4, offset: const Offset(0, 1)) // shadow-sm
-            ],
           ),
-          padding: const EdgeInsets.all(8), // p-2
-          child: Image.network(imgUrl, fit: BoxFit.contain, errorBuilder: (c,e,s) => const Icon(Icons.shield, color: AppColors.secondary, size: 24)),
+          padding: const EdgeInsets.all(8),
+          child: Image.network(imgUrl, fit: BoxFit.contain, errorBuilder: (c,e,s) => Icon(Icons.shield, color: Theme.of(context).colorScheme.secondary, size: 24)),
         ),
-        const SizedBox(height: 8), // gap-2
+        const SizedBox(height: 8),
         Text(
           code,
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'Lexend',
-            fontSize: 12, // text-xs
-            fontWeight: FontWeight.bold, // font-bold
-            color: textColor,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ],
@@ -303,20 +289,21 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildBreakingNewsSection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0), // px-6
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Container(
-        height: 400, // h-[400px]
+        height: 400,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: AppColors.onBackground, // bg-on-background
-          borderRadius: BorderRadius.circular(16), // rounded-2xl
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(24), // rounded-2xl
         ),
         clipBehavior: Clip.hardEdge,
         child: Stack(
           children: [
             Opacity(
-              opacity: 0.7, // absolute inset-0 opacity-70
+              opacity: 0.6, // opacity-60
               child: Image.network(
                 'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
                 fit: BoxFit.cover,
@@ -325,48 +312,48 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.black, Colors.black45, Colors.transparent], // bg-gradient-to-t from-black via-black/40 to-transparent
+                  colors: [colorScheme.surface, colorScheme.surface.withAlpha(102), Colors.transparent],
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  stops: [0.0, 0.4, 1.0],
+                  stops: const [0.0, 0.4, 1.0],
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(32), // p-8
+              padding: const EdgeInsets.all(32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), // px-3 py-1
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(4), // rounded
+                      color: colorScheme.primary,
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Text(
                       'BREAKING NEWS',
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        color: Colors.white, 
-                        fontSize: 10, // text-[10px]
-                        fontWeight: FontWeight.w900, // font-black
-                        letterSpacing: 1.0, // tracking-widest
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.0,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12), // gap-3 equivalent
-                  const Text(
+                  const SizedBox(height: 12),
+                  Text(
                     'WAEL ARAKJI LEADS RIYADI TO THRILLING OVERTIME VICTORY',
                     style: TextStyle(
                       fontFamily: 'Lexend',
-                      fontSize: 30, // text-3xl
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900, // font-black
+                      fontSize: 30,
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w900,
                       fontStyle: FontStyle.italic,
-                      height: 1.0, // leading-none
+                      height: 1.0,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -374,21 +361,21 @@ class HomeScreen extends StatelessWidget {
                     'The Lebanese point guard dropped 34 points in a historic performance at the Saeb Salam Arena tonight.',
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 14, // text-sm
-                      color: Colors.white70, // text-white/80 equivalent mapped
+                      fontSize: 14,
+                      color: colorScheme.onSurface.withAlpha(204), // text-on-surface/80
                       height: 1.4,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 12), // mt-2 approx
+                  const SizedBox(height: 24),
                   Row(
                     children: [
-                      Container(width: 32, height: 4, decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(2))), // w-8 h-1
-                      const SizedBox(width: 8), // gap-2
-                      Container(width: 8, height: 4, decoration: BoxDecoration(color: Colors.white30, borderRadius: BorderRadius.circular(2))), // w-2 h-1
+                      Container(width: 32, height: 4, decoration: BoxDecoration(color: colorScheme.primary, borderRadius: BorderRadius.circular(2))),
                       const SizedBox(width: 8),
-                      Container(width: 8, height: 4, decoration: BoxDecoration(color: Colors.white30, borderRadius: BorderRadius.circular(2))),
+                      Container(width: 8, height: 4, decoration: BoxDecoration(color: Colors.white.withAlpha(77), borderRadius: BorderRadius.circular(2))),
+                      const SizedBox(width: 8),
+                      Container(width: 8, height: 4, decoration: BoxDecoration(color: Colors.white.withAlpha(77), borderRadius: BorderRadius.circular(2))),
                     ],
                   )
                 ],
@@ -401,33 +388,37 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildUpcomingBattlesSection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(
           context,
           'UPCOMING BATTLES',
-          trailing: const Text(
-            'VIEW SCHEDULE',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              color: AppColors.primary,
-              fontSize: 12, // text-xs
-              fontWeight: FontWeight.bold, // font-bold
-              letterSpacing: -0.5, // tracking-tighter hover:underline effect mapped via standard flutter TextDecoration
-              decoration: TextDecoration.underline,
-              decorationColor: AppColors.primary,
+          trailing: TextButton(
+            onPressed: () {},
+            child: Text(
+              'VIEW SCHEDULE',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: colorScheme.primary,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                decoration: TextDecoration.underline,
+                decorationColor: colorScheme.primary,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 16), // mb-4
+        const SizedBox(height: 16),
         SizedBox(
-          height: 250, // Height bound manually, aligns well 
+          height: 260,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 24), // px-6
+            padding: const EdgeInsets.only(left: 24, right: 24, bottom: 4),
             scrollDirection: Axis.horizontal,
             itemCount: 2,
-            separatorBuilder: (context, index) => const SizedBox(width: 16), // gap-4
+            separatorBuilder: (context, index) => const SizedBox(width: 16),
             itemBuilder: (context, index) {
               final isFirst = index == 0;
               return _buildTicketCard(
@@ -455,42 +446,42 @@ class HomeScreen extends StatelessWidget {
     required String team1Img,
     required String team2Img,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      width: 300, // min-w-[300px]
+      width: 300,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12), // rounded-xl
-        border: Border.all(color: const Color(0xFFF1F5F9)), // border-slate-100
-        boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 2, offset: const Offset(0, 1)) // shadow-sm
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withAlpha(13)),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))
         ],
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(16), // p-4
-            decoration: const BoxDecoration(
-              color: AppColors.surfaceContainerLow,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-              border: Border(bottom: BorderSide(color: Colors.white)), // border-b border-white
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              border: Border(bottom: BorderSide(color: Colors.white.withAlpha(13))),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   date,
-                  style: const TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.secondary), // text-[10px] font-black uppercase
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), // px-2 py-0.5
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(4), // rounded
-                    boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 2, offset: const Offset(0, 1))], // shadow-sm
+                    color: colorScheme.surfaceVariant,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     venue,
-                    style: const TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.onSurface),
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
                   ),
                 ),
               ],
@@ -498,48 +489,48 @@ class HomeScreen extends StatelessWidget {
           ),
           Expanded(
             child: Padding(
-               padding: const EdgeInsets.all(24), // p-6
+               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween, // justify-around approx native map
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildTicketTeam(context, team1Code, team1Img),
-                  const Text(
-                    'VS',
-                    style: TextStyle(
-                      fontFamily: 'Lexend', // mapped to brand specific italic
-                      fontSize: 20, // text-xl
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w900, // font-black
-                      fontStyle: FontStyle.italic,
+                    Text(
+                      'VS',
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontSize: 20,
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
-                  ),
                   _buildTicketTeam(context, team2Code, team2Img),
                 ],
               ),
             ),
           ),
           Material(
-            color: AppColors.primary,
+            color: colorScheme.primary,
             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
             child: InkWell(
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketSelectionScreen())),
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16), // py-4
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 alignment: Alignment.center,
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.confirmation_number, color: Colors.white, size: 14), // text-sm icon size approx 14
-                    SizedBox(width: 8), // gap-2
+                    Icon(Icons.confirmation_number, color: Colors.white, size: 14),
+                    SizedBox(width: 8),
                     Text(
                       'BUY TICKETS',
                       style: TextStyle(
                         fontFamily: 'Lexend',
-                        fontSize: 14, // text-sm
+                        fontSize: 14,
                         color: Colors.white,
-                        fontWeight: FontWeight.bold, // font-bold
-                        letterSpacing: 1.0, // tracking-widest
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
                       ),
                     ),
                   ],
@@ -553,26 +544,28 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildTicketTeam(BuildContext context, String code, String imgUrl) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
-          width: 56, // w-14
-          height: 56, // h-14
+          width: 56,
+          height: 56,
           decoration: const BoxDecoration(
-            color: AppColors.surface, // bg-surface
+            color: Colors.white,
             shape: BoxShape.circle,
           ),
-          padding: const EdgeInsets.all(8), // p-2
-          margin: const EdgeInsets.only(bottom: 8), // mb-2
-          child: Image.network(imgUrl, fit: BoxFit.contain, errorBuilder: (c,e,s) => const Icon(Icons.shield, color: AppColors.secondary, size: 28)),
+          padding: const EdgeInsets.all(8),
+          margin: const EdgeInsets.only(bottom: 8),
+          child: Image.network(imgUrl, fit: BoxFit.contain, errorBuilder: (c,e,s) => Icon(Icons.shield, color: colorScheme.secondary, size: 28)),
         ),
         Text(
-          code,
-          style: const TextStyle(
+          code.toUpperCase(),
+          style: TextStyle(
             fontFamily: 'Lexend',
-            fontSize: 14, // text-sm
-            fontWeight: FontWeight.w800, // font-extrabold
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: colorScheme.onSurface,
           ),
         ),
       ],
@@ -580,61 +573,58 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildTopPerformersSection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0), // px-6
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSectionHeader(context, 'TOP PERFORMERS'),
-          const SizedBox(height: 24), // mb-6
-          // Main performer
+          const SizedBox(height: 24),
+          // Main Performer Card
           Container(
-            height: 224, // h-56
+            height: 224,
             width: double.infinity,
             clipBehavior: Clip.hardEdge,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16), // rounded-2xl
-              gradient: const LinearGradient(
-                colors: [AppColors.surfaceContainerLow, AppColors.surfaceContainerHighest],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              border: Border.all(color: Colors.white, width: 1), // border-white
+              borderRadius: BorderRadius.circular(24),
+              color: colorScheme.surfaceContainer,
+              border: Border.all(color: Colors.white.withAlpha(13)),
             ),
             child: Stack(
               children: [
                 Positioned(
-                  right: -16, // -mr-4
-                  bottom: -40, // -mb-10
+                  right: -10,
+                  bottom: -40,
                   child: Text(
                     '23',
                     style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 120, // text-[120px]
-                      fontWeight: FontWeight.w900, // font-black
+                      fontFamily: 'Lexend',
+                      fontSize: 120,
+                      fontWeight: FontWeight.w900,
                       fontStyle: FontStyle.italic,
-                      color: AppColors.primary.withAlpha((255 * 0.05).round()), // text-primary/5
+                      color: colorScheme.primary.withAlpha(26), // primary/10
                       height: 1.0,
                     ),
                   ),
                 ),
                 Positioned(
-                  right: -20, // right-[-20px]
+                  right: -20,
                   top: 0,
                   bottom: 0,
-                  width: 180, // w-1/2 approx bounds
+                  width: 200,
                   child: Opacity(
-                    opacity: 0.9,
+                    opacity: 0.8,
                     child: Image.network(
                       'https://lh3.googleusercontent.com/aida-public/AB6AXuDIzsjzrOvYPWBDZsnhO7BpxSHRAC90apP10GjUVN1_Mkbt7YR5RjeENChGJ1AdDwL7Qzs0lqnHX7gvrxV5ERKZj6sXSG0zdKhNbP1GuUHxGWGTInKmMm1hG3txybGHc3Qw3cnrfsTnMNaNjf_08KiF2HWdLMTvXpzGch-yhVPA373AbEZr3F9qJwFz2NAIXOEbPwCwa5AFC3uuWr9KRMrH_tkNJXF9AFo7iyCSYSOspDHYFClQsA0YqTCkDHHLAoaoh-QSDLzPEun2',
                       fit: BoxFit.cover,
-                      alignment: Alignment.centerLeft, // object-left
-                      errorBuilder: (c,e,s) => const Icon(Icons.person, size: 100, color: AppColors.secondary),
+                      alignment: Alignment.centerLeft,
+                      errorBuilder: (c,e,s) => Icon(Icons.person, size: 100, color: colorScheme.secondary),
                     ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.all(24.0), // p-6
+                  padding: const EdgeInsets.all(24.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -642,42 +632,42 @@ class HomeScreen extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                           Text(
                             'PLAYER OF THE WEEK',
                             style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 12, // text-xs
-                              color: AppColors.primary, // text-primary
-                              fontWeight: FontWeight.w900, // font-black
+                              fontFamily: 'Lexend',
+                              fontSize: 12,
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w900,
                               fontStyle: FontStyle.italic,
-                              letterSpacing: 1.0, // tracking-widest
+                              letterSpacing: 1.0,
                             ),
                           ),
-                          const SizedBox(height: 4), // mt-1
-                          const Text(
+                          const SizedBox(height: 4),
+                           Text(
                             'SERGIO\nEL DARWICH',
                             style: TextStyle(
                               fontFamily: 'Lexend',
-                              fontSize: 24, // text-2xl
-                              fontWeight: FontWeight.w900, // font-black
-                              color: AppColors.onSurface,
-                              height: 1.0, // leading-none
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              color: colorScheme.onSurface,
+                              height: 1.0,
                             ),
                           ),
-                          const SizedBox(height: 4), // mt-1
-                          const Text(
+                          const SizedBox(height: 4),
+                           Text(
                             'BEIRUT CLUB • GUARD',
-                            style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.secondary),
+                            style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary),
                           ),
                         ],
                       ),
                       Row(
                         children: [
-                          _buildStat('PTS', '28.4', false),
-                          const SizedBox(width: 16), // gap-4 
-                          _buildStat('AST', '6.2', true),
-                          const SizedBox(width: 16), // gap-4
-                          _buildStat('REB', '5.8', true),
+                          _buildStat(context, 'PTS', '28.4', false),
+                          const SizedBox(width: 16),
+                          _buildStat(context, 'AST', '6.2', true),
+                          const SizedBox(width: 16),
+                          _buildStat(context, 'REB', '5.8', true),
                         ],
                       ),
                     ],
@@ -686,12 +676,12 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16), // gap-4 from grid
+          const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _buildSecondaryPerformer('Omari Spellman', 'Rebounds Leader', '14.3', 'RPG', 'https://lh3.googleusercontent.com/aida-public/AB6AXuBGkL957XYsrycUmC-N_7vejj9y4jFXS9pXb74WJSNyMW3VSm8GRtIse6uSng_hWepCONIh80CLfQE54WmUDJ-_nbnKegpHBlHkv_t9RByTCG0FGC4vxfx89SRQdPNOYmeOg-RlVZDi5IbOZkFeGNFroj4-N1vxLwu0l_GCXNb80Dw69Ubmt2r25UTt7-rMtlYvdLbFRLo_HjXuz6BE2Rnz-oXEbkrp7Rni_6fQI0SCpIkIoz3IOncehQ71xlZr8KDqn4uLTFk-zD2p')),
-              const SizedBox(width: 16), // gap-4
-              Expanded(child: _buildSecondaryPerformer('Ali Mezher', 'Assists Leader', '8.9', 'APG', 'https://lh3.googleusercontent.com/aida-public/AB6AXuCRr_ol2LJioV3KhfH-1HZc3hw7nBKIaEptbKc9l3bFSLHsTKRZtCmwxNBLhiII57FBTReMI_V9HeJjha7rXZ-PZxcbFZki6ddl5RFSiSROTkUHrCeuRvDDuCOjIQ4AgmzJR1qieUQX7xBz-SJUXRS0otz35g90wggZU4UmaBMKe427lP3qMe7QkSkYlGnZvXi8lnXKkkUFS1IVkop7yKYKdmvsWRohaVOVzvKJmGfR_WBETAeOv5PQEjJhfF6y5vpt7EQg6S__9k35')),
+              Expanded(child: _buildSecondaryPerformer(context, 'Omari Spellman', 'Rebounds Leader', '14.3', 'RPG', 'https://lh3.googleusercontent.com/aida-public/AB6AXuBGkL957XYsrycUmC-N_7vejj9y4jFXS9pXb74WJSNyMW3VSm8GRtIse6uSng_hWepCONIh80CLfQE54WmUDJ-_nbnKegpHBlHkv_t9RByTCG0FGC4vxfx89SRQdPNOYmeOg-RlVZDi5IbOZkFeGNFroj4-N1vxLwu0l_GCXNb80Dw69Ubmt2r25UTt7-rMtlYvdLbFRLo_HjXuz6BE2Rnz-oXEbkrp7Rni_6fQI0SCpIkIoz3IOncehQ71xlZr8KDqn4uLTFk-zD2p')),
+              const SizedBox(width: 16),
+              Expanded(child: _buildSecondaryPerformer(context, 'Ali Mezher', 'Assists Leader', '8.9', 'APG', 'https://lh3.googleusercontent.com/aida-public/AB6AXuCRr_ol2LJioV3KhfH-1HZc3hw7nBKIaEptbKc9l3bFSLHsTKRZtCmwxNBLhiII57FBTReMI_V9HeJjha7rXZ-PZxcbFZki6ddl5RFSiSROTkUHrCeuRvDDuCOjIQ4AgmzJR1qieUQX7xBz-SJUXRS0otz35g90wggZU4UmaBMKe427lP3qMe7QkSkYlGnZvXi8lnXKkkUFS1IVkop7yKYKdmvsWRohaVOVzvKJmGfR_WBETAeOv5PQEjJhfF6y5vpt7EQg6S__9k35')),
             ],
           ),
         ],
@@ -699,35 +689,34 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStat(String label, String value, bool borderLeft) {
+  Widget _buildStat(BuildContext context, String label, String value, bool borderLeft) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: EdgeInsets.only(left: borderLeft ? 16 : 0), // pl-4 (16px) left only based on HTML
+      padding: EdgeInsets.only(left: borderLeft ? 16 : 0),
       decoration: BoxDecoration(
-        border: borderLeft ? const Border(left: BorderSide(color: Color(0xFFCBD5E1))) : null, // border-slate-300
+        border: borderLeft ? Border(left: BorderSide(color: Colors.white.withAlpha(26))) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.secondary)), // text-[10px] uppercase
+          Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.secondary)),
           Text(
             value,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.primary, fontFamily: 'Lexend', height: 1.0), // text-xl font-black
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: colorScheme.primary, fontFamily: 'Lexend', height: 1.0),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSecondaryPerformer(String name, String sublabel, String stat, String statLabel, String imgUrl) {
+  Widget _buildSecondaryPerformer(BuildContext context, String name, String sublabel, String stat, String statLabel, String imgUrl) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(20), // p-5
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16), // rounded-2xl
-        border: Border.all(color: const Color(0xFFF1F5F9)), // border-slate-100
-        boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 2, offset: const Offset(0, 1)) // shadow-sm
-        ],
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withAlpha(13)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -737,44 +726,44 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 40, // w-10
-                height: 40, // h-10
+                width: 40,
+                height: 40,
                 clipBehavior: Clip.hardEdge,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFF1F5F9), // bg-slate-100
+                  color: Colors.white10,
                   shape: BoxShape.circle,
                 ),
-                child: Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.person, color: AppColors.secondary)),
+                child: Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => Icon(Icons.person, color: colorScheme.secondary)),
               ),
-              const Text('#1', style: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.primary)), // text-lg font-black
+              Text('#1', style: TextStyle(fontFamily: 'Lexend', fontSize: 18, fontWeight: FontWeight.w900, color: colorScheme.primary)),
             ],
           ),
-          const SizedBox(height: 12), // gap-3
+          const SizedBox(height: 12),
           Text(
-            name,
-            style: const TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w800), // text-xs font-extrabold uppercase
+            name.toUpperCase(),
+            style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w800, color: colorScheme.onSurface),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
             sublabel,
-            style: const TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.secondary), // text-[10px] font-medium
+            style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w500, color: colorScheme.secondary),
           ),
-          const SizedBox(height: 12), // map gap inside card layout flow
+          const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
                 stat,
-                style: const TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, height: 1.0), // text-2xl font-black
+                style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, height: 1.0, color: colorScheme.onSurface),
               ),
-              const SizedBox(width: 4), // gap-1
+              const SizedBox(width: 4),
               Padding(
-                padding: const EdgeInsets.only(bottom: 2.0), // pb-1 scale approx
+                padding: const EdgeInsets.only(bottom: 2.0),
                 child: Text(
                   statLabel,
-                  style: const TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold), // text-[10px] uppercase font-bold
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.secondary),
                 ),
               ),
             ],

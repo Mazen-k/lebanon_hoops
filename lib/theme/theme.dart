@@ -4,23 +4,31 @@ import 'typography.dart';
 
 class AppTheme {
   static ThemeData get lightTheme {
+    return _buildTheme(AppColors.lightColorScheme);
+  }
+
+  static ThemeData get darkTheme {
+    return _buildTheme(AppColors.darkColorScheme);
+  }
+
+  static ThemeData _buildTheme(ColorScheme colorScheme) {
     return ThemeData(
       useMaterial3: true,
-      colorScheme: AppColors.colorScheme,
+      colorScheme: colorScheme,
       textTheme: AppTypography.textTheme,
-      scaffoldBackgroundColor: AppColors.surface,
-      cardTheme: const CardThemeData(
+      scaffoldBackgroundColor: colorScheme.surface,
+      cardTheme: CardThemeData(
         elevation: 0,
-        shape: RoundedRectangleBorder(
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(8)), // ROUND_FOUR
         ),
-        color: AppColors.surfaceContainer,
+        color: colorScheme.surfaceContainer,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           elevation: 0,
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.onPrimary,
+          backgroundColor: colorScheme.primary,
+          foregroundColor: colorScheme.onPrimary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),

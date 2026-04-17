@@ -4,6 +4,8 @@ import '../navigation/app_nav_shell_key.dart';
 import '../navigation/card_collection_section_route.dart';
 import '../screens/court_reservation_page.dart';
 import '../screens/menu_pages.dart';
+import '../screens/games/games_shell.dart';
+import '../theme/theme_controller.dart';
 
 enum MainDrawerVariant { mainApp, gamesSection }
 
@@ -32,8 +34,9 @@ class MainAppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Drawer(
-      backgroundColor: AppColors.surfaceContainerLowest,
+      backgroundColor: colorScheme.surface,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -45,10 +48,14 @@ class MainAppDrawer extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      gradient: AppColors.signatureGradient,
+                      gradient: LinearGradient(
+                        colors: [colorScheme.primary, colorScheme.primaryContainer],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.sports_basketball, color: AppColors.onPrimary, size: 28),
+                    child: Icon(Icons.sports_basketball, color: colorScheme.onPrimary, size: 28),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -57,7 +64,7 @@ class MainAppDrawer extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
                             fontStyle: FontStyle.italic,
-                            color: AppColors.onSurface,
+                            color: colorScheme.onSurface,
                           ),
                     ),
                   ),
@@ -138,10 +145,22 @@ class MainAppDrawer extends StatelessWidget {
                       );
                     }),
                   ),
+                  ListenableBuilder(
+                    listenable: ThemeController(),
+                    builder: (context, _) {
+                      final isDark = ThemeController().isDarkMode;
+                      return _DrawerSwitchTile(
+                        icon: isDark ? Icons.dark_mode : Icons.light_mode,
+                        label: 'Dark Mode',
+                        value: isDark,
+                        onChanged: (val) => ThemeController().toggleTheme(val),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppColors.outlineVariant),
+            Divider(height: 1, color: colorScheme.outlineVariant),
             if (onSignOut != null)
               _DrawerTile(
                 icon: Icons.logout_rounded,
@@ -188,20 +207,56 @@ class _DrawerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? AppColors.primary.withAlpha((255 * 0.08).round()) : null;
+    final colorScheme = Theme.of(context).colorScheme;
+    final bg = selected ? colorScheme.primary.withAlpha((255 * 0.08).round()) : null;
     return Material(
       color: bg,
       child: ListTile(
         contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: denseBottom ? 4 : 2),
-        leading: Icon(icon, color: selected ? AppColors.primary : AppColors.secondary),
+        leading: Icon(icon, color: selected ? colorScheme.primary : colorScheme.secondary),
         title: Text(
           label,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? AppColors.primary : AppColors.onSurface,
+                color: selected ? colorScheme.primary : colorScheme.onSurface,
               ),
         ),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _DrawerSwitchTile extends StatelessWidget {
+  const _DrawerSwitchTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+      leading: Icon(icon, color: colorScheme.secondary),
+      title: Text(
+        label,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface,
+            ),
+      ),
+      trailing: Switch(
+        value: value,
+        onChanged: onChanged,
+        activeColor: colorScheme.primary,
       ),
     );
   }

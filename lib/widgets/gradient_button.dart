@@ -15,15 +15,20 @@ class GradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: AppColors.signatureGradient,
+        gradient: LinearGradient(
+          colors: [colorScheme.primary, colorScheme.primaryContainer],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: [
           // Ambient shadow
           BoxShadow(
-            color: AppColors.onSurface.withAlpha((255 * 0.06).round()),
+            color: colorScheme.onSurface.withAlpha((255 * 0.06).round()),
             blurRadius: 32,
             offset: const Offset(0, 4),
           ),
@@ -40,7 +45,7 @@ class GradientButton extends StatelessWidget {
               child: Text(
                 text,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.onPrimary,
+                      color: colorScheme.onPrimary,
                       fontWeight: FontWeight.bold,
                     ),
               ),

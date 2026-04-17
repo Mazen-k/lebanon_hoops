@@ -64,21 +64,22 @@ class _CourtPlaygroundsPageState extends State<CourtPlaygroundsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: Text(
           _court.courtName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
       body: RefreshIndicator(
-        color: AppColors.primary,
+        color: colorScheme.primary,
         onRefresh: _load,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -90,8 +91,8 @@ class _CourtPlaygroundsPageState extends State<CourtPlaygroundsPage> {
               ),
             ),
             if (_loading)
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator(color: colorScheme.primary)),
               )
             else if (_error != null)
               SliverFillRemaining(
@@ -114,7 +115,7 @@ class _CourtPlaygroundsPageState extends State<CourtPlaygroundsPage> {
                 child: Center(
                   child: Text(
                     'No playgrounds listed for this venue yet.',
-                    style: theme.textTheme.bodyLarge?.copyWith(color: AppColors.secondary),
+                    style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.secondary),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -158,21 +159,15 @@ class _CourtHeroBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary,
-            AppColors.primaryContainer.withAlpha((255 * 0.92).round()),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: colorScheme.signatureGradient,
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withAlpha((255 * 0.28).round()),
+            color: colorScheme.primary.withAlpha((255 * 0.28).round()),
             blurRadius: 28,
             offset: const Offset(0, 14),
           ),
@@ -184,7 +179,7 @@ class _CourtHeroBanner extends StatelessWidget {
           Text(
             'Playgrounds',
             style: theme.textTheme.labelLarge?.copyWith(
-              color: AppColors.onPrimary.withAlpha((255 * 0.88).round()),
+              color: colorScheme.onPrimary.withAlpha((255 * 0.88).round()),
               fontWeight: FontWeight.w800,
               letterSpacing: 1.4,
             ),
@@ -193,7 +188,7 @@ class _CourtHeroBanner extends StatelessWidget {
           Text(
             court.courtName,
             style: theme.textTheme.titleLarge?.copyWith(
-              color: AppColors.onPrimary,
+              color: colorScheme.onPrimary,
               fontWeight: FontWeight.w900,
               fontStyle: FontStyle.italic,
               height: 1.1,
@@ -203,13 +198,13 @@ class _CourtHeroBanner extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.place_outlined, color: AppColors.onPrimary, size: 20),
+              Icon(Icons.place_outlined, color: colorScheme.onPrimary, size: 20),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   court.location,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.onPrimary.withAlpha((255 * 0.92).round()),
+                    color: colorScheme.onPrimary.withAlpha((255 * 0.92).round()),
                     height: 1.35,
                   ),
                 ),
@@ -220,12 +215,12 @@ class _CourtHeroBanner extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(Icons.phone_outlined, color: AppColors.onPrimary, size: 20),
+                Icon(Icons.phone_outlined, color: colorScheme.onPrimary, size: 20),
                 const SizedBox(width: 6),
                 Text(
                   court.phoneNumber!.trim(),
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.onPrimary.withAlpha((255 * 0.92).round()),
+                    color: colorScheme.onPrimary.withAlpha((255 * 0.92).round()),
                   ),
                 ),
               ],
@@ -246,10 +241,11 @@ class _PlaygroundCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final photos = playground.photoUrls;
 
     return Material(
-      color: AppColors.surfaceContainerLowest,
+      color: colorScheme.surfaceContainerLowest,
       borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       elevation: 0,
@@ -260,9 +256,9 @@ class _PlaygroundCard extends StatelessWidget {
             height: 168,
             child: photos.isEmpty
                 ? Container(
-                    color: AppColors.surfaceContainerHighest,
+                    color: colorScheme.surfaceContainerHighest,
                     alignment: Alignment.center,
-                    child: Icon(Icons.image_not_supported_outlined, size: 40, color: AppColors.secondary.withAlpha((255 * 0.6).round())),
+                    child: Icon(Icons.image_not_supported_outlined, size: 40, color: colorScheme.secondary.withAlpha((255 * 0.6).round())),
                   )
                 : PageView.builder(
                     itemCount: photos.length,
@@ -270,9 +266,9 @@ class _PlaygroundCard extends StatelessWidget {
                       photos[i],
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, _) => Container(
-                        color: AppColors.surfaceContainerHighest,
+                        color: colorScheme.surfaceContainerHighest,
                         alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image_outlined, color: AppColors.secondary),
+                        child: Icon(Icons.broken_image_outlined, color: colorScheme.secondary),
                       ),
                     ),
                   ),
@@ -288,29 +284,29 @@ class _PlaygroundCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         playground.playgroundName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Lexend',
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.3,
-                          color: AppColors.onSurface,
+                          color: colorScheme.onSurface,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '\$${playground.pricePerHour.toStringAsFixed(0)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Lexend',
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: AppColors.primary,
+                        color: colorScheme.primary,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text('/ hour', style: theme.textTheme.labelSmall?.copyWith(color: AppColors.secondary)),
+                Text('/ hour', style: theme.textTheme.labelSmall?.copyWith(color: colorScheme.secondary)),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -320,35 +316,35 @@ class _PlaygroundCard extends StatelessWidget {
                       Chip(
                         label: const Text('Inactive'),
                         visualDensity: VisualDensity.compact,
-                        backgroundColor: AppColors.errorContainer,
-                        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        backgroundColor: colorScheme.errorContainer,
+                        labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: colorScheme.onErrorContainer),
                       )
                     else
                       Chip(
                         label: const Text('Open'),
                         visualDensity: VisualDensity.compact,
-                        avatar: const Icon(Icons.check_circle_outline, size: 18, color: AppColors.primary),
-                        backgroundColor: AppColors.primary.withAlpha((255 * 0.08).round()),
-                        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                        avatar: Icon(Icons.check_circle_outline, size: 18, color: colorScheme.primary),
+                        backgroundColor: colorScheme.primary.withAlpha((255 * 0.08).round()),
+                        labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: colorScheme.primary),
                       ),
                     if (playground.canHalfCourt)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.secondaryContainer.withAlpha((255 * 0.55).round()),
+                          color: colorScheme.secondaryContainer.withAlpha((255 * 0.55).round()),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.outlineVariant),
+                          border: Border.all(color: colorScheme.outlineVariant),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.check_rounded, size: 20, color: AppColors.primary),
+                            Icon(Icons.check_rounded, size: 20, color: colorScheme.primary),
                             const SizedBox(width: 8),
                             Text(
                               'Half court allowed',
                               style: theme.textTheme.labelLarge?.copyWith(
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.onSurface,
+                                color: colorScheme.onSurface,
                               ),
                             ),
                           ],
@@ -362,8 +358,8 @@ class _PlaygroundCard extends StatelessWidget {
                   child: FilledButton(
                     onPressed: playground.isActive ? onBook : null,
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: AppColors.onPrimary,
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),

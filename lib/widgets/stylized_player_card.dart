@@ -15,6 +15,7 @@ class StylizedPlayerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(top: 32), // space for overlapping head
       child: Stack(
@@ -26,8 +27,8 @@ class StylizedPlayerCard extends StatelessWidget {
             padding: const EdgeInsets.only(top: 48, bottom: 16, left: 16, right: 16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
-              gradient: const LinearGradient(
-                colors: [AppColors.surfaceContainerLow, AppColors.surfaceContainerHighest],
+              gradient: LinearGradient(
+                colors: [colorScheme.surfaceContainerLow, colorScheme.surfaceContainerHighest],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -40,6 +41,7 @@ class StylizedPlayerCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         letterSpacing: -0.48, // Tight letter spacing from design
+                        color: colorScheme.onSurface,
                       ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -48,7 +50,7 @@ class StylizedPlayerCard extends StatelessWidget {
                 Text(
                   position.toUpperCase(),
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppColors.secondary,
+                        color: colorScheme.secondary,
                       ),
                 ),
               ],
@@ -62,7 +64,7 @@ class StylizedPlayerCard extends StatelessWidget {
             child: Text(
               playerNumber,
               style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    color: AppColors.onSurface.withAlpha((255 * 0.1).round()),
+                    color: colorScheme.onSurface.withAlpha((255 * 0.1).round()),
                     fontSize: 100,
                   ),
             ),
@@ -76,13 +78,13 @@ class StylizedPlayerCard extends StatelessWidget {
               width: 80,
               height: 100,
               decoration: BoxDecoration(
-                color: AppColors.surfaceDim,
+                color: colorScheme.surfaceDim,
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(40),
                   topRight: Radius.circular(40),
                 ),
               ),
-              child: const Icon(Icons.person, size: 64, color: AppColors.secondary),
+              child: Icon(Icons.person, size: 64, color: colorScheme.secondary),
             ),
           ),
         ],

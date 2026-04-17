@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
 import '../navigation/app_nav_shell_key.dart';
 import '../widgets/menu_placeholder_page.dart';
 
@@ -8,12 +7,13 @@ class ShopBookingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('Shop / booking'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
@@ -21,7 +21,7 @@ class ShopBookingPage extends StatelessWidget {
         children: [
           Text(
             'Jump to the main app sections for court booking and the fan shop.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.secondary),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: colorScheme.secondary),
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
@@ -32,8 +32,8 @@ class ShopBookingPage extends StatelessWidget {
             icon: const Icon(Icons.sports_basketball),
             label: const Text('Court booking'),
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.onPrimary,
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
@@ -46,8 +46,8 @@ class ShopBookingPage extends StatelessWidget {
             icon: const Icon(Icons.shopping_bag),
             label: const Text('Fan shop'),
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.onPrimary,
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
@@ -62,12 +62,13 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('Settings'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
       body: const MenuPlaceholderPage(
@@ -83,12 +84,13 @@ class AboutUsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('About us'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
       body: const MenuPlaceholderPage(
@@ -104,12 +106,13 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('Profile'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
       body: const MenuPlaceholderPage(

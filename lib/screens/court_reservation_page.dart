@@ -76,23 +76,24 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('Court reservation'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColors.surfaceContainerLow,
-              AppColors.surface,
+              colorScheme.surfaceContainerLow,
+              colorScheme.surface,
             ],
           ),
         ),
@@ -111,13 +112,13 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
                         fontWeight: FontWeight.w900,
                         fontStyle: FontStyle.italic,
                         letterSpacing: -0.8,
-                        color: AppColors.onSurface,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Search venues, then open a court to see its playgrounds.',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.secondary, height: 1.35),
+                      style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.secondary, height: 1.35),
                     ),
                   ],
                 ),
@@ -138,12 +139,12 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
                   child: Row(
                     children: [
-                      Icon(Icons.sports_basketball_rounded, size: 18, color: AppColors.primary.withAlpha((255 * 0.85).round())),
+                      Icon(Icons.sports_basketball_rounded, size: 18, color: colorScheme.primary.withAlpha((255 * 0.85).round())),
                       const SizedBox(width: 6),
                       Text(
                         '${_visible.length} venue${_visible.length == 1 ? '' : 's'}',
                         style: theme.textTheme.labelLarge?.copyWith(
-                          color: AppColors.secondary,
+                          color: colorScheme.secondary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -152,9 +153,9 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
                 ),
               Expanded(
                 child: RefreshIndicator(
-                  color: AppColors.primary,
+                  color: colorScheme.primary,
                   onRefresh: _loadCourts,
-                  child: _buildBody(theme),
+                  child: _buildBody(theme, colorScheme),
                 ),
               ),
             ],
@@ -164,13 +165,13 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
     );
   }
 
-  Widget _buildBody(ThemeData theme) {
+  Widget _buildBody(ThemeData theme, ColorScheme colorScheme) {
     if (_loading) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 120),
-          Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        children: [
+          const SizedBox(height: 120),
+          Center(child: CircularProgressIndicator(color: colorScheme.primary)),
         ],
       );
     }
@@ -180,7 +181,7 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
         padding: const EdgeInsets.all(24),
         children: [
           const SizedBox(height: 48),
-          Icon(Icons.cloud_off_rounded, size: 56, color: AppColors.secondary.withAlpha((255 * 0.5).round())),
+          Icon(Icons.cloud_off_rounded, size: 56, color: colorScheme.secondary.withAlpha((255 * 0.5).round())),
           const SizedBox(height: 16),
           Text(
             'Could not load courts',
@@ -189,7 +190,7 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
           const SizedBox(height: 8),
           Text(
             _error!,
-            style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.secondary, height: 1.4),
+            style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.secondary, height: 1.4),
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
@@ -197,8 +198,8 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
             icon: const Icon(Icons.refresh_rounded),
             label: const Text('Retry'),
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.onPrimary,
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             ),
           ),
@@ -216,7 +217,7 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(
                 children: [
-                  Icon(Icons.search_off_rounded, size: 52, color: AppColors.outline),
+                  Icon(Icons.search_off_rounded, size: 52, color: colorScheme.outline),
                   const SizedBox(height: 12),
                   Text(
                     _search.text.trim().isEmpty ? 'No courts yet' : 'No matches',
@@ -228,7 +229,7 @@ class _CourtReservationPageState extends State<CourtReservationPage> {
                         ? 'Add rows to `courts` in your database, or run DB/court_reservation_schema.sql.'
                         : 'Try another name or clear the search field.',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.secondary),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.secondary),
                   ),
                 ],
               ),
@@ -274,21 +275,22 @@ class _GlassSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
       builder: (context, value, _) {
         return Material(
-          color: AppColors.surfaceContainerLowest.withAlpha((255 * 0.92).round()),
+          color: colorScheme.surfaceContainerLowest.withAlpha((255 * 0.92).round()),
           elevation: 0,
           shadowColor: Colors.transparent,
           borderRadius: BorderRadius.circular(18),
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.outlineVariant),
+              border: Border.all(color: colorScheme.outlineVariant),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withAlpha((255 * 0.06).round()),
+                  color: colorScheme.primary.withAlpha((255 * 0.06).round()),
                   blurRadius: 24,
                   offset: const Offset(0, 10),
                 ),
@@ -301,8 +303,8 @@ class _GlassSearchField extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyLarge,
               decoration: InputDecoration(
                 hintText: 'Search court name or area…',
-                hintStyle: TextStyle(color: AppColors.secondary.withAlpha((255 * 0.85).round())),
-                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary),
+                hintStyle: TextStyle(color: colorScheme.secondary.withAlpha((255 * 0.85).round())),
+                prefixIcon: Icon(Icons.search_rounded, color: colorScheme.primary),
                 suffixIcon: value.text.isEmpty
                     ? null
                     : IconButton(
@@ -330,6 +332,7 @@ class _CourtVenueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final url = court.logoUrl;
 
     return Material(
@@ -340,11 +343,11 @@ class _CourtVenueCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
-            color: AppColors.surfaceContainerLowest,
-            border: Border.all(color: AppColors.outlineVariant.withAlpha((255 * 0.65).round())),
+            color: colorScheme.surfaceContainerLowest,
+            border: Border.all(color: colorScheme.outlineVariant.withAlpha((255 * 0.65).round())),
             boxShadow: [
               BoxShadow(
-                color: AppColors.onSurface.withAlpha((255 * 0.04).round()),
+                color: colorScheme.onSurface.withAlpha((255 * 0.04).round()),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -367,14 +370,14 @@ class _CourtVenueCard extends StatelessWidget {
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.2,
-                          color: AppColors.onSurface,
+                          color: colorScheme.onSurface,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.place_outlined, size: 18, color: AppColors.secondary.withAlpha((255 * 0.9).round())),
+                          Icon(Icons.place_outlined, size: 18, color: colorScheme.secondary.withAlpha((255 * 0.9).round())),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
@@ -382,7 +385,7 @@ class _CourtVenueCard extends StatelessWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppColors.secondary,
+                                color: colorScheme.secondary,
                                 height: 1.35,
                               ),
                             ),
@@ -396,10 +399,10 @@ class _CourtVenueCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppColors.secondaryContainer.withAlpha((255 * 0.45).round()),
+                    color: colorScheme.secondaryContainer.withAlpha((255 * 0.45).round()),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.primary),
+                  child: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: colorScheme.primary),
                 ),
               ],
             ),
@@ -418,16 +421,17 @@ class _CourtLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final letter = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
     return Container(
       width: 64,
       height: 64,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: AppColors.signatureGradient,
+        gradient: colorScheme.signatureGradient,
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withAlpha((255 * 0.25).round()),
+            color: colorScheme.primary.withAlpha((255 * 0.25).round()),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -454,14 +458,15 @@ class _LogoFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Center(
       child: Text(
         letter,
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: 'Lexend',
           fontSize: 26,
           fontWeight: FontWeight.w900,
-          color: AppColors.onPrimary,
+          color: colorScheme.onPrimary,
         ),
       ),
     );

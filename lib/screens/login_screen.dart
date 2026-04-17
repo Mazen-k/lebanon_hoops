@@ -71,8 +71,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -82,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 8),
               _buildHero(context),
               const SizedBox(height: 28),
-              _buildSectionTitle('SIGN IN'),
+              _buildSectionTitle(context, 'SIGN IN'),
               const SizedBox(height: 20),
               GlassCard(
                 borderRadius: 12,
@@ -115,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           icon: Icon(
                             _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                            color: AppColors.secondary,
+                            color: colorScheme.secondary,
                           ),
                         ),
                         validator: (v) {
@@ -126,10 +127,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 28),
                       if (_loading)
-                        const Center(
+                        Center(
                           child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: CircularProgressIndicator(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: CircularProgressIndicator(color: colorScheme.primary),
                           ),
                         )
                       else
@@ -141,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             'New here? ',
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: AppColors.onSurfaceVariant,
+                                  color: colorScheme.onSurfaceVariant,
                                 ),
                           ),
                           TextButton(
@@ -158,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Text(
                               'Create account',
                               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    color: AppColors.primary,
+                                    color: colorScheme.primary,
                                     fontWeight: FontWeight.bold,
                                   ),
                             ),
@@ -203,15 +204,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildHero(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
       decoration: BoxDecoration(
-        gradient: AppColors.signatureGradient,
+        gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.primaryContainer]),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withAlpha((255 * 0.25).round()),
+            color: colorScheme.primary.withAlpha((255 * 0.25).round()),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -223,7 +225,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Text(
             'Lebanon Hoops',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppColors.onPrimary,
+                  color: colorScheme.onPrimary,
                   fontWeight: FontWeight.w800,
                   fontStyle: FontStyle.italic,
                   letterSpacing: -0.5,
@@ -233,7 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
           Text(
             'Welcome back — pick up where you left off.',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.onPrimary.withAlpha((255 * 0.92).round()),
+                  color: colorScheme.onPrimary.withAlpha((255 * 0.92).round()),
                   height: 1.35,
                 ),
           ),
@@ -242,24 +244,25 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(BuildContext context, String title) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
-          decoration: const BoxDecoration(
-            border: Border(left: BorderSide(color: AppColors.primary, width: 4)),
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: colorScheme.primary, width: 4)),
           ),
           padding: const EdgeInsets.only(left: 12),
           child: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Lexend',
               fontSize: 24,
               fontWeight: FontWeight.w800,
               fontStyle: FontStyle.italic,
               letterSpacing: -1,
               height: 1,
-              color: AppColors.onSurface,
+              color: colorScheme.onSurface,
             ),
           ),
         ),

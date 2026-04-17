@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../theme/colors.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/gradient_button.dart';
 import '../widgets/auth_text_field.dart';
@@ -125,14 +124,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primary),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: colorScheme.primary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -143,7 +143,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildSectionTitle('CREATE ACCOUNT'),
+              _buildSectionTitle(context, 'CREATE ACCOUNT'),
               const SizedBox(height: 20),
               GlassCard(
                 borderRadius: 12,
@@ -187,7 +187,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           icon: Icon(
                             _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                            color: AppColors.secondary,
+                            color: colorScheme.secondary,
                           ),
                         ),
                         validator: (v) {
@@ -207,7 +207,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                           icon: Icon(
                             _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                            color: AppColors.secondary,
+                            color: colorScheme.secondary,
                           ),
                         ),
                         validator: (v) {
@@ -234,10 +234,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       _buildFavoriteTeamField(context),
                       const SizedBox(height: 28),
                       if (_submitting)
-                        const Center(
+                        Center(
                           child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: CircularProgressIndicator(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: CircularProgressIndicator(color: colorScheme.primary),
                           ),
                         )
                       else
@@ -254,19 +254,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Widget _buildFavoriteTeamField(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Favorite team (optional)',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: AppColors.onSurfaceVariant,
+                color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
               ),
         ),
         const SizedBox(height: 8),
         if (_teamsLoading)
-          const LinearProgressIndicator(color: AppColors.primary, minHeight: 3)
+          LinearProgressIndicator(color: colorScheme.primary, minHeight: 3)
         else if (_teamsError != null)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,18 +275,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
               Text(
                 _teamsError!,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.error,
+                      color: colorScheme.error,
                       height: 1.35,
                     ),
               ),
               const SizedBox(height: 8),
               TextButton.icon(
                 onPressed: _loadTeams,
-                icon: const Icon(Icons.refresh, color: AppColors.primary, size: 20),
+                icon: Icon(Icons.refresh, color: colorScheme.primary, size: 20),
                 label: Text(
                   'Retry',
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppColors.primary,
+                        color: colorScheme.primary,
                         fontWeight: FontWeight.bold,
                       ),
                 ),
@@ -298,23 +299,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
             isExpanded: true,
             hint: Text(
               _teams.isEmpty ? 'No teams from server' : 'Select a team',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.secondary),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colorScheme.secondary),
             ),
             decoration: InputDecoration(
               filled: true,
-              fillColor: AppColors.surfaceContainerLow,
+              fillColor: colorScheme.surfaceContainerLow,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.outlineVariant),
+                borderSide: BorderSide(color: colorScheme.outlineVariant),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.outlineVariant),
+                borderSide: BorderSide(color: colorScheme.outlineVariant),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                borderSide: BorderSide(color: colorScheme.primary, width: 2),
               ),
             ),
             items: [
@@ -335,24 +336,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(BuildContext context, String title) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
-          decoration: const BoxDecoration(
-            border: Border(left: BorderSide(color: AppColors.primary, width: 4)),
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: colorScheme.primary, width: 4)),
           ),
           padding: const EdgeInsets.only(left: 12),
           child: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Lexend',
               fontSize: 24,
               fontWeight: FontWeight.w800,
               fontStyle: FontStyle.italic,
               letterSpacing: -1,
               height: 1,
-              color: AppColors.onSurface,
+              color: colorScheme.onSurface,
             ),
           ),
         ),

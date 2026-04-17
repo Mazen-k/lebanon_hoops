@@ -327,13 +327,14 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: Text(s.courtName, maxLines: 1, overflow: TextOverflow.ellipsis),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
@@ -345,20 +346,20 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _loading ? null : _addPlayground,
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.onPrimary,
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
         icon: const Icon(Icons.add),
         label: const Text('Playground'),
       ),
       body: RefreshIndicator(
-        color: AppColors.primary,
+        color: colorScheme.primary,
         onRefresh: _load,
         child: _loading
             ? ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 120),
-                  Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                children: [
+                  const SizedBox(height: 120),
+                  Center(child: CircularProgressIndicator(color: colorScheme.primary)),
                 ],
               )
             : _error != null
@@ -378,7 +379,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          gradient: AppColors.signatureGradient,
+                          gradient: colorScheme.signatureGradient,
                           borderRadius: BorderRadius.circular(18),
                         ),
                         child: Column(
@@ -387,7 +388,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
                             Text(
                               'Your venue',
                               style: theme.textTheme.labelLarge?.copyWith(
-                                color: AppColors.onPrimary.withAlpha((255 * 0.9).round()),
+                                color: colorScheme.onPrimary.withAlpha((255 * 0.9).round()),
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -395,7 +396,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
                             Text(
                               s.location,
                               style: theme.textTheme.bodyLarge?.copyWith(
-                                color: AppColors.onPrimary,
+                                color: colorScheme.onPrimary,
                                 height: 1.3,
                               ),
                             ),
@@ -403,7 +404,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
                             Text(
                               'Signed in as ${s.username}',
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppColors.onPrimary.withAlpha((255 * 0.85).round()),
+                                color: colorScheme.onPrimary.withAlpha((255 * 0.85).round()),
                               ),
                             ),
                           ],
@@ -418,7 +419,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
                       if (_playgrounds.isEmpty)
                         Text(
                           'No playgrounds yet. Tap + Playground to add one.',
-                          style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.secondary),
+                          style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.secondary),
                         )
                       else
                         ..._playgrounds.map((pg) => _buildPlaygroundCard(context, pg)),
@@ -430,6 +431,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
 
   Widget _buildPlaygroundCard(BuildContext context, Map<String, dynamic> pg) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final id = _pgId(pg);
     final name = '${pg['playground_name'] ?? ''}';
     final price = (pg['price_per_hour'] is num) ? (pg['price_per_hour'] as num).toDouble() : double.tryParse('${pg['price_per_hour']}') ?? 0;
@@ -437,11 +439,11 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
-      color: AppColors.surfaceContainerLowest,
+      color: colorScheme.surfaceContainerLowest,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.outlineVariant),
+        side: BorderSide(color: colorScheme.outlineVariant),
       ),
       child: ExpansionTile(
         onExpansionChanged: (open) {
@@ -455,7 +457,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
           if (open) _loadAvailability(id);
         },
         title: Text(name, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
-        subtitle: Text('\$${price.toStringAsFixed(2)} / hr', style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary)),
+        subtitle: Text('\$${price.toStringAsFixed(2)} / hr', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.secondary)),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
           Align(
@@ -468,7 +470,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check_rounded, size: 18, color: AppColors.primary),
+                      Icon(Icons.check_rounded, size: 18, color: colorScheme.primary),
                       const SizedBox(width: 4),
                       Text(
                         'Half court allowed',
@@ -502,7 +504,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
           Text('Photos', style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           if (photos.isEmpty)
-            Text('No photos yet.', style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary))
+            Text('No photos yet.', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.secondary))
           else
             ...photos.map((ph) {
               final pid = ph['photo_id'];
@@ -513,7 +515,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
                 title: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
                 trailing: pid != null
                     ? IconButton(
-                        icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                        icon: Icon(Icons.delete_outline, color: colorScheme.error),
                         onPressed: () => _deletePhoto(pid is int ? pid : (pid as num).toInt()),
                       )
                     : null,
@@ -533,20 +535,20 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
               ],
             ),
             if (_availLoading.contains(id))
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Center(child: CircularProgressIndicator(color: colorScheme.primary)),
               )
             else if (!_availability.containsKey(id))
               Padding(
                 padding: const EdgeInsets.all(8),
                 child: Text(
                   'Loading slots…',
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary),
+                  style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.secondary),
                 ),
               )
             else if (_availability[id]!.isEmpty)
-              Text('No slots yet.', style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary))
+              Text('No slots yet.', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.secondary))
             else
               ..._availability[id]!.map((slot) {
                 final aid = _slotId(slot);
@@ -562,7 +564,7 @@ class _VendorCourtDashboardPageState extends State<VendorCourtDashboardPage> {
                   trailing: booked
                       ? null
                       : IconButton(
-                          icon: const Icon(Icons.close, color: AppColors.error),
+                          icon: Icon(Icons.close, color: colorScheme.error),
                           onPressed: () => _deleteSlot(id, aid),
                         ),
                 );

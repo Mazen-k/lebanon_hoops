@@ -20,41 +20,42 @@ class FantasyScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(top: 16, bottom: 128, left: 16, right: 16), // px-4 py-8
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeroMatchup(),
+              _buildHeroMatchup(context),
               const SizedBox(height: 24), // gap-6
 
               // ── My Active Lineup ────────────────────────
-              _buildSectionHeader('My Active Lineup', 'Gameday Live'),
+              _buildSectionHeader(context, 'My Active Lineup', 'Gameday Live'),
               const SizedBox(height: 24), // gap-6
               ..._players.map((p) => Padding(
                 padding: const EdgeInsets.only(bottom: 16), // gap-4
-                child: _buildPlayerCard(p),
+                child: _buildPlayerCard(context, p),
               )),
-              _buildDraftCard(),
+              _buildDraftCard(context),
               const SizedBox(height: 24), // gap-6
 
               // ── Trade Center Banner ─────────────────────
-              _buildTradeBanner(),
+              _buildTradeBanner(context),
               const SizedBox(height: 24), // gap-6
 
               // ── League Standings ────────────────────────
-              _buildLeagueStandings(),
+              _buildLeagueStandings(context),
               const SizedBox(height: 24), // gap-6
 
               // ── Injury Alert ────────────────────────────
-              _buildInjuryAlert(),
+              _buildInjuryAlert(context),
               const SizedBox(height: 24), // gap-6
 
               // ── Recent Transactions ─────────────────────
-              _buildRecentTransactions(),
+              _buildRecentTransactions(context),
             ],
           ),
         ),
@@ -63,11 +64,12 @@ class FantasyScreen extends StatelessWidget {
   }
 
   // ── Hero Section: Matchup of the Week ─────────────────────
-  Widget _buildHeroMatchup() {
+  Widget _buildHeroMatchup(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(32), // p-8
       decoration: BoxDecoration(
-        color: AppColors.inverseSurface,
+        color: colorScheme.inverseSurface,
         borderRadius: BorderRadius.circular(12), // rounded-xl
         boxShadow: [
           BoxShadow(color: Colors.black.withAlpha((255 * 0.25).round()), blurRadius: 25, offset: const Offset(0, 10)), // shadow-2xl
@@ -80,7 +82,7 @@ class FantasyScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), // px-3 py-1
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: colorScheme.primary,
               borderRadius: BorderRadius.circular(8), // rounded-lg
             ),
             child: const Text(
@@ -92,12 +94,12 @@ class FantasyScreen extends StatelessWidget {
 
           // Title
           RichText(
-            text: const TextSpan(
-              style: TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white, height: 1.0), // text-4xl font-black leading-none
+            text: TextSpan(
+              style: const TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white, height: 1.0), // text-4xl font-black leading-none
               children: [
-                TextSpan(text: 'CEDAR GIANTS '),
-                TextSpan(text: 'VS', style: TextStyle(color: AppColors.primary, fontStyle: FontStyle.italic)),
-                TextSpan(text: ' BEIRUT BOLTS'),
+                const TextSpan(text: 'CEDAR GIANTS '),
+                TextSpan(text: 'VS', style: TextStyle(color: colorScheme.primary, fontStyle: FontStyle.italic)),
+                const TextSpan(text: ' BEIRUT BOLTS'),
               ],
             ),
           ),
@@ -111,7 +113,7 @@ class FantasyScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Your Score',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w400, color: Colors.grey.shade500, letterSpacing: -0.5), // text-xs text-slate-400 tracking-tighter
+                    style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w400, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round()), letterSpacing: -0.5), // text-xs text-slate-400 tracking-tighter
                   ),
                   const Text(
                     '142.5',
@@ -120,18 +122,18 @@ class FantasyScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(width: 24), // gap-6
-              Container(height: 48, width: 1, color: Colors.grey.shade700), // h-12 w-px bg-slate-700
+              Container(height: 48, width: 1, color: Colors.white.withAlpha((255 * 0.1).round())), // h-12 w-px bg-slate-700
               const SizedBox(width: 24), // gap-6
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Opponent',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w400, color: Colors.grey.shade500, letterSpacing: -0.5), // text-xs text-slate-400
+                    style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w400, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round()), letterSpacing: -0.5), // text-xs text-slate-400
                   ),
                   Text(
                     '128.2',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: Colors.grey.shade500), // text-4xl font-black text-slate-400
+                    style: TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.4).round())), // text-4xl font-black text-slate-400
                   ),
                 ],
               ),
@@ -145,9 +147,11 @@ class FantasyScreen extends StatelessWidget {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    gradient: AppColors.signatureGradient,
+                    gradient: colorScheme.brightness == Brightness.light
+                        ? const LinearGradient(colors: [Color(0xFFBB0013), Color(0xFFE71520)])
+                        : LinearGradient(colors: [colorScheme.primary, colorScheme.primaryContainer]),
                     borderRadius: BorderRadius.circular(12), // rounded-xl
-                    boxShadow: [BoxShadow(color: AppColors.primary.withAlpha((255 * 0.3).round()), blurRadius: 15, offset: const Offset(0, 4))],
+                    boxShadow: [BoxShadow(color: colorScheme.primary.withAlpha((255 * 0.3).round()), blurRadius: 15, offset: const Offset(0, 4))],
                   ),
                   child: Material(
                     color: Colors.transparent,
@@ -171,9 +175,9 @@ class FantasyScreen extends StatelessWidget {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B), // bg-slate-800
+                    color: colorScheme.surfaceContainerHighest, // bg-slate-800
                     borderRadius: BorderRadius.circular(12), // rounded-xl
-                    border: Border.all(color: const Color(0xFF334155)), // border border-slate-700
+                    border: Border.all(color: colorScheme.outlineVariant), // border border-slate-700
                   ),
                   child: Material(
                     color: Colors.transparent,
@@ -201,36 +205,38 @@ class FantasyScreen extends StatelessWidget {
   }
 
   // ── Section Header ────────────────────────────────────────
-  Widget _buildSectionHeader(String title, String trailing) {
+  Widget _buildSectionHeader(BuildContext context, String title, String trailing) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(
           title,
-          style: const TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, color: AppColors.onSurface, letterSpacing: -1.0), // text-2xl font-extrabold italic tracking-tighter
+          style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, color: colorScheme.onSurface, letterSpacing: -1.0), // text-2xl font-extrabold italic tracking-tighter
         ),
         Text(
           trailing,
-          style: const TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary), // text-sm font-bold text-primary uppercase
+          style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold, color: colorScheme.primary), // text-sm font-bold text-primary uppercase
         ),
       ],
     );
   }
 
   // ── Player Card ───────────────────────────────────────────
-  Widget _buildPlayerCard(Map<String, dynamic> player) {
+  Widget _buildPlayerCard(BuildContext context, Map<String, dynamic> player) {
+    final colorScheme = Theme.of(context).colorScheme;
     final bool isPrimary = player['isPrimary'] as bool;
     final Map<String, String> stats = Map<String, String>.from(player['stats'] as Map);
 
     return Container(
       padding: const EdgeInsets.all(16), // p-4
       decoration: BoxDecoration(
-        color: Colors.white, // bg-surface-container-lowest
+        color: colorScheme.surface, // bg-surface-container-lowest
         borderRadius: BorderRadius.circular(12), // rounded-xl
         border: Border(
           bottom: BorderSide(
-            color: isPrimary ? AppColors.primary : const Color(0xFFE2E8F0), // border-primary or border-slate-200
+            color: isPrimary ? colorScheme.primary : colorScheme.outlineVariant, // border-primary or border-slate-200
             width: 4,
           ),
         ),
@@ -244,7 +250,7 @@ class FantasyScreen extends StatelessWidget {
             bottom: -8,
             child: Text(
               player['jersey'] as String,
-              style: TextStyle(fontFamily: 'Lexend', fontSize: 80, fontWeight: FontWeight.w900, color: AppColors.onSurface.withAlpha((255 * 0.05).round())), // text-8xl opacity-10
+              style: TextStyle(fontFamily: 'Lexend', fontSize: 80, fontWeight: FontWeight.w900, color: colorScheme.onSurface.withAlpha((255 * 0.05).round())), // text-8xl opacity-10
             ),
           ),
           // Main content
@@ -260,22 +266,22 @@ class FantasyScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), // px-2 py-0.5
                         decoration: BoxDecoration(
-                          color: isPrimary ? AppColors.primaryFixed : AppColors.secondaryContainer,
+                          color: isPrimary ? colorScheme.primaryContainer : colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.circular(8), // rounded-lg
                         ),
                         child: Text(
                           player['pos'] as String,
-                          style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: isPrimary ? AppColors.primary : AppColors.secondary), // text-xs font-bold uppercase
+                          style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: isPrimary ? colorScheme.primary : colorScheme.secondary), // text-xs font-bold uppercase
                         ),
                       ),
                       const SizedBox(height: 8), // mb-2
                       Text(
                         player['name'] as String,
-                        style: const TextStyle(fontFamily: 'Lexend', fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.onSurface, height: 1.1), // text-xl font-bold leading-tight
+                        style: TextStyle(fontFamily: 'Lexend', fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onSurface, height: 1.1), // text-xl font-bold leading-tight
                       ),
                       Text(
                         player['team'] as String,
-                        style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade500), // text-xs text-slate-500 font-medium
+                        style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w500, color: colorScheme.secondary), // text-xs text-slate-500 font-medium
                       ),
                     ],
                   ),
@@ -284,11 +290,11 @@ class FantasyScreen extends StatelessWidget {
                     children: [
                       Text(
                         player['fpts'] as String,
-                        style: const TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.onSurface), // text-2xl font-black
+                        style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.onSurface), // text-2xl font-black
                       ),
                       Text(
                         'FPTS',
-                        style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade400), // text-[10px] uppercase text-slate-400 font-bold
+                        style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round())), // text-[10px] uppercase text-slate-400 font-bold
                       ),
                     ],
                   ),
@@ -306,7 +312,7 @@ class FantasyScreen extends StatelessWidget {
                       ),
                       Text(
                         e.value,
-                        style: const TextStyle(fontFamily: 'Lexend', fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.onSurface), // font-headline font-bold
+                        style: TextStyle(fontFamily: 'Lexend', fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface), // font-headline font-bold
                       ),
                     ],
                   ),
@@ -320,14 +326,15 @@ class FantasyScreen extends StatelessWidget {
   }
 
   // ── Draft Utility Player Card ─────────────────────────────
-  Widget _buildDraftCard() {
+  Widget _buildDraftCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16), // p-4
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC), // bg-slate-50
+        color: colorScheme.surfaceContainerLow, // bg-slate-50
         borderRadius: BorderRadius.circular(12), // rounded-xl
         border: Border.all(
-          color: const Color(0xFFE2E8F0), // border-slate-200
+          color: colorScheme.outlineVariant, // border-slate-200
           width: 2,
           strokeAlign: BorderSide.strokeAlignInside,
         ),
@@ -335,11 +342,11 @@ class FantasyScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.add_circle_outline, size: 36, color: Colors.grey.shade300), // text-4xl text-slate-300
+          Icon(Icons.add_circle_outline, size: 36, color: colorScheme.onSurface.withAlpha((255 * 0.2).round())), // text-4xl text-slate-300
           const SizedBox(height: 8), // mb-2
           Text(
             'DRAFT UTILITY PLAYER',
-            style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade400), // text-sm font-bold uppercase text-slate-400
+            style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold, color: colorScheme.onSurface.withAlpha((255 * 0.4).round())), // text-sm font-bold uppercase text-slate-400
           ),
         ],
       ),
@@ -347,11 +354,12 @@ class FantasyScreen extends StatelessWidget {
   }
 
   // ── Trade Center Banner ───────────────────────────────────
-  Widget _buildTradeBanner() {
+  Widget _buildTradeBanner(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(24), // p-6
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainer,
+        color: colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(12), // rounded-xl
       ),
       child: Column(
@@ -362,24 +370,24 @@ class FantasyScreen extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colorScheme.surface,
                   shape: BoxShape.circle,
                   boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 4, offset: const Offset(0, 1))],
                 ),
-                child: const Icon(Icons.swap_horiz, color: AppColors.primary, size: 24),
+                child: Icon(Icons.swap_horiz, color: colorScheme.primary, size: 24),
               ),
               const SizedBox(width: 16), // gap-4
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Trade Analysis Available',
-                      style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.onSurface, letterSpacing: -0.5), // font-bold uppercase text-sm tracking-tight
+                      style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold, color: colorScheme.onSurface, letterSpacing: -0.5), // font-bold uppercase text-sm tracking-tight
                     ),
                     Text(
                       'Your F Ater Majok has high market value this week.',
-                      style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.grey.shade500), // text-xs text-slate-500
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: colorScheme.secondary), // text-xs text-slate-500
                     ),
                   ],
                 ),
@@ -392,8 +400,8 @@ class FantasyScreen extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () {},
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.onSurface,
-                foregroundColor: Colors.white,
+                backgroundColor: colorScheme.onSurface,
+                foregroundColor: colorScheme.surface,
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24), // px-6 py-2
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), // rounded-lg
                 elevation: 0,
@@ -410,10 +418,11 @@ class FantasyScreen extends StatelessWidget {
   }
 
   // ── League Standings ──────────────────────────────────────
-  Widget _buildLeagueStandings() {
+  Widget _buildLeagueStandings(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12), // rounded-xl
         boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 4, offset: const Offset(0, 1))],
       ),
@@ -423,17 +432,17 @@ class FantasyScreen extends StatelessWidget {
           // Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), // px-6 py-4
-            color: AppColors.surfaceContainerHighest,
+            color: colorScheme.surfaceContainerHighest,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'League Standings',
-                  style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, color: AppColors.onSurface, letterSpacing: -0.5), // font-extrabold italic text-sm tracking-tight
+                  style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, color: colorScheme.onSurface, letterSpacing: -0.5), // font-extrabold italic text-sm tracking-tight
                 ),
                 Text(
                   'WEEK 12',
-                  style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade500), // text-[10px] font-bold uppercase text-slate-500
+                  style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.secondary), // text-[10px] font-bold uppercase text-slate-500
                 ),
               ],
             ),
@@ -445,26 +454,27 @@ class FantasyScreen extends StatelessWidget {
               children: [
                 Expanded(
                   flex: 3,
-                  child: Text('TEAM', style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade400)), // text-[10px] uppercase text-slate-400
+                  child: Text('TEAM', style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round()))), // text-[10px] uppercase text-slate-400
                 ),
                 Expanded(
                   flex: 1,
-                  child: Center(child: Text('W-L', style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade400))),
+                  child: Center(child: Text('W-L', style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round())))),
                 ),
                 Expanded(
                   flex: 1,
-                  child: Align(alignment: Alignment.centerRight, child: Text('PTS', style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade400))),
+                  child: Align(alignment: Alignment.centerRight, child: Text('PTS', style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round())))),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)), // border-slate-100
+          const Divider(height: 1, color: Colors.transparent), // invisible divider for consistency
+          Divider(height: 1, color: colorScheme.outlineVariant), // border-slate-100
           // Table rows
           ...List.generate(_standings.length, (index) {
             final s = _standings[index];
             final isUser = s['rank'] == '02';
             return Container(
-              color: isUser ? const Color(0xFFFEF2F2).withAlpha((255 * 0.5).round()) : Colors.transparent, // bg-red-50/50
+              color: isUser ? colorScheme.primaryContainer.withAlpha((255 * 0.5).round()) : Colors.transparent, // bg-red-50/50
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // px-4 py-3
               child: Row(
                 children: [
@@ -474,12 +484,12 @@ class FantasyScreen extends StatelessWidget {
                       children: [
                         Text(
                           s['rank']!,
-                          style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, color: isUser ? AppColors.primary : Colors.grey.shade300), // font-black text-xs italic
+                          style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, color: isUser ? colorScheme.primary : colorScheme.onSurface.withAlpha((255 * 0.2).round())), // font-black text-xs italic
                         ),
                         const SizedBox(width: 12), // gap-3
                         Text(
                           s['team']!,
-                          style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.bold, color: isUser ? AppColors.primary : AppColors.onSurface), // font-bold
+                          style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.bold, color: isUser ? colorScheme.primary : colorScheme.onSurface), // font-bold
                         ),
                       ],
                     ),
@@ -503,13 +513,13 @@ class FantasyScreen extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFF1F5F9)), // border border-slate-100
+                border: Border.all(color: colorScheme.outlineVariant), // border border-slate-100
                 borderRadius: BorderRadius.circular(8), // rounded-lg
               ),
               child: Center(
                 child: Text(
                   'VIEW FULL TABLE',
-                  style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade400, letterSpacing: 2.0), // text-[10px] uppercase tracking-widest text-slate-400
+                  style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round()), letterSpacing: 2.0), // text-[10px] uppercase tracking-widest text-slate-400
                 ),
               ),
             ),
@@ -520,11 +530,12 @@ class FantasyScreen extends StatelessWidget {
   }
 
   // ── Injury Alert Card ─────────────────────────────────────
-  Widget _buildInjuryAlert() {
+  Widget _buildInjuryAlert(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(24), // p-6
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: colorScheme.primary,
         borderRadius: BorderRadius.circular(12), // rounded-xl
       ),
       clipBehavior: Clip.hardEdge,
@@ -578,11 +589,12 @@ class FantasyScreen extends StatelessWidget {
   }
 
   // ── Recent Transactions ───────────────────────────────────
-  Widget _buildRecentTransactions() {
+  Widget _buildRecentTransactions(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(24), // p-6
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12), // rounded-xl
       ),
       child: Column(
@@ -590,18 +602,19 @@ class FantasyScreen extends StatelessWidget {
         children: [
           Text(
             'RECENT TRANSACTIONS',
-            style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade500, letterSpacing: 2.0), // text-xs font-bold uppercase tracking-widest text-slate-500
+            style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary, letterSpacing: 2.0), // text-xs font-bold uppercase tracking-widest text-slate-500
           ),
           const SizedBox(height: 16), // mb-4
-          _buildTransactionRow(Colors.green, 'Added S. El Darwich', '2h ago'),
+          _buildTransactionRow(context, Colors.green, 'Added S. El Darwich', '2h ago'),
           const SizedBox(height: 16), // space-y-4
-          _buildTransactionRow(Colors.red, 'Dropped J. Arledge', '2h ago'),
+          _buildTransactionRow(context, Colors.red, 'Dropped J. Arledge', '2h ago'),
         ],
       ),
     );
   }
 
-  Widget _buildTransactionRow(Color dotColor, String text, String time) {
+  Widget _buildTransactionRow(BuildContext context, Color dotColor, String text, String time) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -618,13 +631,13 @@ class FantasyScreen extends StatelessWidget {
             const SizedBox(width: 12), // gap-3
             Text(
               text,
-              style: const TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.onSurface), // text-xs font-bold
+              style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.onSurface), // text-xs font-bold
             ),
           ],
         ),
         Text(
           time,
-          style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: Colors.grey.shade400), // text-[10px] text-slate-400
+          style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round())), // text-[10px] text-slate-400
         ),
       ],
     );

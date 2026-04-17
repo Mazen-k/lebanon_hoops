@@ -49,23 +49,24 @@ class _FanShopScreenState extends State<FanShopScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(top: 16, bottom: 128, left: 24, right: 24), // pt-20 pb-32 px-6
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeroBanner(),
+              _buildHeroBanner(context),
               const SizedBox(height: 48), // mb-12
-              _buildCategoryFilters(),
+              _buildCategoryFilters(context),
               const SizedBox(height: 48), // mb-12
-              _buildFeaturedProduct(),
+              _buildFeaturedProduct(context),
               const SizedBox(height: 32), // gap-8
-              _buildProductGrid(),
+              _buildProductGrid(context),
               const SizedBox(height: 80), // mt-20
-              _buildMvpPackSection(),
+              _buildMvpPackSection(context),
             ],
           ),
         ),
@@ -74,7 +75,8 @@ class _FanShopScreenState extends State<FanShopScreen> {
   }
 
   // ── Hero Editorial Section ──────────────────────────────────
-  Widget _buildHeroBanner() {
+  Widget _buildHeroBanner(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ClipRRect(
       borderRadius: BorderRadius.circular(12), // rounded-xl
       child: SizedBox(
@@ -87,15 +89,14 @@ class _FanShopScreenState extends State<FanShopScreen> {
               'https://lh3.googleusercontent.com/aida-public/AB6AXuB2F4mXAhrehyYkaSQPdQQ1dR2wxLNX1XPrcB6V6lxlXqCZf28yFRXtd2pT0w83wae8N2gmhS2unSlqSzgqUKlrfZfOZqtfHv7UsGARUI1rkCQM0_jo7Sm8eGGi1j8qHWHYkVeuAZQCIZARigfKNPpbSsmRA2uMMtbEpSXGK86y_Cv-zq9MFpzo9S8j9cyA9VIiFUKeZ4ug1XDvY9Hqcmup0pwY9T9D4Ntf36YqtfKgzTYBc450HXwfTDTx4xifUKB6fmHaJM2ake0a',
               fit: BoxFit.cover,
             ),
-            // Gradient overlay: from-on-surface via-on-surface/40 to-transparent
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                   colors: [
-                    AppColors.onSurface,
-                    AppColors.onSurface.withAlpha((255 * 0.4).round()),
+                    colorScheme.onSurface,
+                    colorScheme.onSurface.withAlpha((255 * 0.4).round()),
                     Colors.transparent,
                   ],
                 ),
@@ -111,7 +112,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), // px-3 py-1
-                    color: AppColors.primary,
+                    color: colorScheme.primary,
                     child: const Text(
                       'Limited Drop',
                       style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2.0), // text-xs uppercase tracking-widest
@@ -131,7 +132,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
                   ElevatedButton(
                     onPressed: () {},
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: colorScheme.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12), // px-8 py-3
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // rounded-xl
@@ -152,7 +153,8 @@ class _FanShopScreenState extends State<FanShopScreen> {
   }
 
   // ── Category Filter Chips ──────────────────────────────────
-  Widget _buildCategoryFilters() {
+  Widget _buildCategoryFilters(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return SizedBox(
       height: 44,
       child: ListView.separated(
@@ -167,10 +169,10 @@ class _FanShopScreenState extends State<FanShopScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8), // px-6 py-2
               decoration: BoxDecoration(
-                color: isActive ? AppColors.primary : AppColors.surfaceContainerLow,
+                color: isActive ? colorScheme.primary : colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(12), // rounded-xl
                 boxShadow: isActive
-                    ? [BoxShadow(color: AppColors.primary.withAlpha((255 * 0.2).round()), blurRadius: 8, offset: const Offset(0, 4))]
+                    ? [BoxShadow(color: colorScheme.primary.withAlpha((255 * 0.2).round()), blurRadius: 8, offset: const Offset(0, 4))]
                     : [],
               ),
               child: Center(
@@ -180,7 +182,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
                     fontFamily: 'Lexend',
                     fontSize: 14, // text-sm
                     fontWeight: FontWeight.bold,
-                    color: isActive ? Colors.white : AppColors.onSurface,
+                    color: isActive ? Colors.white : colorScheme.onSurface,
                   ),
                 ),
               ),
@@ -192,11 +194,12 @@ class _FanShopScreenState extends State<FanShopScreen> {
   }
 
   // ── Featured (Large) Product Card ──────────────────────────
-  Widget _buildFeaturedProduct() {
+  Widget _buildFeaturedProduct(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final product = _products[0];
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12), // rounded-xl
       ),
       clipBehavior: Clip.hardEdge,
@@ -220,12 +223,12 @@ class _FanShopScreenState extends State<FanShopScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), // px-3 py-1
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: colorScheme.surface,
                     borderRadius: BorderRadius.circular(100), // rounded-full
                   ),
-                  child: const Text(
+                  child: Text(
                     'Authentic',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.primary, letterSpacing: -0.5), // text-[10px] font-black tracking-tighter
+                    style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.primary, letterSpacing: -0.5), // text-[10px] font-black tracking-tighter
                   ),
                 ),
               ),
@@ -234,7 +237,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
           // Product info
           Container(
             padding: const EdgeInsets.all(32), // p-8
-            color: AppColors.surfaceContainerHighest.withAlpha((255 * 0.5).round()), // bg-surface-container-highest/50
+            color: colorScheme.surfaceContainerHighest.withAlpha((255 * 0.5).round()), // bg-surface-container-highest/50
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -248,19 +251,19 @@ class _FanShopScreenState extends State<FanShopScreen> {
                         children: [
                           Text(
                             product['title']!,
-                            style: const TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, color: AppColors.onSurface, height: 1.1), // text-2xl font-extrabold italic leading-tight
+                            style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, color: colorScheme.onSurface, height: 1.1), // text-2xl font-extrabold italic leading-tight
                           ),
                           const SizedBox(height: 4), // mb-1
                           Text(
                             product['subtitle']!,
-                            style: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: AppColors.secondary), // text-sm text-secondary
+                            style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: colorScheme.secondary), // text-sm text-secondary
                           ),
                         ],
                       ),
                     ),
                     Text(
                       product['price']!,
-                      style: const TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primary), // text-2xl font-black text-primary
+                      style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.primary), // text-2xl font-black text-primary
                     ),
                   ],
                 ),
@@ -275,7 +278,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
                       style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: colorScheme.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16), // py-4
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // rounded-xl
@@ -292,7 +295,8 @@ class _FanShopScreenState extends State<FanShopScreen> {
   }
 
   // ── Standard Product Grid (2-col) ─────────────────────────
-  Widget _buildProductGrid() {
+  Widget _buildProductGrid(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final standardProducts = _products.sublist(1); // skip the featured one
     return GridView.builder(
       shrinkWrap: true,
@@ -308,7 +312,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
         final product = standardProducts[index];
         return Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLow,
+            color: colorScheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(12), // rounded-xl
           ),
           clipBehavior: Clip.hardEdge,
@@ -319,7 +323,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
               Expanded(
                 flex: 3,
                 child: Container(
-                  color: Colors.white, // bg-white
+                  color: colorScheme.surface, // bg-white
                   width: double.infinity,
                   child: Image.network(
                     product['image']!,
@@ -343,14 +347,14 @@ class _FanShopScreenState extends State<FanShopScreen> {
                           children: [
                             Text(
                               product['title']!,
-                              style: const TextStyle(fontFamily: 'Lexend', fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.onSurface, height: 1.1),
+                              style: TextStyle(fontFamily: 'Lexend', fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface, height: 1.1),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
                               product['subtitle']!,
-                              style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.secondary),
+                              style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: colorScheme.secondary),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -362,15 +366,15 @@ class _FanShopScreenState extends State<FanShopScreen> {
                         children: [
                           Text(
                             product['price']!,
-                            style: const TextStyle(fontFamily: 'Lexend', fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.onSurface),
+                            style: TextStyle(fontFamily: 'Lexend', fontSize: 18, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
                           ),
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AppColors.onSurface,
+                              color: colorScheme.onInverseSurface,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.add, color: Colors.white, size: 18),
+                            child: Icon(Icons.add, color: colorScheme.surface, size: 18),
                           ),
                         ],
                       ),
@@ -386,11 +390,12 @@ class _FanShopScreenState extends State<FanShopScreen> {
   }
 
   // ── Limited Edition MVP Pack Section ───────────────────────
-  Widget _buildMvpPackSection() {
+  Widget _buildMvpPackSection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(40), // p-10
       decoration: BoxDecoration(
-        color: AppColors.inverseSurface, // bg-inverse-surface (#2A303F)
+        color: colorScheme.inverseSurface, // bg-inverse-surface (#2A303F)
         borderRadius: BorderRadius.circular(16), // rounded-2xl
       ),
       clipBehavior: Clip.hardEdge,
@@ -404,7 +409,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
           const SizedBox(height: 16), // mb-4
           Text(
             'Get the exclusive MVP bundle including the limited edition game day jersey, signed photo, and a commemorative ring box.',
-            style: TextStyle(fontFamily: 'Inter', fontSize: 16, color: AppColors.inverseOnSurface.withAlpha((255 * 0.8).round()), height: 1.5), // text-inverse-on-surface/80
+            style: TextStyle(fontFamily: 'Inter', fontSize: 16, color: colorScheme.onInverseSurface.withAlpha((255 * 0.8).round()), height: 1.5), // text-inverse-on-surface/80
           ),
           const SizedBox(height: 32), // mb-8
           // Pricing row
@@ -413,9 +418,9 @@ class _FanShopScreenState extends State<FanShopScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     '\$399.00',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primaryFixedDim), // text-2xl font-black text-primary-fixed-dim
+                    style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.primaryContainer), // text-2xl font-black text-primary-fixed-dim
                   ),
                   Text(
                     '\$550.00',
@@ -460,7 +465,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
             child: ElevatedButton(
               onPressed: () {},
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: colorScheme.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 40), // px-10 py-4
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // rounded-xl

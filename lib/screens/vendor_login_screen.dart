@@ -61,12 +61,13 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('Court / vendor sign in'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
       body: SafeArea(
@@ -77,7 +78,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
             children: [
               Text(
                 'Sign in with your court account to manage playgrounds, photos, prices, and booking slots.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.secondary, height: 1.4),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colorScheme.secondary, height: 1.4),
               ),
               const SizedBox(height: 24),
               GlassCard(
@@ -106,17 +107,17 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
                           onPressed: () => setState(() => _obscure = !_obscure),
                           icon: Icon(
                             _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                            color: AppColors.secondary,
+                            color: colorScheme.secondary,
                           ),
                         ),
                         validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
                       ),
                       const SizedBox(height: 28),
                       if (_loading)
-                        const Center(
+                        Center(
                           child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: CircularProgressIndicator(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: CircularProgressIndicator(color: colorScheme.primary),
                           ),
                         )
                       else

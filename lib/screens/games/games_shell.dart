@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../theme/colors.dart';
 import '../../widgets/main_app_drawer.dart';
 import '../../widgets/menu_placeholder_page.dart';
 import 'cards/cards_game_hub_page.dart';
@@ -45,9 +44,10 @@ class _GamesShellState extends State<GamesShell> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final cardsTab = _index == 0;
     return Scaffold(
-      backgroundColor: cardsTab ? _cardsHubBg : AppColors.surface,
+      backgroundColor: cardsTab ? _cardsHubBg : colorScheme.surface,
       appBar: AppBar(
         centerTitle: !cardsTab,
         title: cardsTab
@@ -56,8 +56,8 @@ class _GamesShellState extends State<GamesShell> {
                 style: TextStyle(fontWeight: FontWeight.w700),
               )
             : Text(_labels[_index]),
-        backgroundColor: cardsTab ? _cardsHubBg : AppColors.surface,
-        foregroundColor: cardsTab ? _cardsHubFg : AppColors.onSurface,
+        backgroundColor: cardsTab ? _cardsHubBg : colorScheme.surface,
+        foregroundColor: cardsTab ? _cardsHubFg : colorScheme.onSurface,
         surfaceTintColor: Colors.transparent,
         leading: Builder(
           builder: (scaffoldContext) => IconButton(
@@ -82,10 +82,10 @@ class _GamesShellState extends State<GamesShell> {
           ? null
           : Container(
               decoration: BoxDecoration(
-                color: AppColors.surface.withAlpha((255 * 0.9).round()),
+                color: colorScheme.surface.withAlpha((255 * 0.9).round()),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.onSurface.withAlpha((255 * 0.05).round()),
+                    color: colorScheme.onSurface.withAlpha((255 * 0.05).round()),
                     blurRadius: 16,
                     offset: const Offset(0, -4),
                   ),
@@ -97,8 +97,8 @@ class _GamesShellState extends State<GamesShell> {
                 type: BottomNavigationBarType.fixed,
                 backgroundColor: Colors.transparent,
                 elevation: 0,
-                selectedItemColor: AppColors.primary,
-                unselectedItemColor: AppColors.secondary,
+                selectedItemColor: colorScheme.primary,
+                unselectedItemColor: colorScheme.secondary,
                 selectedLabelStyle:
                     Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
                 unselectedLabelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 10),
