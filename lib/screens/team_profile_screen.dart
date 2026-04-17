@@ -28,6 +28,7 @@ class _DemoFixture {
   final int? homeScore;
   final int? awayScore;
   final bool isPast;
+
   /// Shown in the center for upcoming games (e.g. time).
   final String? centerLabel;
 }
@@ -73,8 +74,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   List<_DemoFixture> _demoFixtures(String clubName) {
     return [
       _DemoFixture(
-        metaLine: 'MON, OCT 20, 2025 — ROUND 1',
-        leagueLabel: 'Lebanon Basketball League',
+        metaLine: 'MON, OCT 20, 25 — RD 1',
+        leagueLabel: 'LBL',
         homeName: clubName,
         awayName: 'Tadamon Hrajel',
         homeScore: 118,
@@ -82,8 +83,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         isPast: true,
       ),
       _DemoFixture(
-        metaLine: 'SAT, OCT 25, 2025 — ROUND 2',
-        leagueLabel: 'Lebanon Basketball League',
+        metaLine: 'SAT, OCT 25, 25 — RD 2',
+        leagueLabel: 'LBL',
         homeName: 'Sagesse',
         awayName: clubName,
         homeScore: 76,
@@ -91,8 +92,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         isPast: true,
       ),
       _DemoFixture(
-        metaLine: 'WED, NOV 5, 2025 — ROUND 4',
-        leagueLabel: 'Lebanon Basketball League',
+        metaLine: 'WED, NOV 5, 25 — RD 4',
+        leagueLabel: 'LBL',
         homeName: clubName,
         awayName: 'Champville',
         homeScore: 102,
@@ -100,16 +101,16 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
         isPast: true,
       ),
       _DemoFixture(
-        metaLine: 'FRI, APR 18, 2026 — ROUND 12',
-        leagueLabel: 'Lebanon Basketball League',
+        metaLine: 'FRI, APR 18, 26 — RD 12',
+        leagueLabel: 'LBL',
         homeName: clubName,
         awayName: 'Hoops United',
         isPast: false,
         centerLabel: '8:30 PM',
       ),
       _DemoFixture(
-        metaLine: 'WED, APR 23, 2026 — ROUND 13',
-        leagueLabel: 'Lebanon Basketball League',
+        metaLine: 'WED, APR 23, 26 — RD 13',
+        leagueLabel: 'LBL',
         homeName: 'Beirut Club',
         awayName: clubName,
         isPast: false,
@@ -125,7 +126,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     if (_loading) {
       return Scaffold(
         backgroundColor: colorScheme.surface,
-        body: Center(child: CircularProgressIndicator(color: colorScheme.primary)),
+        body: Center(
+          child: CircularProgressIndicator(color: colorScheme.primary),
+        ),
       );
     }
     if (_error != null) {
@@ -138,9 +141,17 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.wifi_off_rounded, size: 48, color: colorScheme.secondary),
+                Icon(
+                  Icons.wifi_off_rounded,
+                  size: 48,
+                  color: colorScheme.secondary,
+                ),
                 const SizedBox(height: 16),
-                Text(_error!, style: TextStyle(color: colorScheme.secondary), textAlign: TextAlign.center),
+                Text(
+                  _error!,
+                  style: TextStyle(color: colorScheme.secondary),
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 16),
                 FilledButton(onPressed: _load, child: const Text('Retry')),
               ],
@@ -192,7 +203,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       onOpenTickets: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute<void>(builder: (_) => const TicketSelectionScreen()),
+                          MaterialPageRoute<void>(
+                            builder: (_) => const TicketSelectionScreen(),
+                          ),
                         );
                       },
                     ),
@@ -202,7 +215,9 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       onGetTickets: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute<void>(builder: (_) => const TicketSelectionScreen()),
+                          MaterialPageRoute<void>(
+                            builder: (_) => const TicketSelectionScreen(),
+                          ),
                         );
                       },
                     ),
@@ -229,38 +244,111 @@ class _ClubHeader extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final initials = _initials(team.teamName);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 16, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    // Split the team name into two lines if it contains a space for a more dramatic asymmetrical layout
+    final nameParts = team.teamName.split(' ');
+    final String line1 = nameParts.first;
+    final String line2 = nameParts.length > 1
+        ? nameParts.sublist(1).join(' ')
+        : '';
+
+    return Container(
+      width: double.infinity,
+      color: colorScheme.surface,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          IconButton(
-            onPressed: () => Navigator.maybePop(context),
-            icon: Icon(Icons.arrow_back_rounded, color: colorScheme.onSurface),
-          ),
-          _ClubLogo(initials: initials, logoUrl: team.logoUrl),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  team.teamName,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                      ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Lebanese Basketball League',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ],
+          // Background watermark logo
+          Positioned(
+            right: -40,
+            top: -20,
+            child: Opacity(
+              opacity: 0.04,
+              child: _ClubLogo(
+                initials: initials,
+                logoUrl: team.logoUrl,
+                size: 240,
+              ),
             ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 16, 0),
+                child: IconButton(
+                  onPressed: () => Navigator.maybePop(context),
+                  icon: Icon(
+                    Icons.arrow_back_rounded,
+                    color: colorScheme.onSurface,
+                    size: 28,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            line1.toUpperCase(),
+                            style: TextStyle(
+                              fontFamily: 'Lexend',
+                              fontSize: 56,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -2.5,
+                              height: 0.95,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                          if (line2.isNotEmpty)
+                            Text(
+                              line2.toUpperCase(),
+                              style: TextStyle(
+                                fontFamily: 'Lexend',
+                                fontSize: 48,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -2.0,
+                                height: 0.95,
+                                color: colorScheme.primary, // Pop of red
+                              ),
+                            ),
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.onSurface,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'LBL',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: colorScheme.surface,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 10,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _ClubLogo(
+                      initials: initials,
+                      logoUrl: team.logoUrl,
+                      size: 64,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -268,7 +356,11 @@ class _ClubHeader extends StatelessWidget {
   }
 
   String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((s) => s.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) {
       final s = parts.first;
@@ -279,24 +371,25 @@ class _ClubHeader extends StatelessWidget {
 }
 
 class _ClubLogo extends StatelessWidget {
-  const _ClubLogo({required this.initials, this.logoUrl});
+  const _ClubLogo({required this.initials, this.logoUrl, this.size = 72.0});
 
   final String initials;
   final String? logoUrl;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    const size = 72.0;
     final url = logoUrl?.trim();
     if (url != null && url.isNotEmpty) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(size * 0.22),
         child: Image.network(
           url,
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _fallback(context, size),
+          errorBuilder: (context, error, stackTrace) =>
+              _fallback(context, size),
         ),
       );
     }
@@ -309,9 +402,12 @@ class _ClubLogo extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(size * 0.22),
         gradient: LinearGradient(
-          colors: [colorScheme.primary, colorScheme.primary.withValues(alpha: 0.65)],
+          colors: [
+            colorScheme.primary,
+            colorScheme.primary.withValues(alpha: 0.65),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -320,7 +416,7 @@ class _ClubLogo extends StatelessWidget {
       child: Text(
         initials,
         style: TextStyle(
-          fontSize: 26,
+          fontSize: size * 0.36,
           fontWeight: FontWeight.w900,
           color: colorScheme.onPrimary,
           letterSpacing: 0.5,
@@ -336,11 +432,16 @@ TeamStaffMember? _pickStaffByRole(List<TeamStaffMember> staff, String roleKey) {
     if (roleKey == 'president') {
       if (r.contains('president') && !r.contains('vice')) return m;
     } else if (roleKey == 'head_coach') {
-      if (r == 'head coach' || (r.contains('head') && r.contains('coach') && !r.contains('assistant'))) {
+      if (r == 'head coach' ||
+          (r.contains('head') &&
+              r.contains('coach') &&
+              !r.contains('assistant'))) {
         return m;
       }
     } else if (roleKey == 'assistant_coach') {
-      if ((r.contains('assistant') && r.contains('coach')) || r.contains('assistant')) return m;
+      if ((r.contains('assistant') && r.contains('coach')) ||
+          r.contains('assistant'))
+        return m;
     }
   }
   return null;
@@ -374,7 +475,9 @@ class _OverviewTab extends StatelessWidget {
       children: [
         Text(
           'Overview',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 14),
         Text(
@@ -393,12 +496,18 @@ class _OverviewTab extends StatelessWidget {
           _OverviewCard(
             child: Row(
               children: [
-                Icon(Icons.event_busy_rounded, color: colorScheme.onSurfaceVariant),
+                Icon(
+                  Icons.event_busy_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'No upcoming fixtures scheduled right now.',
-                    style: TextStyle(color: colorScheme.onSurfaceVariant, height: 1.35),
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.35,
+                    ),
                   ),
                 ),
               ],
@@ -424,14 +533,20 @@ class _OverviewTab extends StatelessWidget {
                 member: _pickStaffByRole(staff, 'president'),
                 colorScheme: colorScheme,
               ),
-              Divider(height: 20, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+              Divider(
+                height: 20,
+                color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+              ),
               _StaffLeadershipRow(
                 sectionTitle: 'Head coach',
                 icon: Icons.sports_rounded,
                 member: _pickStaffByRole(staff, 'head_coach'),
                 colorScheme: colorScheme,
               ),
-              Divider(height: 20, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+              Divider(
+                height: 20,
+                color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+              ),
               _StaffLeadershipRow(
                 sectionTitle: 'Assistant coach',
                 icon: Icons.groups_2_outlined,
@@ -461,7 +576,11 @@ class _OverviewTab extends StatelessWidget {
                   color: colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.emoji_events_rounded, color: colorScheme.primary, size: 28),
+                child: Icon(
+                  Icons.emoji_events_rounded,
+                  color: colorScheme.primary,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -470,7 +589,8 @@ class _OverviewTab extends StatelessWidget {
                   children: [
                     Text(
                       '$totalTrophyWins',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
                             fontWeight: FontWeight.w900,
                             height: 1,
                             color: colorScheme.onSurface,
@@ -489,7 +609,12 @@ class _OverviewTab extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         'Across $distinctTrophies ${distinctTrophies == 1 ? 'competition' : 'competitions'}',
-                        style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.9,
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -509,178 +634,190 @@ class _OverviewTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        _OverviewStadiumCard(teamName: team.teamName, stadium: stadium, colorScheme: colorScheme),
+        _OverviewStadiumCard(
+          teamName: team.teamName,
+          stadium: stadium,
+          colorScheme: colorScheme,
+        ),
       ],
     );
   }
 }
 
 class _OverviewUpcomingMatchCard extends StatelessWidget {
-  const _OverviewUpcomingMatchCard({required this.fixture, required this.onTap});
+  const _OverviewUpcomingMatchCard({
+    required this.fixture,
+    required this.onTap,
+  });
 
   final _DemoFixture fixture;
   final VoidCallback onTap;
 
-  static const _accentGreen = Color(0xFF22C55E);
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final cardBg = colorScheme.surfaceContainerLowest;
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+            color: colorScheme.inverseSurface,
+            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: colorScheme.primary.withValues(alpha: 0.15),
+                blurRadius: 32,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 4,
-                  decoration: const BoxDecoration(
-                    color: _accentGreen,
-                    borderRadius: BorderRadius.horizontal(left: Radius.circular(18)),
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                fixture.metaLine.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.3,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-                                ),
-                              ),
-                              child: Text(
-                                fixture.leagueLabel.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      fixture.homeName,
-                                      textAlign: TextAlign.right,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14,
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _TeamCrestBadge(teamName: fixture.homeName, size: 34),
-                                ],
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'NEXT',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    fixture.centerLabel ?? '—',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 14,
-                                      color: colorScheme.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  _TeamCrestBadge(teamName: fixture.awayName, size: 34),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      fixture.awayName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14,
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap for tickets',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: colorScheme.primary,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        fixture.leagueLabel.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: colorScheme.onInverseSurface.withValues(
+                            alpha: 0.6,
                           ),
                         ),
-                      ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        fixture.metaLine.toUpperCase(),
+                        textAlign: TextAlign.right,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: Column(
+                        children: [
+                          _TeamCrestBadge(teamName: fixture.homeName, size: 56),
+                          const SizedBox(height: 12),
+                          Text(
+                            fixture.homeName.toUpperCase(),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Lexend',
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                              letterSpacing: -0.5,
+                              color: colorScheme.onInverseSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        children: [
+                          Text(
+                            'VS',
+                            style: TextStyle(
+                              fontFamily: 'Lexend',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -1,
+                              color: colorScheme.onInverseSurface.withValues(
+                                alpha: 0.3,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Text(
+                              fixture.centerLabel ?? '—',
+                              style: TextStyle(
+                                fontFamily: 'Lexend',
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14,
+                                color: colorScheme.onPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 4,
+                      child: Column(
+                        children: [
+                          _TeamCrestBadge(teamName: fixture.awayName, size: 56),
+                          const SizedBox(height: 12),
+                          Text(
+                            fixture.awayName.toUpperCase(),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Lexend',
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                              letterSpacing: -0.5,
+                              color: colorScheme.onInverseSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Divider(
+                  color: colorScheme.onInverseSurface.withValues(alpha: 0.1),
+                  height: 1,
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: Text(
+                    'GET TICKETS',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2.0,
+                      color: colorScheme.primary,
                     ),
                   ),
                 ),
@@ -730,7 +867,8 @@ class _StaffLeadershipRow extends StatelessWidget {
                     fit: BoxFit.cover,
                     width: 52,
                     height: 52,
-                    errorBuilder: (context, error, stackTrace) => _placeholderAvatar(),
+                    errorBuilder: (context, error, stackTrace) =>
+                        _placeholderAvatar(),
                   )
                 : _placeholderAvatar(),
           ),
@@ -740,7 +878,13 @@ class _StaffLeadershipRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(sectionTitle, style: TextStyle(fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
+              Text(
+                sectionTitle,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: colorScheme.onSurface,
+                ),
+              ),
               if (member != null) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -818,12 +962,11 @@ class _OverviewStadiumCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.32)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: colorScheme.onSurface.withValues(alpha: 0.06),
+            blurRadius: 32,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -837,7 +980,8 @@ class _OverviewStadiumCard extends StatelessWidget {
                 ? Image.network(
                     url,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => _stadiumPlaceholder(context),
+                    errorBuilder: (context, error, stackTrace) =>
+                        _stadiumPlaceholder(context),
                   )
                 : _stadiumPlaceholder(context),
           ),
@@ -849,8 +993,8 @@ class _OverviewStadiumCard extends StatelessWidget {
                 Text(
                   name,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 if (stadium == null) ...[
                   const SizedBox(height: 6),
@@ -868,7 +1012,11 @@ class _OverviewStadiumCard extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.place_outlined, size: 18, color: colorScheme.primary),
+                        Icon(
+                          Icons.place_outlined,
+                          size: 18,
+                          color: colorScheme.primary,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -887,7 +1035,11 @@ class _OverviewStadiumCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.event_seat_outlined, size: 18, color: colorScheme.primary),
+                        Icon(
+                          Icons.event_seat_outlined,
+                          size: 18,
+                          color: colorScheme.primary,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'Capacity: ${_formatCapacity(cap)}',
@@ -911,7 +1063,8 @@ class _OverviewStadiumCard extends StatelessWidget {
 
   String _formatCapacity(int c) {
     if (c >= 1000000) return '${(c / 1000000).toStringAsFixed(1)}M';
-    if (c >= 1000) return '${(c / 1000).toStringAsFixed(1)}k'.replaceAll('.0k', 'k');
+    if (c >= 1000)
+      return '${(c / 1000).toStringAsFixed(1)}k'.replaceAll('.0k', 'k');
     return c.toString();
   }
 
@@ -922,7 +1075,11 @@ class _OverviewStadiumCard extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.add_photo_alternate_outlined, size: 40, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+          Icon(
+            Icons.add_photo_alternate_outlined,
+            size: 40,
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
           const SizedBox(height: 8),
           Text(
             'Stadium photo',
@@ -960,7 +1117,6 @@ class _OverviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.35)),
       ),
       child: child,
     );
@@ -983,7 +1139,11 @@ class _FixturesTab extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final upcoming = fixtures.where((f) => !f.isPast).toList();
     final past = fixtures.where((f) => f.isPast).toList();
-    final listBg = Color.lerp(colorScheme.surface, colorScheme.surfaceContainerHighest, 0.55)!;
+    final listBg = Color.lerp(
+      colorScheme.surface,
+      colorScheme.surfaceContainerHighest,
+      0.55,
+    )!;
 
     void openFixtureMenu() {
       showModalBottomSheet<void>(
@@ -997,12 +1157,18 @@ class _FixturesTab extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: Icon(Icons.info_outline_rounded, color: colorScheme.primary),
+                leading: Icon(
+                  Icons.info_outline_rounded,
+                  color: colorScheme.primary,
+                ),
                 title: const Text('Match details'),
                 onTap: () => Navigator.pop(ctx),
               ),
               ListTile(
-                leading: Icon(Icons.notifications_active_outlined, color: colorScheme.primary),
+                leading: Icon(
+                  Icons.notifications_active_outlined,
+                  color: colorScheme.primary,
+                ),
                 title: const Text('Remind me'),
                 onTap: () => Navigator.pop(ctx),
               ),
@@ -1094,194 +1260,162 @@ class _LeagueFixtureCard extends StatelessWidget {
   final VoidCallback onMenu;
   final VoidCallback? onCardTap;
 
-  static const _accentGreen = Color(0xFF22C55E);
-  static const _menuBlue = Color(0xFF2563EB);
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final cardBg = Theme.of(context).brightness == Brightness.dark
-        ? colorScheme.surfaceContainerHigh
-        : colorScheme.surfaceContainerLowest;
-    final metaStyle = TextStyle(
-      fontSize: 10.5,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.35,
-      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.85),
-    );
-    final leaguePillStyle = TextStyle(
-      fontSize: 9.5,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.4,
-      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.88),
-    );
+    final bool isFuture = !fixture.isPast;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: fixture.isPast ? null : onCardTap,
-        borderRadius: BorderRadius.circular(18),
+        onTap: isFuture ? onCardTap : null,
+        borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(18),
+            color: colorScheme.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: colorScheme.onSurface.withValues(alpha: 0.04),
+                blurRadius: 32,
+                offset: const Offset(0, 8),
               ),
             ],
-            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.25)),
           ),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Column(
               children: [
-                Container(
-                  width: 4,
-                  decoration: const BoxDecoration(
-                    color: _accentGreen,
-                    borderRadius: BorderRadius.horizontal(left: Radius.circular(18)),
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                fixture.metaLine.toUpperCase(),
-                                style: metaStyle,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-                                ),
-                              ),
-                              child: Text(
-                                fixture.leagueLabel.toUpperCase(),
-                                style: leaguePillStyle,
-                              ),
-                            ),
-                          ],
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        fixture.metaLine.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
-                        const SizedBox(height: 14),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              flex: 10,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      fixture.homeName,
-                                      textAlign: TextAlign.right,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14,
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _TeamCrestBadge(teamName: fixture.homeName, size: 36),
-                                ],
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: SizedBox(
-                                width: 72,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      fixture.isPast ? 'FT' : 'NEXT',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    if (fixture.isPast &&
-                                        fixture.homeScore != null &&
-                                        fixture.awayScore != null)
-                                      Text(
-                                        '${fixture.homeScore} : ${fixture.awayScore}',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 17,
-                                          letterSpacing: 0.5,
-                                          color: colorScheme.onSurface,
-                                        ),
-                                      )
-                                    else
-                                      Text(
-                                        fixture.centerLabel ?? '—',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 13,
-                                          color: colorScheme.onSurface,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 10,
-                              child: Row(
-                                children: [
-                                  _TeamCrestBadge(teamName: fixture.awayName, size: 36),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      fixture.awayName,
-                                      textAlign: TextAlign.left,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14,
-                                        color: colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
-                              icon: const Icon(Icons.more_vert_rounded, color: _menuBlue, size: 22),
-                              onPressed: onMenu,
-                            ),
-                          ],
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                    if (isFuture)
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: colorScheme.primary,
+                        ),
+                      )
+                    else
+                      Text(
+                        'FT',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.7,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: Row(
+                        children: [
+                          _TeamCrestBadge(teamName: fixture.homeName, size: 40),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              fixture.homeName.toUpperCase(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Lexend',
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                letterSpacing: -0.5,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Center(
+                        child: isFuture
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Text(
+                                  fixture.centerLabel ?? '—',
+                                  style: TextStyle(
+                                    fontFamily: 'Lexend',
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                    color: colorScheme.onPrimary,
+                                  ),
+                                ),
+                              )
+                            : Text(
+                                '${fixture.homeScore} - ${fixture.awayScore}',
+                                style: TextStyle(
+                                  fontFamily: 'Lexend',
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -1.5,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 4,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              fixture.awayName.toUpperCase(),
+                              textAlign: TextAlign.right,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Lexend',
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                letterSpacing: -0.5,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          _TeamCrestBadge(teamName: fixture.awayName, size: 40),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1299,7 +1433,11 @@ class _TeamCrestBadge extends StatelessWidget {
   final double size;
 
   static String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((s) => s.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) {
       final s = parts.first;
@@ -1331,7 +1469,9 @@ class _TeamCrestBadge extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.35)),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.35),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -1364,9 +1504,9 @@ class _SectionTitle extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: colorScheme.onSurface,
-          ),
+        fontWeight: FontWeight.w800,
+        color: colorScheme.onSurface,
+      ),
     );
   }
 }
@@ -1407,7 +1547,8 @@ String _rosterCategoryTitle(int category) {
 String _abbrevPosition(String position) {
   final raw = position.trim().toUpperCase();
   if (raw.isEmpty) return '—';
-  if (raw == 'PG' || raw == 'SG' || raw == 'SF' || raw == 'PF' || raw == 'C') return raw;
+  if (raw == 'PG' || raw == 'SG' || raw == 'SF' || raw == 'PF' || raw == 'C')
+    return raw;
   if (raw.contains('POINT')) return 'PG';
   if (raw.contains('SHOOTING')) return 'SG';
   if (raw.contains('SMALL')) return 'SF';
@@ -1419,11 +1560,15 @@ String _abbrevPosition(String position) {
 String _exactPositionLabel(String position) {
   final raw = position.trim().toUpperCase();
   if (raw.isEmpty) return 'Position TBD';
-  if (raw == 'PG' || (raw.contains('POINT') && raw.contains('GUARD'))) return 'Point Guard';
-  if (raw == 'SG' || (raw.contains('SHOOTING') && raw.contains('GUARD'))) return 'Shooting Guard';
+  if (raw == 'PG' || (raw.contains('POINT') && raw.contains('GUARD')))
+    return 'Point Guard';
+  if (raw == 'SG' || (raw.contains('SHOOTING') && raw.contains('GUARD')))
+    return 'Shooting Guard';
   if (raw == 'SF' || raw.contains('SMALL')) return 'Small Forward';
   if (raw == 'PF' || raw.contains('POWER')) return 'Power Forward';
-  if (raw == 'C' || raw == 'CENTER' || (raw.contains('CENTER') && !raw.contains('FORWARD'))) {
+  if (raw == 'C' ||
+      raw == 'CENTER' ||
+      (raw.contains('CENTER') && !raw.contains('FORWARD'))) {
     return 'Center';
   }
   if (raw.contains('POINT')) return 'Point Guard';
@@ -1443,7 +1588,10 @@ class _RosterTab extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     if (players.isEmpty) {
       return Center(
-        child: Text('No players on file', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+        child: Text(
+          'No players on file',
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
+        ),
       );
     }
 
@@ -1469,7 +1617,10 @@ class _RosterTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       children: [
         for (final order in orders) ...[
-          _SectionTitle(title: _rosterCategoryTitle(order), colorScheme: colorScheme),
+          _SectionTitle(
+            title: _rosterCategoryTitle(order),
+            colorScheme: colorScheme,
+          ),
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, c) {
@@ -1500,8 +1651,12 @@ class _PlayerPhotoSlot extends StatelessWidget {
   final Player player;
 
   String _initials() {
-    final a = player.firstName.trim().isNotEmpty ? player.firstName.trim()[0] : '';
-    final b = player.lastName.trim().isNotEmpty ? player.lastName.trim()[0] : '';
+    final a = player.firstName.trim().isNotEmpty
+        ? player.firstName.trim()[0]
+        : '';
+    final b = player.lastName.trim().isNotEmpty
+        ? player.lastName.trim()[0]
+        : '';
     final s = ('$a$b').toUpperCase();
     return s.isEmpty ? '?' : s;
   }
@@ -1513,33 +1668,24 @@ class _PlayerPhotoSlot extends StatelessWidget {
     return Column(
       children: [
         Container(
-          width: 56,
-          height: 56,
+          width: 84,
+          height: 84,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
-            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.45)),
+            shape: BoxShape.circle,
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
           ),
           clipBehavior: Clip.antiAlias,
           child: url != null && url.isNotEmpty
               ? Image.network(
                   url,
                   fit: BoxFit.cover,
-                  width: 56,
-                  height: 56,
-                  errorBuilder: (context, error, stackTrace) => _fallback(colorScheme),
+                  width: 84,
+                  height: 84,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (context, error, stackTrace) =>
+                      _fallback(colorScheme),
                 )
               : _fallback(colorScheme),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Photo',
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
-            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.65),
-          ),
         ),
       ],
     );
@@ -1567,83 +1713,96 @@ class _PlayerBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final abbrev = _abbrevPosition(player.position);
     final exact = _exactPositionLabel(player.position);
     return Container(
-      padding: const EdgeInsets.all(12),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.28)),
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.surfaceContainerLow,
+            colorScheme.surfaceContainerHighest,
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: colorScheme.onSurface.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          _PlayerPhotoSlot(player: player),
-          const SizedBox(width: 12),
-          Expanded(
+          Positioned(
+            right: -10,
+            bottom: -20,
+            child: Text(
+              '${player.jerseyNumber}',
+              style: TextStyle(
+                fontFamily: 'Lexend',
+                fontSize: 110,
+                height: 1,
+                fontWeight: FontWeight.w900,
+                color: colorScheme.onSurface.withValues(alpha: 0.05),
+                letterSpacing: -6,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      '#${player.jerseyNumber}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        abbrev,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          color: colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                  ],
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: _PlayerPhotoSlot(player: player),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 16),
                 Text(
-                  player.fullName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800, height: 1.2),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  exact,
+                  player.fullName.toUpperCase(),
+                  textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.25,
+                    fontFamily: 'Lexend',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                    color: colorScheme.onSurface,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  exact.toUpperCase(),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    color: colorScheme.primary,
                   ),
                 ),
                 if (player.nationality.trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
-                    player.nationality,
-                    style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.85)),
+                    player.nationality.toUpperCase(),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 9,
+                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.8,
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -1666,7 +1825,11 @@ class _TrophiesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final backdrop = Color.lerp(colorScheme.surface, const Color(0xFFFFF9E8), 0.35)!;
+    final backdrop = Color.lerp(
+      colorScheme.surface,
+      const Color(0xFFFFF9E8),
+      0.35,
+    )!;
 
     if (trophies.isEmpty) {
       return ColoredBox(
@@ -1682,21 +1845,33 @@ class _TrophiesTab extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
-                      colors: [_gold.withValues(alpha: 0.2), _gold.withValues(alpha: 0.05)],
+                      colors: [
+                        _gold.withValues(alpha: 0.2),
+                        _gold.withValues(alpha: 0.05),
+                      ],
                     ),
                   ),
-                  child: Icon(Icons.emoji_events_outlined, size: 48, color: _goldDeep.withValues(alpha: 0.85)),
+                  child: Icon(
+                    Icons.emoji_events_outlined,
+                    size: 48,
+                    color: _goldDeep.withValues(alpha: 0.85),
+                  ),
                 ),
                 const SizedBox(height: 18),
                 Text(
                   'Trophy room',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Titles and seasons will appear here once they’re recorded for this club.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: colorScheme.onSurfaceVariant, height: 1.45),
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.45,
+                  ),
                 ),
               ],
             ),
@@ -1724,7 +1899,9 @@ class _TrophiesTab extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(22),
                 child: Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  data: Theme.of(
+                    context,
+                  ).copyWith(dividerColor: Colors.transparent),
                   child: ExpansionTile(
                     tilePadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                     childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
@@ -1748,7 +1925,11 @@ class _TrophiesTab extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.emoji_events_rounded, color: Color(0xFF3D2E00), size: 26),
+                      child: const Icon(
+                        Icons.emoji_events_rounded,
+                        color: Color(0xFF3D2E00),
+                        size: 26,
+                      ),
                     ),
                     title: Row(
                       children: [
@@ -1764,9 +1945,14 @@ class _TrophiesTab extends StatelessWidget {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(colors: [_goldDeep, Color(0xFFA67C0A)]),
+                            gradient: const LinearGradient(
+                              colors: [_goldDeep, Color(0xFFA67C0A)],
+                            ),
                             borderRadius: BorderRadius.circular(22),
                             boxShadow: [
                               BoxShadow(
@@ -1787,7 +1973,9 @@ class _TrophiesTab extends StatelessWidget {
                         ),
                       ],
                     ),
-                    subtitle: t.description != null && t.description!.trim().isNotEmpty
+                    subtitle:
+                        t.description != null &&
+                            t.description!.trim().isNotEmpty
                         ? Padding(
                             padding: const EdgeInsets.only(top: 8, right: 4),
                             child: Text(
@@ -1823,11 +2011,17 @@ class _TrophiesTab extends StatelessWidget {
                         children: [
                           for (final s in seasons)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
+                                color: colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.65),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: _gold.withValues(alpha: 0.35)),
+                                border: Border.all(
+                                  color: _gold.withValues(alpha: 0.35),
+                                ),
                               ),
                               child: Text(
                                 s.label,
