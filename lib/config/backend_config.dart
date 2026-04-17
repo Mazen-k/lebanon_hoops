@@ -97,6 +97,10 @@ abstract final class BackendConfig {
     return 'auth/register';
   }
 
+  /// Court reservation (same [apiBaseUrl]): `GET public/courts`, `GET public/courts/:id/playgrounds`,
+  /// `GET public/playgrounds/:id/availability?date=YYYY-MM-DD`, `POST public/reservations`
+  /// with JSON `{ "user_id", "availability_id" }`. Apply `lebanon_hoops/DB/court_reservation_schema.sql` once if tables are missing.
+
   /// GET `?user_id=…` — returns `username` and `card_coins` for the cards hub header.
   static String get userWalletPath {
     const fromEnv = String.fromEnvironment('API_USER_WALLET_PATH', defaultValue: '');

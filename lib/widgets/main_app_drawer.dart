@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../navigation/app_nav_shell_key.dart';
 import '../navigation/card_collection_section_route.dart';
+import '../screens/court_reservation_page.dart';
 import '../screens/menu_pages.dart';
 
 enum MainDrawerVariant { mainApp, gamesSection }
@@ -109,6 +110,16 @@ class MainAppDrawer extends StatelessWidget {
                       );
                     }),
                   ),
+                  if (variant == MainDrawerVariant.mainApp)
+                    _DrawerTile(
+                      icon: Icons.event_available_outlined,
+                      label: 'Court reservation',
+                      onTap: () => _closeDrawerThen(context, () {
+                        Navigator.of(hostContext).push(
+                          MaterialPageRoute<void>(builder: (_) => const CourtReservationPage()),
+                        );
+                      }),
+                    ),
                   _DrawerTile(
                     icon: Icons.settings_outlined,
                     label: 'Settings',

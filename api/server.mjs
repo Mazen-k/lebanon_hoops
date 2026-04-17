@@ -1499,6 +1499,180 @@ async function tradeableInstancesHandler(req, res) {
 app.get('/trade/instances', tradeableInstancesHandler);
 app.get('/api/trade/instances', tradeableInstancesHandler);
 
+/** --- Public court reservation (no owner credentials exposed) --- */
+
+async function listPublicCourtsHandler(req, res) {
+  const search = (req.query.search ?? req.query.q ?? '').trim();
+  try {
+    const has = search.length > 0;
+    const sql = `
+      SELECT court_id, court_name, location, phone_number, logo_url
+      FROM courts
+      ${has ? 'WHERE court_name ILIKE $1 OR location ILIKE $1' : ''}
+      ORDER BY court_name ASC
+    `;
+    const params = has ? [`%${search}%`] : [];
+    const { rows } = await pool.query(sql, params);
+    res.json({ courts: rows });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        error: 'Court tables are missing. Apply lebanon_hoops/DB/court_reservation_schema.sql to your database.',
+      });
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function getPublicCourtPlaygroundsHandler(req, res) {
+  const courtId = Number(req.params.id);
+  if (Number.isNaN(courtId)) {
+    return res.status(400).json({ error: 'court id must be an integer.' });
+  }
+  try {
+    const { rows: courtRows } = await pool.query(
+      `SELECT court_id, court_name, location, phone_number, logo_url
+       FROM courts WHERE court_id = $1`,
+      [courtId],
+    );
+    if (courtRows.length === 0) {
+      return res.status(404).json({ error: 'Court not found' });
+    }
+    const { rows: pgRows } = await pool.query(
+      `
+      SELECT
+        p.playground_id,
+        p.court_id,
+        p.playground_name,
+        p.price_per_hour::float8 AS price_per_hour,
+        p.is_active,
+        p.can_half_court,
+        COALESCE(
+          json_agg(pp.photo_url ORDER BY pp.photo_id)
+            FILTER (WHERE pp.photo_id IS NOT NULL),
+          '[]'::json
+        ) AS photo_urls
+      FROM playgrounds p
+      LEFT JOIN playground_photos pp ON pp.playground_id = p.playground_id
+      WHERE p.court_id = $1::int
+      GROUP BY p.playground_id, p.court_id, p.playground_name, p.price_per_hour, p.is_active, p.can_half_court
+      ORDER BY p.playground_name ASC
+      `,
+      [courtId],
+    );
+    const playgrounds = pgRows.map((r) => ({
+      ...r,
+      photo_urls: Array.isArray(r.photo_urls) ? r.photo_urls : JSON.parse(String(r.photo_urls ?? '[]')),
+    }));
+    res.json({ court: courtRows[0], playgrounds });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        error: 'Court tables are missing. Apply lebanon_hoops/DB/court_reservation_schema.sql to your database.',
+      });
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function getPublicPlaygroundAvailabilityHandler(req, res) {
+  const playgroundId = Number(req.params.id);
+  const dateStr = String(req.query.date ?? '').trim();
+  if (Number.isNaN(playgroundId)) {
+    return res.status(400).json({ error: 'playground id must be an integer.' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return res.status(400).json({ error: 'Query ?date=YYYY-MM-DD is required.' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT
+        a.availability_id,
+        a.available_date::text AS available_date,
+        to_char(a.start_time, 'HH24:MI') AS start_time,
+        to_char(a.end_time, 'HH24:MI') AS end_time,
+        a.is_available,
+        (r.reservation_id IS NOT NULL) AS is_booked
+      FROM playground_availability a
+      LEFT JOIN reservations r ON r.availability_id = a.availability_id
+      WHERE a.playground_id = $1::int
+        AND a.available_date = $2::date
+      ORDER BY a.start_time ASC
+      `,
+      [playgroundId, dateStr],
+    );
+    res.json({ slots: rows });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        error: 'Court tables are missing. Apply lebanon_hoops/DB/court_reservation_schema.sql to your database.',
+      });
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function postPublicReservationHandler(req, res) {
+  const userId = Number(req.body?.user_id ?? req.body?.userId);
+  const availabilityId = Number(req.body?.availability_id ?? req.body?.availabilityId);
+  if (Number.isNaN(userId) || Number.isNaN(availabilityId)) {
+    return res.status(400).json({ error: 'user_id and availability_id are required integers.' });
+  }
+  try {
+    const { rows: ok } = await pool.query(
+      `
+      SELECT a.availability_id
+      FROM playground_availability a
+      WHERE a.availability_id = $1::int
+        AND a.is_available = TRUE
+        AND NOT EXISTS (
+          SELECT 1 FROM reservations r WHERE r.availability_id = a.availability_id
+        )
+      `,
+      [availabilityId],
+    );
+    if (ok.length === 0) {
+      return res.status(409).json({ error: 'That slot is not available to book.' });
+    }
+    const { rows } = await pool.query(
+      `
+      INSERT INTO reservations (user_id, availability_id)
+      VALUES ($1::int, $2::int)
+      RETURNING reservation_id, reservation_date, status
+      `,
+      [userId, availabilityId],
+    );
+    res.status(201).json({ reservation: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'This time slot was just booked. Pick another.' });
+    }
+    if (err.code === '23503') {
+      return res.status(400).json({ error: 'Invalid user_id or availability_id.' });
+    }
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        error: 'Court tables are missing. Apply lebanon_hoops/DB/court_reservation_schema.sql to your database.',
+      });
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/public/courts', listPublicCourtsHandler);
+app.get('/api/public/courts', listPublicCourtsHandler);
+app.get('/public/courts/:id/playgrounds', getPublicCourtPlaygroundsHandler);
+app.get('/api/public/courts/:id/playgrounds', getPublicCourtPlaygroundsHandler);
+app.get('/public/playgrounds/:id/availability', getPublicPlaygroundAvailabilityHandler);
+app.get('/api/public/playgrounds/:id/availability', getPublicPlaygroundAvailabilityHandler);
+app.post('/public/reservations', postPublicReservationHandler);
+app.post('/api/public/reservations', postPublicReservationHandler);
+
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, '0.0.0.0', () => {
   console.log(`BasketballApp API listening on http://127.0.0.1:${port}`);
@@ -1511,4 +1685,6 @@ app.listen(port, '0.0.0.0', () => {
   console.log('  GET /collection?user_id=…  (&duplicates_only=1 for duplicate stacks)');
   console.log('  GET /collection-duplicates?user_id=…  (alias for duplicates)');
   console.log('  GET /cards/catalog  PUT/PATCH /wishlist  trade: /trade/rooms …');
+  console.log('  GET /public/courts  GET /public/courts/:id/playgrounds  GET /public/playgrounds/:id/availability?date=…');
+  console.log('  POST /public/reservations { user_id, availability_id }');
 });
