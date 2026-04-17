@@ -332,11 +332,27 @@ class _PlaygroundCard extends StatelessWidget {
                         labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
                       ),
                     if (playground.canHalfCourt)
-                      Chip(
-                        label: const Text('Half court OK'),
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: AppColors.secondaryContainer.withAlpha((255 * 0.5).round()),
-                        labelStyle: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondaryContainer.withAlpha((255 * 0.55).round()),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.outlineVariant),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_rounded, size: 20, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Half court allowed',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 ),

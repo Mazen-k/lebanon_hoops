@@ -11,8 +11,20 @@ class SessionStore {
   static const _kUsername = 'session_username';
   static const _kEmail = 'session_email';
 
+  /// Must match keys in [VendorSessionStore] — cleared when a fan signs in.
+  static const _vendorKeys = [
+    'vendor_token',
+    'vendor_court_id',
+    'vendor_court_name',
+    'vendor_location',
+    'vendor_username',
+  ];
+
   Future<void> save(UserSession session) async {
     final p = await SharedPreferences.getInstance();
+    for (final k in _vendorKeys) {
+      await p.remove(k);
+    }
     await p.setInt(_kUserId, session.userId);
     await p.setString(_kUsername, session.username);
     await p.setString(_kEmail, session.email);

@@ -7,12 +7,16 @@ import '../services/auth_api_service.dart';
 import '../services/auth_service.dart';
 import '../services/session_store.dart';
 import 'sign_up_screen.dart';
+import 'vendor_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.onAuthSuccess});
+  const LoginScreen({super.key, this.onAuthSuccess, this.onVendorSignedIn});
 
   /// Called after credentials are saved; parent should reload session and show the app shell.
   final Future<void> Function()? onAuthSuccess;
+
+  /// Called after court vendor credentials are saved (fan session cleared).
+  final Future<void> Function()? onVendorSignedIn;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -160,6 +164,32 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 16),
+                      Center(
+                        child: TextButton(
+                          onPressed: _loading
+                              ? null
+                              : () async {
+                                  final ok = await Navigator.of(context).push<bool>(
+                                    MaterialPageRoute<bool>(
+                                      builder: (_) => const VendorLoginScreen(),
+                                    ),
+                                  );
+                                  if (ok == true && context.mounted) {
+                                    await widget.onVendorSignedIn?.call();
+                                  }
+                                },
+                          child: Text(
+                            'Sign in as vendor',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  color: AppColors.secondary,
+                                  fontWeight: FontWeight.w700,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppColors.secondary,
+                                ),
+                          ),
+                        ),
                       ),
                     ],
                   ),

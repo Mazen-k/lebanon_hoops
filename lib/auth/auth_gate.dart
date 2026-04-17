@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../app_shell.dart';
+import '../models/user_session.dart';
+import '../models/vendor_session.dart';
 import '../navigation/app_nav_shell_key.dart';
 import '../screens/login_screen.dart';
+import '../screens/vendor_court_dashboard_page.dart';
 import '../services/session_store.dart';
+import '../services/vendor_session_store.dart';
 import '../widgets/main_app_drawer.dart';
 
-/// Restores session on cold start; toggles between login and main shell.
+/// Restores fan or court-vendor session; toggles between login, main shell, or vendor hub.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -15,7 +19,9 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  bool? _signedIn;
+  bool _ready = false;
+  UserSession? _user;
+  VendorSession? _vendor;
 
   @override
   void initState() {
@@ -25,47 +31,86 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _restore() async {
     try {
-      final session = await SessionStore.instance.load();
+      var vendor = await VendorSessionStore.instance.load();
+      var user = await SessionStore.instance.load();
+      if (vendor != null && user != null) {
+        await VendorSessionStore.instance.clear();
+        vendor = null;
+      }
       if (!mounted) return;
-      setState(() => _signedIn = session != null);
+      setState(() {
+        _vendor = vendor;
+        _user = user;
+        _ready = true;
+      });
     } catch (_) {
       if (!mounted) return;
-      // SharedPreferences or platform store failed — still show the app (login).
-      setState(() => _signedIn = false);
+      setState(() {
+        _vendor = null;
+        _user = null;
+        _ready = true;
+      });
     }
   }
 
   Future<void> _handleSignOut() async {
     if (!mounted) return;
-    // Show login immediately; prefs clear can hang on some platforms if awaited first.
-    setState(() => _signedIn = false);
+    setState(() => _user = null);
     try {
       await SessionStore.instance.clear();
-    } catch (_) {
-      // Session file may be unreadable; user is already on login.
-    }
+    } catch (_) {}
+  }
+
+  Future<void> _handleVendorSignOut() async {
+    if (!mounted) return;
+    setState(() => _vendor = null);
+    try {
+      await VendorSessionStore.instance.clear();
+    } catch (_) {}
   }
 
   Future<void> _handleAuthSuccess() async {
     try {
-      final session = await SessionStore.instance.load();
+      final user = await SessionStore.instance.load();
       if (!mounted) return;
-      setState(() => _signedIn = session != null);
+      setState(() {
+        _user = user;
+        _vendor = null;
+      });
     } catch (_) {
       if (!mounted) return;
-      // Save succeeded in login/sign-up; don't trap user on login if reload fails.
-      setState(() => _signedIn = true);
+      setState(() => _user = null);
+    }
+  }
+
+  Future<void> _handleVendorSignedIn() async {
+    try {
+      final vendor = await VendorSessionStore.instance.load();
+      if (!mounted) return;
+      setState(() {
+        _vendor = vendor;
+        _user = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _vendor = null);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_signedIn == null) {
+    if (!_ready) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator(color: Color(0xFFBB0013))),
       );
     }
-    if (_signedIn!) {
+    if (_vendor != null) {
+      return VendorCourtDashboardPage(
+        session: _vendor!,
+        onSignedOut: _handleVendorSignOut,
+      );
+    }
+    if (_user != null) {
       return AppNavigationShell(
         key: appNavShellKey,
         drawerBuilder: (hostContext) => MainAppDrawer(
@@ -75,6 +120,9 @@ class _AuthGateState extends State<AuthGate> {
         ),
       );
     }
-    return LoginScreen(onAuthSuccess: _handleAuthSuccess);
+    return LoginScreen(
+      onAuthSuccess: _handleAuthSuccess,
+      onVendorSignedIn: _handleVendorSignedIn,
+    );
   }
 }

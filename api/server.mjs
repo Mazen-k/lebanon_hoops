@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import cors from 'cors';
 import express from 'express';
 import pg from 'pg';
@@ -228,6 +229,329 @@ app.post('/auth/register', registerHandler);
 app.post('/api/auth/register', registerHandler);
 app.post('/auth/login', loginHandler);
 app.post('/api/auth/login', loginHandler);
+
+/** --- Court vendor (owner) sessions: in-memory Bearer tokens --- */
+const vendorSessions = new Map();
+const VENDOR_SESSION_MS = 72 * 60 * 60 * 1000;
+
+function getVendorCourtId(req) {
+  const h = req.headers.authorization ?? '';
+  if (!h.startsWith('Bearer ')) return null;
+  const token = h.slice(7).trim();
+  if (!token) return null;
+  const s = vendorSessions.get(token);
+  if (!s || s.expMs < Date.now()) {
+    if (token) vendorSessions.delete(token);
+    return null;
+  }
+  return s.courtId;
+}
+
+async function courtVendorLoginHandler(req, res) {
+  const username = req.body?.username?.trim();
+  const password = req.body?.password;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'username and password required' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT court_id, court_name, location, username, password_hash
+       FROM courts WHERE username = $1 LIMIT 1`,
+      [username],
+    );
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid court username or password' });
+    }
+    const ok = await bcrypt.compare(password, rows[0].password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Invalid court username or password' });
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    vendorSessions.set(token, { courtId: rows[0].court_id, expMs: Date.now() + VENDOR_SESSION_MS });
+    res.json({
+      token,
+      court_id: rows[0].court_id,
+      court_name: rows[0].court_name,
+      location: rows[0].location,
+      username: rows[0].username,
+    });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({ error: 'Courts table missing. Run DB/court_reservation_schema.sql' });
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function vendorListPlaygroundsHandler(req, res) {
+  const courtId = getVendorCourtId(req);
+  if (!courtId) return res.status(401).json({ error: 'Vendor session required' });
+  try {
+    const { rows: pgRows } = await pool.query(
+      `
+      SELECT
+        p.playground_id,
+        p.court_id,
+        p.playground_name,
+        p.price_per_hour::float8 AS price_per_hour,
+        p.is_active,
+        p.can_half_court,
+        COALESCE(
+          json_agg(
+            json_build_object('photo_id', pp.photo_id, 'photo_url', pp.photo_url)
+            ORDER BY pp.photo_id
+          ) FILTER (WHERE pp.photo_id IS NOT NULL),
+          '[]'::json
+        ) AS photos
+      FROM playgrounds p
+      LEFT JOIN playground_photos pp ON pp.playground_id = p.playground_id
+      WHERE p.court_id = $1::int
+      GROUP BY p.playground_id, p.court_id, p.playground_name, p.price_per_hour, p.is_active, p.can_half_court
+      ORDER BY p.playground_name ASC
+      `,
+      [courtId],
+    );
+    const playgrounds = pgRows.map((r) => ({
+      ...r,
+      photos: Array.isArray(r.photos) ? r.photos : JSON.parse(String(r.photos ?? '[]')),
+    }));
+    res.json({ playgrounds });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function vendorCreatePlaygroundHandler(req, res) {
+  const courtId = getVendorCourtId(req);
+  if (!courtId) return res.status(401).json({ error: 'Vendor session required' });
+  const name = (req.body?.playground_name ?? req.body?.playgroundName ?? '').trim();
+  const price = req.body?.price_per_hour ?? req.body?.pricePerHour;
+  if (!name || price == null || price === '') {
+    return res.status(400).json({ error: 'playground_name and price_per_hour required' });
+  }
+  const canHalf = req.body?.can_half_court === true || req.body?.canHalfCourt === true;
+  const isActive = req.body?.is_active !== false && req.body?.isActive !== false;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO playgrounds (court_id, playground_name, price_per_hour, is_active, can_half_court)
+       VALUES ($1::int, $2, $3::decimal, $4::bool, $5::bool)
+       RETURNING playground_id, court_id, playground_name, price_per_hour::float8 AS price_per_hour, is_active, can_half_court`,
+      [courtId, name, Number(price), isActive, canHalf],
+    );
+    res.status(201).json({ playground: { ...rows[0], photo_urls: [] } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function vendorPatchPlaygroundHandler(req, res) {
+  const courtId = getVendorCourtId(req);
+  if (!courtId) return res.status(401).json({ error: 'Vendor session required' });
+  const pid = Number(req.params.id);
+  if (Number.isNaN(pid)) return res.status(400).json({ error: 'invalid playground id' });
+  const name = req.body?.playground_name ?? req.body?.playgroundName;
+  const price = req.body?.price_per_hour ?? req.body?.pricePerHour;
+  const canHalf = req.body?.can_half_court ?? req.body?.canHalfCourt;
+  const isActive = req.body?.is_active ?? req.body?.isActive;
+  try {
+    const { rows } = await pool.query(
+      `
+      UPDATE playgrounds SET
+        playground_name = COALESCE($3::varchar, playground_name),
+        price_per_hour = COALESCE($4::decimal, price_per_hour),
+        can_half_court = COALESCE($5::bool, can_half_court),
+        is_active = COALESCE($6::bool, is_active)
+      WHERE playground_id = $2::int AND court_id = $1::int
+      RETURNING playground_id, court_id, playground_name, price_per_hour::float8 AS price_per_hour, is_active, can_half_court
+      `,
+      [
+        courtId,
+        pid,
+        name != null ? String(name).trim() || null : null,
+        price != null ? Number(price) : null,
+        canHalf != null ? Boolean(canHalf) : null,
+        isActive != null ? Boolean(isActive) : null,
+      ],
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Playground not found' });
+    res.json({ playground: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function vendorAddPlaygroundPhotoHandler(req, res) {
+  const courtId = getVendorCourtId(req);
+  if (!courtId) return res.status(401).json({ error: 'Vendor session required' });
+  const pid = Number(req.params.id);
+  const url = (req.body?.photo_url ?? req.body?.photoUrl ?? '').trim();
+  if (Number.isNaN(pid) || !url) {
+    return res.status(400).json({ error: 'photo_url required' });
+  }
+  try {
+    const ins = await pool.query(
+      `
+      INSERT INTO playground_photos (playground_id, photo_url)
+      SELECT p.playground_id, $3
+      FROM playgrounds p
+      WHERE p.playground_id = $2::int AND p.court_id = $1::int
+      RETURNING photo_id, playground_id, photo_url
+      `,
+      [courtId, pid, url],
+    );
+    if (ins.rows.length === 0) return res.status(404).json({ error: 'Playground not found' });
+    res.status(201).json({ photo: ins.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function vendorDeletePhotoHandler(req, res) {
+  const courtId = getVendorCourtId(req);
+  if (!courtId) return res.status(401).json({ error: 'Vendor session required' });
+  const photoId = Number(req.params.photoId);
+  if (Number.isNaN(photoId)) return res.status(400).json({ error: 'invalid photo id' });
+  try {
+    const { rowCount } = await pool.query(
+      `
+      DELETE FROM playground_photos pp
+      USING playgrounds p
+      WHERE pp.photo_id = $2::int
+        AND pp.playground_id = p.playground_id
+        AND p.court_id = $1::int
+      `,
+      [courtId, photoId],
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Photo not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function vendorListAvailabilityHandler(req, res) {
+  const courtId = getVendorCourtId(req);
+  if (!courtId) return res.status(401).json({ error: 'Vendor session required' });
+  const pgId = Number(req.query.playground_id ?? req.query.playgroundId);
+  if (Number.isNaN(pgId)) {
+    return res.status(400).json({ error: 'playground_id query required' });
+  }
+  try {
+    const { rows: ok } = await pool.query(
+      'SELECT 1 FROM playgrounds WHERE playground_id = $1::int AND court_id = $2::int',
+      [pgId, courtId],
+    );
+    if (ok.length === 0) return res.status(404).json({ error: 'Playground not found' });
+    const { rows } = await pool.query(
+      `
+      SELECT
+        a.availability_id,
+        a.playground_id,
+        a.available_date::text AS available_date,
+        to_char(a.start_time, 'HH24:MI') AS start_time,
+        to_char(a.end_time, 'HH24:MI') AS end_time,
+        a.is_available,
+        (r.reservation_id IS NOT NULL) AS is_booked
+      FROM playground_availability a
+      LEFT JOIN reservations r ON r.availability_id = a.availability_id
+      WHERE a.playground_id = $1::int
+      ORDER BY a.available_date ASC, a.start_time ASC
+      `,
+      [pgId],
+    );
+    res.json({ slots: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function vendorCreateAvailabilityHandler(req, res) {
+  const courtId = getVendorCourtId(req);
+  if (!courtId) return res.status(401).json({ error: 'Vendor session required' });
+  const pgId = Number(req.body?.playground_id ?? req.body?.playgroundId);
+  const dateStr = String(req.body?.available_date ?? req.body?.availableDate ?? '').trim();
+  const st = String(req.body?.start_time ?? req.body?.startTime ?? '').trim();
+  const et = String(req.body?.end_time ?? req.body?.endTime ?? '').trim();
+  if (Number.isNaN(pgId) || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !st || !et) {
+    return res.status(400).json({ error: 'playground_id, available_date (YYYY-MM-DD), start_time, end_time required' });
+  }
+  try {
+    const { rows: ok } = await pool.query(
+      'SELECT 1 FROM playgrounds WHERE playground_id = $1::int AND court_id = $2::int',
+      [pgId, courtId],
+    );
+    if (ok.length === 0) return res.status(404).json({ error: 'Playground not found' });
+    const { rows } = await pool.query(
+      `
+      INSERT INTO playground_availability (playground_id, available_date, start_time, end_time, is_available)
+      VALUES ($1::int, $2::date, $3::time, $4::time, COALESCE($5::bool, TRUE))
+      RETURNING availability_id, playground_id, available_date::text AS available_date,
+        to_char(start_time, 'HH24:MI') AS start_time, to_char(end_time, 'HH24:MI') AS end_time, is_available
+      `,
+      [pgId, dateStr, st.length === 5 ? `${st}:00` : st, et.length === 5 ? `${et}:00` : et, req.body?.is_available ?? req.body?.isAvailable],
+    );
+    res.status(201).json({ slot: rows[0] });
+  } catch (err) {
+    if (err.code === '23514') {
+      return res.status(400).json({ error: 'end_time must be after start_time' });
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function vendorDeleteAvailabilityHandler(req, res) {
+  const courtId = getVendorCourtId(req);
+  if (!courtId) return res.status(401).json({ error: 'Vendor session required' });
+  const aid = Number(req.params.id);
+  if (Number.isNaN(aid)) return res.status(400).json({ error: 'invalid availability id' });
+  try {
+    const { rowCount } = await pool.query(
+      `
+      DELETE FROM playground_availability a
+      USING playgrounds p
+      WHERE a.availability_id = $2::int
+        AND a.playground_id = p.playground_id
+        AND p.court_id = $1::int
+      `,
+      [courtId, aid],
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Slot not found' });
+    res.status(204).end();
+  } catch (err) {
+    if (err.code === '23503') {
+      return res.status(409).json({ error: 'Cannot delete: slot has a reservation' });
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.post('/auth/court-login', courtVendorLoginHandler);
+app.post('/api/auth/court-login', courtVendorLoginHandler);
+app.get('/vendor/playgrounds', vendorListPlaygroundsHandler);
+app.get('/api/vendor/playgrounds', vendorListPlaygroundsHandler);
+app.post('/vendor/playgrounds', vendorCreatePlaygroundHandler);
+app.post('/api/vendor/playgrounds', vendorCreatePlaygroundHandler);
+app.patch('/vendor/playgrounds/:id', vendorPatchPlaygroundHandler);
+app.patch('/api/vendor/playgrounds/:id', vendorPatchPlaygroundHandler);
+app.post('/vendor/playgrounds/:id/photos', vendorAddPlaygroundPhotoHandler);
+app.post('/api/vendor/playgrounds/:id/photos', vendorAddPlaygroundPhotoHandler);
+app.delete('/vendor/photos/:photoId', vendorDeletePhotoHandler);
+app.delete('/api/vendor/photos/:photoId', vendorDeletePhotoHandler);
+app.get('/vendor/availability', vendorListAvailabilityHandler);
+app.get('/api/vendor/availability', vendorListAvailabilityHandler);
+app.post('/vendor/availability', vendorCreateAvailabilityHandler);
+app.post('/api/vendor/availability', vendorCreateAvailabilityHandler);
+app.delete('/vendor/availability/:id', vendorDeleteAvailabilityHandler);
+app.delete('/api/vendor/availability/:id', vendorDeleteAvailabilityHandler);
 
 /** GET ?user_id= — username + card_coins for cards hub header. */
 async function userWalletHandler(req, res) {

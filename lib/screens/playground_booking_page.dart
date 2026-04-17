@@ -24,10 +24,8 @@ class _PlaygroundBookingPageState extends State<PlaygroundBookingPage> {
   final _api = CourtReservationApiService();
   late DateTime _day = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
   List<AvailabilitySlotDto> _slots = [];
-  AvailabilitySlotDto? _picked;
   bool _loading = true;
   String? _error;
-  bool _submitting = false;
 
   @override
   void initState() {
@@ -36,10 +34,16 @@ class _PlaygroundBookingPageState extends State<PlaygroundBookingPage> {
   }
 
   Future<void> _fetchSlots() async {
+    final today = _dateOnly(DateTime.now());
+    final lastBookable = today.add(const Duration(days: 10));
+    var day = _dateOnly(_day);
+    if (day.isBefore(today)) day = today;
+    if (day.isAfter(lastBookable)) day = lastBookable;
+
     setState(() {
       _loading = true;
       _error = null;
-      _picked = null;
+      _day = day;
     });
     try {
       final list = await _api.fetchAvailability(playgroundId: widget.playground.playgroundId, date: _day);
@@ -66,9 +70,20 @@ class _PlaygroundBookingPageState extends State<PlaygroundBookingPage> {
   CourtSummary get court => widget.court;
   PlaygroundSummary get playground => widget.playground;
 
-  Future<void> _confirm() async {
-    final slot = _picked;
-    if (slot == null || !slot.canReserve) return;
+  double _hourlyPrice(bool halfCourt) {
+    final base = playground.pricePerHour;
+    if (halfCourt && playground.canHalfCourt) {
+      return (base * 0.55 * 100).round() / 100;
+    }
+    return base;
+  }
+
+  Future<void> _confirmReservation(
+    AvailabilitySlotDto slot, {
+    required bool halfCourt,
+    required VoidCallback closeSheet,
+  }) async {
+    if (!slot.canReserve) return;
 
     final session = await SessionStore.instance.load();
     if (!mounted) return;
@@ -83,14 +98,16 @@ class _PlaygroundBookingPageState extends State<PlaygroundBookingPage> {
       return;
     }
 
-    setState(() => _submitting = true);
     try {
       await _api.createReservation(userId: session.userId, availabilityId: slot.availabilityId);
       if (!mounted) return;
+      closeSheet();
+      if (!mounted) return;
+      final sizeLabel = halfCourt && playground.canHalfCourt ? 'Half court' : 'Full court';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('Booked! See you on the court.'),
+          content: Text('Booked ($sizeLabel). See you on the court.'),
         ),
       );
       Navigator.of(context).pop();
@@ -104,18 +121,39 @@ class _PlaygroundBookingPageState extends State<PlaygroundBookingPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(behavior: SnackBarBehavior.floating, content: Text(e.toString())),
       );
-    } finally {
-      if (mounted) setState(() => _submitting = false);
     }
   }
 
-  List<DateTime> get _weekStrip {
-    return List.generate(10, (i) => _day.subtract(const Duration(days: 3)).add(Duration(days: i)));
+  Future<void> _openBookingSummary(AvailabilitySlotDto slot) async {
+    if (!slot.canReserve) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return _BookingSummarySheet(
+          court: court,
+          playground: playground,
+          day: _day,
+          slot: slot,
+          hourlyPrice: _hourlyPrice,
+          onCancel: () => Navigator.of(sheetContext).pop(),
+          onConfirm: (halfCourt) => _confirmReservation(
+            slot,
+            halfCourt: halfCourt,
+            closeSheet: () => Navigator.of(sheetContext).pop(),
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final todayStart = _dateOnly(DateTime.now());
+    final rentalDays = List.generate(11, (i) => todayStart.add(Duration(days: i)));
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -135,19 +173,26 @@ class _PlaygroundBookingPageState extends State<PlaygroundBookingPage> {
               style: theme.textTheme.titleSmall?.copyWith(color: AppColors.secondary, fontWeight: FontWeight.w600),
             ),
           ),
-          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: Text(
+              'Tap an open slot to see a summary and confirm.',
+              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary),
+            ),
+          ),
+          const SizedBox(height: 8),
           SizedBox(
             height: 92,
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               scrollDirection: Axis.horizontal,
-              itemCount: _weekStrip.length,
+              itemCount: rentalDays.length,
               separatorBuilder: (context, index) => const SizedBox(width: 10),
               itemBuilder: (context, i) {
-                final d = _weekStrip[i];
+                final d = rentalDays[i];
                 final same = d.year == _day.year && d.month == _day.month && d.day == _day.day;
                 return _DateChip(
-                  label: _weekdayShort(d),
+                  label: _rentalStripLabel(d, todayStart),
                   day: '${d.day}',
                   selected: same,
                   onTap: () {
@@ -197,7 +242,7 @@ class _PlaygroundBookingPageState extends State<PlaygroundBookingPage> {
                             )
                           : GridView.builder(
                               physics: const AlwaysScrollableScrollPhysics(),
-                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
                               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 2,
                                 mainAxisSpacing: 12,
@@ -207,14 +252,9 @@ class _PlaygroundBookingPageState extends State<PlaygroundBookingPage> {
                               itemCount: _slots.length,
                               itemBuilder: (context, i) {
                                 final s = _slots[i];
-                                final sel = _picked?.availabilityId == s.availabilityId;
                                 return _SlotTile(
                                   slot: s,
-                                  selected: sel,
-                                  onTap: () {
-                                    if (!s.canReserve) return;
-                                    setState(() => _picked = s);
-                                  },
+                                  onTap: () => _openBookingSummary(s),
                                 );
                               },
                             ),
@@ -222,39 +262,285 @@ class _PlaygroundBookingPageState extends State<PlaygroundBookingPage> {
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: _picked != null && _picked!.canReserve ? AppColors.signatureGradient : null,
-              color: _picked == null || !_picked!.canReserve ? AppColors.surfaceDim : null,
-            ),
-            child: ElevatedButton(
-              onPressed: (_picked != null && _picked!.canReserve && !_submitting) ? _confirm : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                foregroundColor: AppColors.onPrimary,
-                disabledForegroundColor: AppColors.secondary,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              child: _submitting
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onPrimary),
-                    )
-                  : Text(
-                      _picked == null ? 'Select a time slot' : 'Confirm reservation',
-                      style: const TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.w900, letterSpacing: -0.2),
+    );
+  }
+}
+
+class _BookingSummarySheet extends StatefulWidget {
+  const _BookingSummarySheet({
+    required this.court,
+    required this.playground,
+    required this.day,
+    required this.slot,
+    required this.hourlyPrice,
+    required this.onCancel,
+    required this.onConfirm,
+  });
+
+  final CourtSummary court;
+  final PlaygroundSummary playground;
+  final DateTime day;
+  final AvailabilitySlotDto slot;
+  final double Function(bool halfCourt) hourlyPrice;
+  final VoidCallback onCancel;
+  final Future<void> Function(bool halfCourt) onConfirm;
+
+  @override
+  State<_BookingSummarySheet> createState() => _BookingSummarySheetState();
+}
+
+class _BookingSummarySheetState extends State<_BookingSummarySheet> {
+  bool _halfCourt = false;
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final price = widget.hourlyPrice(_halfCourt);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, -4)),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.outlineVariant,
+                      borderRadius: BorderRadius.circular(99),
                     ),
+                  ),
+                ),
+                Text(
+                  'Booking summary',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                    letterSpacing: -0.5,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _SummaryLine(
+                  icon: Icons.calendar_today_outlined,
+                  label: 'Date',
+                  value: _formatFullDate(widget.day),
+                ),
+                const SizedBox(height: 12),
+                _SummaryLine(
+                  icon: Icons.schedule_rounded,
+                  label: 'Time',
+                  value: '${_formatHm(widget.slot.startTime)} – ${_formatHm(widget.slot.endTime)}',
+                ),
+                const SizedBox(height: 12),
+                _SummaryLine(
+                  icon: Icons.place_outlined,
+                  label: 'Location',
+                  value: widget.court.location,
+                ),
+                const SizedBox(height: 12),
+                _SummaryLine(
+                  icon: Icons.apartment_outlined,
+                  label: 'Venue',
+                  value: widget.court.courtName,
+                ),
+                const SizedBox(height: 12),
+                _SummaryLine(
+                  icon: Icons.sports_basketball_outlined,
+                  label: 'Playground',
+                  value: widget.playground.playgroundName,
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.outlineVariant),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Price',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: AppColors.secondary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '\$${price.toStringAsFixed(2)} / hour',
+                              style: const TextStyle(
+                                fontFamily: 'Lexend',
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.onSurface,
+                              ),
+                            ),
+                            if (widget.playground.canHalfCourt && _halfCourt)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Half-court estimate (venue may confirm)',
+                                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (widget.playground.canHalfCourt) ...[
+                  const SizedBox(height: 12),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Half court',
+                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      'Lower rate when the venue allows splitting the floor.',
+                      style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary),
+                    ),
+                    value: _halfCourt,
+                    activeTrackColor: AppColors.primary.withAlpha((255 * 0.35).round()),
+                    thumbColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) return AppColors.primary;
+                      return AppColors.outline;
+                    }),
+                    onChanged: _busy ? null : (v) => setState(() => _halfCourt = v),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _busy ? null : widget.onCancel,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.onSurface,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(color: AppColors.outlineVariant),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                        child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          gradient: _busy ? null : AppColors.signatureGradient,
+                          color: _busy ? AppColors.surfaceDim : null,
+                        ),
+                        child: ElevatedButton(
+                          onPressed: _busy
+                              ? null
+                              : () async {
+                                  setState(() => _busy = true);
+                                  try {
+                                    await widget.onConfirm(_halfCourt);
+                                  } finally {
+                                    if (mounted) setState(() => _busy = false);
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            foregroundColor: AppColors.onPrimary,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: _busy
+                              ? const SizedBox(
+                                  height: 22,
+                                  width: 22,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onPrimary),
+                                )
+                              : const Text(
+                                  'Confirm booking',
+                                  style: TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.w900),
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SummaryLine extends StatelessWidget {
+  const _SummaryLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 22, color: AppColors.primary),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: AppColors.secondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.onSurface,
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -278,8 +564,8 @@ class _DateChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        width: 62,
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        width: 76,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: BoxDecoration(
           gradient: selected ? AppColors.signatureGradient : null,
           color: selected ? null : AppColors.surfaceContainerLowest,
@@ -300,9 +586,12 @@ class _DateChip extends StatelessWidget {
           children: [
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Lexend',
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: FontWeight.w700,
                 color: selected ? AppColors.onPrimary : AppColors.secondary,
               ),
@@ -328,12 +617,10 @@ class _DateChip extends StatelessWidget {
 class _SlotTile extends StatelessWidget {
   const _SlotTile({
     required this.slot,
-    required this.selected,
     required this.onTap,
   });
 
   final AvailabilitySlotDto slot;
-  final bool selected;
   final VoidCallback onTap;
 
   @override
@@ -343,19 +630,16 @@ class _SlotTile extends StatelessWidget {
     return Opacity(
       opacity: ok ? 1 : 0.5,
       child: Material(
-        color: selected ? AppColors.primary.withAlpha((255 * 0.08).round()) : AppColors.surfaceContainerLowest,
+        color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          onTap: onTap,
+          onTap: ok ? onTap : null,
           borderRadius: BorderRadius.circular(16),
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: selected ? AppColors.primary : AppColors.outlineVariant,
-                width: selected ? 2 : 1,
-              ),
+              border: Border.all(color: AppColors.outlineVariant),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,7 +668,7 @@ class _SlotTile extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  ok ? 'Tap to select' : 'Unavailable',
+                  ok ? 'Tap for summary' : 'Unavailable',
                   style: theme.textTheme.bodySmall?.copyWith(color: AppColors.secondary),
                 ),
               ],
@@ -396,9 +680,27 @@ class _SlotTile extends StatelessWidget {
   }
 }
 
+DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+int _calendarDaysFromTo(DateTime from, DateTime to) {
+  return _dateOnly(to).difference(_dateOnly(from)).inDays;
+}
+
+/// "Today" for the current day; weekday name for all future days in the strip.
+String _rentalStripLabel(DateTime d, DateTime todayStart) {
+  final diff = _calendarDaysFromTo(todayStart, d);
+  if (diff == 0) return 'Today';
+  return _weekdayShort(d);
+}
+
 String _weekdayShort(DateTime d) {
   const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   return names[(d.weekday - 1).clamp(0, 6)];
+}
+
+String _formatFullDate(DateTime d) {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return '${_weekdayShort(d)}, ${months[d.month - 1]} ${d.day}, ${d.year}';
 }
 
 String _formatHm(String hm) {
