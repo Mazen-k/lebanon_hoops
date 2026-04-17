@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../services/vendor_auth_api_service.dart';
 import '../services/vendor_session_store.dart';
-import '../theme/colors.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/gradient_button.dart';
