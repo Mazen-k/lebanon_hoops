@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/player.dart';
 import '../models/team.dart';
+import '../models/team_staff.dart';
 import '../models/team_stadium.dart';
 import '../models/team_trophy.dart';
 import '../services/players_api_service.dart';
@@ -186,6 +187,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       team: data.team,
                       trophies: data.trophies,
                       stadium: data.stadium,
+                      staff: data.staff,
                       upcoming: firstUpcoming,
                       onOpenTickets: () {
                         Navigator.push(
@@ -328,11 +330,28 @@ class _ClubLogo extends StatelessWidget {
   }
 }
 
+TeamStaffMember? _pickStaffByRole(List<TeamStaffMember> staff, String roleKey) {
+  for (final m in staff) {
+    final r = m.role.toLowerCase().trim();
+    if (roleKey == 'president') {
+      if (r.contains('president') && !r.contains('vice')) return m;
+    } else if (roleKey == 'head_coach') {
+      if (r == 'head coach' || (r.contains('head') && r.contains('coach') && !r.contains('assistant'))) {
+        return m;
+      }
+    } else if (roleKey == 'assistant_coach') {
+      if ((r.contains('assistant') && r.contains('coach')) || r.contains('assistant')) return m;
+    }
+  }
+  return null;
+}
+
 class _OverviewTab extends StatelessWidget {
   const _OverviewTab({
     required this.team,
     required this.trophies,
     required this.stadium,
+    required this.staff,
     required this.upcoming,
     required this.onOpenTickets,
   });
@@ -340,6 +359,7 @@ class _OverviewTab extends StatelessWidget {
   final Team team;
   final List<TeamTrophySummary> trophies;
   final TeamStadium? stadium;
+  final List<TeamStaffMember> staff;
   final _DemoFixture? upcoming;
   final VoidCallback onOpenTickets;
 
@@ -398,21 +418,24 @@ class _OverviewTab extends StatelessWidget {
         _OverviewCard(
           child: Column(
             children: [
-              _LeadershipPlaceholderRow(
+              _StaffLeadershipRow(
+                sectionTitle: 'Club president',
                 icon: Icons.account_balance_rounded,
-                title: 'Club president',
+                member: _pickStaffByRole(staff, 'president'),
                 colorScheme: colorScheme,
               ),
               Divider(height: 20, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
-              _LeadershipPlaceholderRow(
+              _StaffLeadershipRow(
+                sectionTitle: 'Head coach',
                 icon: Icons.sports_rounded,
-                title: 'Head coach',
+                member: _pickStaffByRole(staff, 'head_coach'),
                 colorScheme: colorScheme,
               ),
               Divider(height: 20, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
-              _LeadershipPlaceholderRow(
+              _StaffLeadershipRow(
+                sectionTitle: 'Assistant coach',
                 icon: Icons.groups_2_outlined,
-                title: 'Assistant coach',
+                member: _pickStaffByRole(staff, 'assistant_coach'),
                 colorScheme: colorScheme,
               ),
             ],
@@ -670,48 +693,106 @@ class _OverviewUpcomingMatchCard extends StatelessWidget {
   }
 }
 
-class _LeadershipPlaceholderRow extends StatelessWidget {
-  const _LeadershipPlaceholderRow({
+class _StaffLeadershipRow extends StatelessWidget {
+  const _StaffLeadershipRow({
+    required this.sectionTitle,
     required this.icon,
-    required this.title,
+    required this.member,
     required this.colorScheme,
   });
 
+  final String sectionTitle;
   final IconData icon;
-  final String title;
+  final TeamStaffMember? member;
   final ColorScheme colorScheme;
+
+  static String _initials(String first, String last) {
+    final a = first.trim().isNotEmpty ? first.trim()[0] : '';
+    final b = last.trim().isNotEmpty ? last.trim()[0] : '';
+    return ('$a$b').toUpperCase().isEmpty ? '?' : ('$a$b').toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final url = member?.pictureUrl?.trim();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: colorScheme.surfaceContainerHighest,
-          child: Icon(icon, color: colorScheme.onSurfaceVariant, size: 22),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: 52,
+            height: 52,
+            color: colorScheme.surfaceContainerHighest,
+            child: url != null && url.isNotEmpty
+                ? Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    width: 52,
+                    height: 52,
+                    errorBuilder: (context, error, stackTrace) => _placeholderAvatar(),
+                  )
+                : _placeholderAvatar(),
+          ),
         ),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: TextStyle(fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
-              const SizedBox(height: 4),
-              Text(
-                'Coming soon — will be linked from the database.',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  height: 1.35,
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
+              Text(sectionTitle, style: TextStyle(fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
+              if (member != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  member!.fullName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 2),
+                Text(
+                  member!.role,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Not listed yet',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ],
     );
+  }
+
+  Widget _placeholderAvatar() {
+    if (member != null) {
+      return Center(
+        child: Text(
+          _initials(member!.firstName, member!.lastName),
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+            color: colorScheme.primary,
+          ),
+        ),
+      );
+    }
+    return Icon(icon, color: colorScheme.onSurfaceVariant, size: 26);
   }
 }
 
@@ -1413,6 +1494,71 @@ class _RosterTab extends StatelessWidget {
   }
 }
 
+class _PlayerPhotoSlot extends StatelessWidget {
+  const _PlayerPhotoSlot({required this.player});
+
+  final Player player;
+
+  String _initials() {
+    final a = player.firstName.trim().isNotEmpty ? player.firstName.trim()[0] : '';
+    final b = player.lastName.trim().isNotEmpty ? player.lastName.trim()[0] : '';
+    final s = ('$a$b').toUpperCase();
+    return s.isEmpty ? '?' : s;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final url = player.pictureUrl?.trim();
+    return Column(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
+            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.45)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: url != null && url.isNotEmpty
+              ? Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  width: 56,
+                  height: 56,
+                  errorBuilder: (context, error, stackTrace) => _fallback(colorScheme),
+                )
+              : _fallback(colorScheme),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Photo',
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.65),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _fallback(ColorScheme colorScheme) {
+    return Center(
+      child: Text(
+        _initials(),
+        style: TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 20,
+          color: colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
 class _PlayerBox extends StatelessWidget {
   const _PlayerBox({required this.player});
 
@@ -1424,7 +1570,7 @@ class _PlayerBox extends StatelessWidget {
     final abbrev = _abbrevPosition(player.position);
     final exact = _exactPositionLabel(player.position);
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLowest.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(16),
@@ -1437,63 +1583,72 @@ class _PlayerBox extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                '#${player.jerseyNumber}',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                  color: colorScheme.primary,
+          _PlayerPhotoSlot(player: player),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '#${player.jerseyNumber}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        abbrev,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 8),
+                Text(
+                  player.fullName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800, height: 1.2),
                 ),
-                child: Text(
-                  abbrev,
+                const SizedBox(height: 6),
+                Text(
+                  exact,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: colorScheme.onPrimaryContainer,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.25,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            player.fullName,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w800, height: 1.2),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            exact,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: colorScheme.onSurfaceVariant,
-              height: 1.25,
+                if (player.nationality.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    player.nationality,
+                    style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.85)),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (player.nationality.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              player.nationality,
-              style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.85)),
-            ),
-          ],
         ],
       ),
     );

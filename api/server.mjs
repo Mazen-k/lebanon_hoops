@@ -48,10 +48,34 @@ async function getTeamDetails(req, res) {
     }
     const team = teamRows[0];
 
-    const { rows: playerRows } = await pool.query(
-      'SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob FROM players WHERE team_id = $1 ORDER BY jersey_number ASC',
-      [teamId]
-    );
+    let playerRows;
+    try {
+      const q = await pool.query(
+        `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob, picture_url
+         FROM players WHERE team_id = $1 ORDER BY jersey_number ASC`,
+        [teamId],
+      );
+      playerRows = q.rows;
+    } catch (playerColErr) {
+      const q = await pool.query(
+        `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob
+         FROM players WHERE team_id = $1 ORDER BY jersey_number ASC`,
+        [teamId],
+      );
+      playerRows = q.rows.map((r) => ({ ...r, picture_url: null }));
+    }
+
+    let staff = [];
+    try {
+      const { rows: staffRows } = await pool.query(
+        `SELECT staff_id, team_id, first_name, last_name, role, picture_url
+         FROM team_staff WHERE team_id = $1 ORDER BY staff_id ASC`,
+        [teamId],
+      );
+      staff = staffRows;
+    } catch (staffErr) {
+      console.warn('getTeamDetails team_staff skipped:', staffErr?.message ?? staffErr);
+    }
 
     let trophies = [];
     try {
@@ -103,7 +127,7 @@ async function getTeamDetails(req, res) {
       console.warn('getTeamDetails stadium skipped:', stadiumErr?.message ?? stadiumErr);
     }
 
-    res.json({ team, players: playerRows, trophies, stadium });
+    res.json({ team, players: playerRows, trophies, stadium, staff });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message ?? String(err) });

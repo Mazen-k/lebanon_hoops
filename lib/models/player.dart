@@ -5,6 +5,7 @@ class Player {
   final String lastName;
   final String nationality;
   final String position;
+  final String? pictureUrl;
 
   const Player({
     required this.playerId,
@@ -13,9 +14,11 @@ class Player {
     required this.lastName,
     required this.nationality,
     required this.position,
+    this.pictureUrl,
   });
 
   factory Player.fromJson(Map<String, dynamic> json) {
+    final pic = json['picture_url'] ?? json['pictureUrl'] ?? json['player_image_url'] ?? json['playerImageUrl'];
     return Player(
       playerId: json['player_id'] as int,
       jerseyNumber: json['jersey_number'] as int,
@@ -23,6 +26,7 @@ class Player {
       lastName: json['last_name'] as String? ?? '',
       nationality: json['nationality'] as String? ?? '',
       position: json['position'] as String? ?? '',
+      pictureUrl: pic?.toString().trim().isEmpty == true ? null : pic?.toString(),
     );
   }
 
