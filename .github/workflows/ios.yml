@@ -3,6 +3,9 @@ name: iOS-ipa-build
 on:
   workflow_dispatch:
 
+env:
+  APP_VERSION: 1.0.0
+
 jobs:
   build-ios:
     runs-on: macos-latest
@@ -19,19 +22,28 @@ jobs:
       - run: pod repo update
         working-directory: ios
 
-      - run: flutter build ios --release --no-codesign
+      - name: Build iOS app
+        run: >
+          flutter build ios --release --no-codesign
+          --build-name=$APP_VERSION
+          --build-number=${{ github.run_number }}
 
-      - run: mkdir -p Payload
+      - name: Create Payload folder
+        run: mkdir -p Payload
         working-directory: build/ios/iphoneos
 
-      - run: cp -R Runner.app Payload/
+      - name: Copy app bundle
+        run: cp -R Runner.app Payload/
         working-directory: build/ios/iphoneos
 
       - name: Package IPA
-        run: ditto -c -k --sequesterRsrc --keepParent Payload FlutterIpaExport.ipa
+        run: >
+          ditto -c -k --sequesterRsrc --keepParent
+          Payload
+          "${{ github.event.repository.name }}.ipa"
         working-directory: build/ios/iphoneos
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FlutterIpaExport
-          path: build/ios/iphoneos/FlutterIpaExport.ipa
+          name: ${{ github.event.repository.name }}-ios-ipa-build-${{ github.run_number }}
+          path: build/ios/iphoneos/${{ github.event.repository.name }}.ipa
