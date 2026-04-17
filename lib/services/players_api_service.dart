@@ -5,11 +5,18 @@ import 'package:http/http.dart' as http;
 import '../config/backend_config.dart';
 import '../models/player.dart';
 import '../models/team.dart';
+import '../models/team_trophy.dart';
 
 class TeamWithPlayers {
   final Team team;
   final List<Player> players;
-  const TeamWithPlayers({required this.team, required this.players});
+  final List<TeamTrophySummary> trophies;
+
+  const TeamWithPlayers({
+    required this.team,
+    required this.players,
+    this.trophies = const [],
+  });
 }
 
 class PlayersApiService {
@@ -39,8 +46,14 @@ class PlayersApiService {
       final players = (decoded['players'] as List<dynamic>)
           .map((p) => Player.fromJson(p as Map<String, dynamic>))
           .toList();
+      final trophiesRaw = decoded['trophies'];
+      final trophies = trophiesRaw is List<dynamic>
+          ? trophiesRaw
+              .map((t) => TeamTrophySummary.fromJson(Map<String, dynamic>.from(t as Map)))
+              .toList()
+          : <TeamTrophySummary>[];
 
-      return TeamWithPlayers(team: team, players: players);
+      return TeamWithPlayers(team: team, players: players, trophies: trophies);
     } finally {
       if (_client == null) own.close();
     }

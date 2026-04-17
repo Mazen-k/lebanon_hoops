@@ -1,10 +1,19 @@
 class Team {
   final int teamId;
   final String teamName;
+  final String? logoUrl;
+  final String? city;
+  final String? about;
 
-  const Team({required this.teamId, required this.teamName});
+  const Team({
+    required this.teamId,
+    required this.teamName,
+    this.logoUrl,
+    this.city,
+    this.about,
+  });
 
-  /// Parses rows from `SELECT team_id, team_name FROM teams` (JSON from your API).
+  /// Parses rows from `SELECT team_id, team_name ... FROM teams` (JSON from your API).
   factory Team.fromJson(Map<String, dynamic> json) {
     final id = json['team_id'] ?? json['teamId'] ?? json['id'];
     final name = json['team_name'] ?? json['teamName'] ?? json['name'] ?? json['title'];
@@ -15,6 +24,15 @@ class Team {
     if (parsedId == null) {
       throw FormatException('Invalid team_id: $id');
     }
-    return Team(teamId: parsedId, teamName: name.toString());
+    final logo = json['team_logo_url'] ?? json['teamLogoUrl'] ?? json['logo_url'] ?? json['logoUrl'];
+    final city = json['city'] ?? json['home_city'] ?? json['homeCity'];
+    final about = json['about'] ?? json['description'] ?? json['club_summary'] ?? json['clubSummary'];
+    return Team(
+      teamId: parsedId,
+      teamName: name.toString(),
+      logoUrl: logo?.toString().trim().isEmpty == true ? null : logo?.toString(),
+      city: city?.toString(),
+      about: about?.toString(),
+    );
   }
 }

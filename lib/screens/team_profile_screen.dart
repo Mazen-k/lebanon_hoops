@@ -1,8 +1,25 @@
 import 'package:flutter/material.dart';
-import '../services/players_api_service.dart';
+
 import '../models/player.dart';
 import '../models/team.dart';
+import '../models/team_trophy.dart';
+import '../services/players_api_service.dart';
 import 'ticket_selection_screen.dart';
+
+/// Demo schedule until games are wired to the API.
+class _DemoFixture {
+  const _DemoFixture({
+    required this.title,
+    required this.subtitle,
+    required this.isPast,
+    this.resultLabel,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool isPast;
+  final String? resultLabel;
+}
 
 class TeamProfileScreen extends StatefulWidget {
   const TeamProfileScreen({super.key, required this.teamId});
@@ -19,6 +36,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   bool _loading = true;
   String? _error;
 
+  static const _tabLabels = ['Overview', 'Fixtures', 'Roster', 'Trophies'];
+
   @override
   void initState() {
     super.initState();
@@ -26,28 +45,67 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final data = await _service.fetchTeamWithPlayers(widget.teamId);
-      if (mounted) setState(() { _data = data; _loading = false; });
+      if (mounted) setState(() => _data = data);
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
+  }
+
+  List<_DemoFixture> _demoFixtures(String clubName) {
+    return [
+      _DemoFixture(
+        title: '$clubName vs Hoops United',
+        subtitle: 'Fri, Apr 18 · 8:30 PM · Home arena',
+        isPast: false,
+      ),
+      _DemoFixture(
+        title: 'City BC vs $clubName',
+        subtitle: 'Wed, Apr 23 · 7:00 PM · Away',
+        isPast: false,
+      ),
+      _DemoFixture(
+        title: '$clubName vs North Stars',
+        subtitle: 'Sat, Apr 5 · 6:00 PM · Home arena',
+        isPast: true,
+        resultLabel: 'W 92–84',
+      ),
+      _DemoFixture(
+        title: 'Capital Lions vs $clubName',
+        subtitle: 'Sun, Mar 22 · 5:15 PM · Away',
+        isPast: true,
+        resultLabel: 'L 71–78',
+      ),
+      _DemoFixture(
+        title: '$clubName vs Mariners',
+        subtitle: 'Thu, Mar 13 · 9:00 PM · Neutral site',
+        isPast: true,
+        resultLabel: 'W 101–96',
+      ),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (_loading) {
-      final colorScheme = Theme.of(context).colorScheme;
       return Scaffold(
         backgroundColor: colorScheme.surface,
         body: Center(child: CircularProgressIndicator(color: colorScheme.primary)),
       );
     }
     if (_error != null) {
-      final colorScheme = Theme.of(context).colorScheme;
       return Scaffold(
         backgroundColor: colorScheme.surface,
+        appBar: AppBar(title: const Text('Team'), centerTitle: true),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -58,7 +116,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                 const SizedBox(height: 16),
                 Text(_error!, style: TextStyle(color: colorScheme.secondary), textAlign: TextAlign.center),
                 const SizedBox(height: 16),
-                ElevatedButton(onPressed: _load, child: const Text('Retry')),
+                FilledButton(onPressed: _load, child: const Text('Retry')),
               ],
             ),
           ),
@@ -66,490 +124,671 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
       );
     }
 
-    final team = _data!.team;
-    final players = _data!.players;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.only(top: 0, bottom: 96), // removed top padding since hero should be at top
-              child: Column(
-                children: [
-                  _buildHero(context, team),
-                  Transform.translate(
-                    offset: const Offset(0, -32),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                      child: _buildBentoStats(context),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  _buildActiveRoster(context, players),
-                  const SizedBox(height: 64),
-                  _buildUpcomingMatch(context),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 8,
-              left: 8,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                onPressed: () {
-                  if (Navigator.canPop(context)) {
-                    Navigator.pop(context);
-                  } else {
-                    // Fallback just in case
-                    Navigator.of(context, rootNavigator: true).pop();
-                  }
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHero(BuildContext context, Team team) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          height: 353,
-          width: double.infinity,
-          color: colorScheme.inverseSurface,
-          child: Stack(
-            fit: StackFit.expand,
+    final data = _data!;
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        backgroundColor: colorScheme.surface,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Opacity(
-                opacity: 0.4,
-                child: Image.network(
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuBFM6UaZ4BYrn98mmU9GsvvqyMjV2lXadgyAg_w6kNhIWz6qAcuR-EOKKKUHsbaKPqGA6z061oGfQX0WeG7CUSNU90xgSyOobta-zBWC4ct1O2Z3dpTnlpW0OxVna4G-e7QLVv_L5Z5wXSWcNKz8VVlx7y5D7XQoyyggOaVQJ8flF-Ss76NhDqENw4uYi4uiV8f4qA5nsJGMsKzQA7fq93EqzLLC-qB_8qfCiVVRx6SX0A7jWkmlK-qOTMg9dmsltWbFjTGovjn53di',
-                  fit: BoxFit.cover,
-                  alignment: Alignment.center,
+              _ClubHeader(team: data.team),
+              Material(
+                color: colorScheme.surfaceContainerLow,
+                child: TabBar(
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelColor: colorScheme.primary,
+                  unselectedLabelColor: colorScheme.onSurfaceVariant,
+                  indicatorColor: colorScheme.primary,
+                  tabs: [for (final l in _tabLabels) Tab(text: l, height: 44)],
                 ),
               ),
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [colorScheme.inverseSurface, Colors.transparent],
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    stops: const [0.0, 0.4],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          height: 353,
-          padding: const EdgeInsets.only(left: 24, right: 24, bottom: 48),
-          alignment: Alignment.bottomLeft,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Transform.rotate(
-                angle: -3 * 3.14159 / 180,
-                child: Container(
-                  width: 128,
-                  height: 128,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withAlpha((255 * 0.25).round()), blurRadius: 25, offset: const Offset(0, 10))
-                    ],
-                  ),
-                  child: Image.network(
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuDJna9D3GFVp-RWSAph8qKdMkfr-dtof9y-XzDbJsQnaLVAKtI_fzWmVH6YPYGBbF5qkuRJaGH1DU0DHeqj-Tf4Hdi1rljY8Jcgy7AN4_6FUUYI430A9gZ_9HXFkskykzYir9xr86Y8DujZpYWnhISiRa_dAYj9q_CaZRS6gwKgkc3z7mdnbUM1EWbyimtO2LvexPzGidHRxLz7ywQI21yjRiz9bpHM8OW6q0i_2Ht0zYwAq_JGX3bT6APa6vMK_mldvYxjO4YyKLZm',
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 24),
               Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: TabBarView(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'LEBANESE BASKETBALL LEAGUE',
-                        style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.0),
-                      ),
+                    _OverviewTab(team: data.team, players: data.players, trophies: data.trophies),
+                    _FixturesTab(
+                      teamName: data.team.teamName,
+                      fixtures: _demoFixtures(data.team.teamName),
+                      onGetTickets: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(builder: (_) => const TicketSelectionScreen()),
+                        );
+                      },
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      team.teamName.toUpperCase(),
-                      style: const TextStyle(
-                        fontFamily: 'Lexend',
-                        fontSize: 48,
-                        fontWeight: FontWeight.w900,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.white,
-                        letterSpacing: -2.0,
-                        height: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Beirut, Lebanon',
-                      style: TextStyle(
-                        fontFamily: 'Lexend',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w500,
-                        fontStyle: FontStyle.italic,
-                        color: colorScheme.primaryContainer,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
+                    _RosterTab(players: data.players),
+                    _TrophiesTab(trophies: data.trophies),
                   ],
                 ),
               ),
             ],
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildBentoStats(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: _buildStatBox(context, label: 'PPG', value: '94.2', sub: '↑ 2.4 vs last season', borderColor: colorScheme.primary, subColor: colorScheme.primary)),
-            const SizedBox(width: 16),
-            Expanded(child: _buildStatBox(context, label: 'RPG', value: '42.8', sub: 'Ranked #1 in League', borderColor: colorScheme.secondary, subColor: colorScheme.secondary)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(child: _buildStatBox(context, label: 'APG', value: '21.5', sub: 'Best in postseason', borderColor: colorScheme.primary, subColor: colorScheme.primary)),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: colorScheme.inverseSurface,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 2, offset: const Offset(0, 1))],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('RECORD', style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.6).round()), letterSpacing: 1.0)),
-                    const SizedBox(height: 4),
-                    const Text('18-2', style: TextStyle(fontFamily: 'Lexend', fontSize: 30, fontWeight: FontWeight.w900, color: Colors.white, height: 1.0)),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: List.generate(5, (index) => Align(
-                        widthFactor: 0.75,
-                        child: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade500,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: colorScheme.inverseSurface, width: 2),
-                          ),
-                        ),
-                      )),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatBox(BuildContext context, {required String label, required String value, required String sub, required Color borderColor, required Color subColor}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(left: BorderSide(color: borderColor, width: 4)),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.05).round()), blurRadius: 2, offset: const Offset(0, 1))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+}
+
+class _ClubHeader extends StatelessWidget {
+  const _ClubHeader({required this.team});
+
+  final Team team;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final initials = _initials(team.teamName);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(label, style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary, letterSpacing: 1.0)),
-          const SizedBox(height: 4),
-          Text(value, style: TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: colorScheme.onSurface, height: 1.0)),
-          const SizedBox(height: 4),
-          Text(sub, style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: subColor)),
+          IconButton(
+            onPressed: () => Navigator.maybePop(context),
+            icon: Icon(Icons.arrow_back_rounded, color: colorScheme.onSurface),
+          ),
+          _ClubLogo(initials: initials, logoUrl: team.logoUrl),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  team.teamName,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Lebanese Basketball League',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildActiveRoster(BuildContext context, List<Player> players) {
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) {
+      final s = parts.first;
+      return s.length >= 2 ? s.substring(0, 2).toUpperCase() : s.toUpperCase();
+    }
+    return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
+}
+
+class _ClubLogo extends StatelessWidget {
+  const _ClubLogo({required this.initials, this.logoUrl});
+
+  final String initials;
+  final String? logoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 72.0;
+    final url = logoUrl?.trim();
+    if (url != null && url.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.network(
+          url,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _fallback(context, size),
+        ),
+      );
+    }
+    return _fallback(context, size);
+  }
+
+  Widget _fallback(BuildContext context, double size) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [colorScheme.primary, colorScheme.primary.withValues(alpha: 0.65)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.w900,
+          color: colorScheme.onPrimary,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+}
+
+class _OverviewTab extends StatelessWidget {
+  const _OverviewTab({
+    required this.team,
+    required this.players,
+    required this.trophies,
+  });
+
+  final Team team;
+  final List<Player> players;
+  final List<TeamTrophySummary> trophies;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final trophyTitles = trophies.length;
+    final totalWins = trophies.fold<int>(0, (a, t) => a + t.winCount);
+    final byPos = <String, int>{};
+    for (final p in players) {
+      final key = p.position.trim().isEmpty ? '—' : p.position.trim().toUpperCase();
+      byPos[key] = (byPos[key] ?? 0) + 1;
+    }
+    final posLine = byPos.entries.isEmpty
+        ? 'Roster positions will show here once players are assigned.'
+        : byPos.entries.map((e) => '${e.key}: ${e.value}').join(' · ');
+
+    final custom = team.about?.trim();
+    final blurb = custom != null && custom.isNotEmpty
+        ? custom
+        : '${team.teamName} competes in the Lebanese Basketball League. '
+            'This page brings together fixtures, the full roster grouped by role, '
+            'and every trophy the club has lifted — season by season.';
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      children: [
+        Text('At a glance', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 12),
+        _OverviewCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _StatRow(icon: Icons.groups_rounded, label: 'Squad size', value: '${players.length} players'),
+              const Divider(height: 24),
+              _StatRow(icon: Icons.emoji_events_rounded, label: 'Trophy types', value: '$trophyTitles'),
+              const Divider(height: 24),
+              _StatRow(icon: Icons.stars_rounded, label: 'Total titles', value: '$totalWins'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _OverviewCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Summary', style: TextStyle(fontWeight: FontWeight.w800, color: colorScheme.onSurface)),
+              const SizedBox(height: 10),
+              Text(blurb, style: TextStyle(height: 1.45, color: colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 14),
+              Text('Positions', style: TextStyle(fontWeight: FontWeight.w700, color: colorScheme.onSurface)),
+              const SizedBox(height: 6),
+              Text(posLine, style: TextStyle(height: 1.4, color: colorScheme.onSurfaceVariant, fontSize: 13)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatRow extends StatelessWidget {
+  const _StatRow({required this.icon, required this.label, required this.value});
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 22, color: colorScheme.primary),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
+      ],
+    );
+  }
+}
+
+class _OverviewCard extends StatelessWidget {
+  const _OverviewCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.35)),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _FixturesTab extends StatelessWidget {
+  const _FixturesTab({
+    required this.teamName,
+    required this.fixtures,
+    required this.onGetTickets,
+  });
+
+  final String teamName;
+  final List<_DemoFixture> fixtures;
+  final VoidCallback onGetTickets;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final upcoming = fixtures.where((f) => !f.isPast).toList();
+    final past = fixtures.where((f) => f.isPast).toList();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      children: [
+        Text(
+          'Sample schedule for $teamName',
+          style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant, height: 1.35),
+        ),
+        const SizedBox(height: 8),
+        if (upcoming.isNotEmpty) ...[
+          _SectionTitle(title: 'Upcoming', colorScheme: colorScheme),
+          const SizedBox(height: 8),
+          ...upcoming.map((f) => _FixtureTile(fixture: f, onGetTickets: onGetTickets)),
+        ],
+        const SizedBox(height: 20),
+        if (past.isNotEmpty) ...[
+          _SectionTitle(title: 'Past results', colorScheme: colorScheme),
+          const SizedBox(height: 8),
+          ...past.map((f) => _FixtureTile(fixture: f, onGetTickets: null)),
+        ],
+      ],
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.title, required this.colorScheme});
+
+  final String title;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: colorScheme.onSurface,
+          ),
+    );
+  }
+}
+
+class _FixtureTile extends StatelessWidget {
+  const _FixtureTile({required this.fixture, this.onGetTickets});
+
+  final _DemoFixture fixture;
+  final VoidCallback? onGetTickets;
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: !fixture.isPast && onGetTickets != null ? onGetTickets : null,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  fixture.isPast ? Icons.history_rounded : Icons.event_rounded,
+                  color: fixture.isPast ? colorScheme.onSurfaceVariant : colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(fixture.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Text(
+                        fixture.subtitle,
+                        style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                if (fixture.resultLabel != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      fixture.resultLabel!,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        color: colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  )
+                else if (onGetTickets != null)
+                  Text(
+                    'Tickets',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+int _rosterGroupOrder(String position) {
+  final raw = position.trim().toUpperCase();
+  if (raw == 'PG' || raw.contains('POINT')) return 0;
+  if (raw == 'SG' || raw.contains('SHOOTING')) return 1;
+  if (raw == 'SF' || raw.contains('SMALL')) return 2;
+  if (raw == 'PF' || raw.contains('POWER')) return 3;
+  if (raw == 'C' || raw == 'CENTER' || raw.contains('CENTER')) return 4;
+  return 5;
+}
+
+String _rosterGroupTitle(int order) {
+  switch (order) {
+    case 0:
+      return 'Point guards';
+    case 1:
+      return 'Shooting guards';
+    case 2:
+      return 'Small forwards';
+    case 3:
+      return 'Power forwards';
+    case 4:
+      return 'Centers';
+    default:
+      return 'Other';
+  }
+}
+
+class _RosterTab extends StatelessWidget {
+  const _RosterTab({required this.players});
+
+  final List<Player> players;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (players.isEmpty) {
+      return Center(
+        child: Text('No players on file', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+      );
+    }
+
+    final sorted = List<Player>.from(players)
+      ..sort((a, b) {
+        final oa = _rosterGroupOrder(a.position);
+        final ob = _rosterGroupOrder(b.position);
+        if (oa != ob) return oa.compareTo(ob);
+        return a.jerseyNumber.compareTo(b.jerseyNumber);
+      });
+
+    final groups = <int, List<Player>>{};
+    for (final p in sorted) {
+      final o = _rosterGroupOrder(p.position);
+      groups.putIfAbsent(o, () => []).add(p);
+    }
+    final orders = groups.keys.toList()..sort();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      children: [
+        for (final order in orders) ...[
+          _SectionTitle(title: _rosterGroupTitle(order), colorScheme: colorScheme),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, c) {
+              final w = (c.maxWidth - 10) / 2;
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final p in groups[order]!)
+                    SizedBox(
+                      width: w,
+                      child: _PlayerBox(player: p),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 22),
+        ],
+        _SectionTitle(title: 'Coaching staff', colorScheme: colorScheme),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            'Coaching staff is not in the database yet. This section will list coaches when data is available.',
+            style: TextStyle(color: colorScheme.onSurfaceVariant, height: 1.4),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlayerBox extends StatelessWidget {
+  const _PlayerBox({required this.player});
+
+  final Player player;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final pos = player.position.trim().isEmpty ? '—' : player.position.trim().toUpperCase();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.25)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'ACTIVE ROSTER',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      fontStyle: FontStyle.italic,
-                      color: colorScheme.onSurface,
-                      letterSpacing: -1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(height: 6, width: 96, color: colorScheme.primary),
-                ],
-              ),
-              Row(
-                children: [
-                  Text('VIEW FULL STATS', style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.primary, letterSpacing: 1.0)),
-                  const SizedBox(width: 4),
-                  Icon(Icons.arrow_forward, size: 14, color: colorScheme.primary),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          if (players.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Text('No players found', style: TextStyle(color: colorScheme.secondary)),
-              ),
-            )
-          else
-            Column(
-              children: [
-                for (int i = 0; i < players.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 32),
-                  _buildRosterCard(context, player: players[i]),
-                ],
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRosterCard(BuildContext context, {required Player player}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final posLabel = _positionLabel(player.position);
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Stack(
-        children: [
-          Positioned(
-            top: 16,
-            right: 16,
-            child: Text(
-              '#${player.jerseyNumber}',
-              style: TextStyle(
-                fontFamily: 'Lexend',
-                fontSize: 72,
-                fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
-                color: Colors.transparent,
-                shadows: [
-                  Shadow(offset: const Offset(-1, -1), color: colorScheme.primary.withAlpha(50)),
-                  Shadow(offset: const Offset(1, -1), color: colorScheme.primary.withAlpha(50)),
-                  Shadow(offset: const Offset(1, 1), color: colorScheme.primary.withAlpha(50)),
-                  Shadow(offset: const Offset(-1, 1), color: colorScheme.primary.withAlpha(50)),
-                ],
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 32.0, left: 24.0, right: 24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      posLabel,
-                      style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w900, color: colorScheme.primary, letterSpacing: 1.0),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      player.fullName.toUpperCase(),
-                      style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w800, color: colorScheme.onSurface, letterSpacing: -0.5, height: 1.1),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Text(
-                          player.nationality.isNotEmpty ? player.nationality : 'Lebanese',
-                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary),
-                        ),
-                        const SizedBox(width: 16),
-                        Container(width: 4, height: 4, decoration: BoxDecoration(color: colorScheme.outlineVariant, shape: BoxShape.circle)),
-                        const SizedBox(width: 16),
-                        Text(
-                          '#${player.jerseyNumber}',
-                          style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary),
-                        ),
-                      ],
-                    ),
-                  ],
+              Text(
+                '#${player.jerseyNumber}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                  color: colorScheme.primary,
                 ),
               ),
-              const SizedBox(height: 16),
+              const Spacer(),
               Container(
-                height: 80,
-                width: double.infinity,
-                color: colorScheme.surfaceContainerHighest,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.all(8),
-                        child: const Icon(Icons.analytics, color: Colors.white, size: 20),
-                      ),
-                    ),
-                  ],
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  pos,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  String _positionLabel(String pos) {
-    switch (pos.toUpperCase()) {
-      case 'PG': return 'POINT GUARD';
-      case 'SG': return 'SHOOTING GUARD';
-      case 'SF': return 'SMALL FORWARD';
-      case 'PF': return 'POWER FORWARD';
-      case 'C': return 'CENTER';
-      default: return pos.toUpperCase().isNotEmpty ? pos.toUpperCase() : 'PLAYER';
-    }
-  }
-
-  Widget _buildUpcomingMatch(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: colorScheme.inverseSurface,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        padding: const EdgeInsets.all(32),
-        width: double.infinity,
-        child: Column(
-          children: [
-            Text(
-              'NEXT BATTLE',
-              style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.primaryContainer, letterSpacing: 3.0),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'THE BEIRUT DERBY',
-              style: TextStyle(fontFamily: 'Lexend', fontSize: 30, fontWeight: FontWeight.w900, color: Colors.white, fontStyle: FontStyle.italic, height: 1.0),
-              textAlign: TextAlign.center,
-            ),
+          const SizedBox(height: 8),
+          Text(
+            player.fullName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700, height: 1.2),
+          ),
+          if (player.nationality.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              'Sagesse vs Al Riyadi • Friday, 20:30',
-              style: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant.withAlpha((255 * 0.7).round())),
+              player.nationality,
+              style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TrophiesTab extends StatelessWidget {
+  const _TrophiesTab({required this.trophies});
+
+  final List<TeamTrophySummary> trophies;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (trophies.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'No trophies recorded for this club yet.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 32),
+      itemCount: trophies.length,
+      itemBuilder: (context, index) {
+        final t = trophies[index];
+        final seasons = List<TrophySeason>.from(t.seasons)
+          ..sort((a, b) => b.seasonStartYear.compareTo(a.seasonStartYear));
+        return Card(
+          margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          elevation: 0,
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.25)),
+          ),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            title: Row(
               children: [
-                Image.network(
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuAtowaD-5NJaSgJmmqdxchrI6jnsvnkquZEQaKdujOgSSR8XYxy4sZV-f_9vSR631FbtjZ4bCjM6Pc9g6ksH6I0zFYdgOTEe7lxSyaRegKAp6pdLOEFWb6tOklm0fx_D79xmH09RbnmtbfwqYbn7bCgU5rCBiCgqd_YDlaQyxrrbZb89C8yx_ywOsd2c4aRnKL0INFJTUD53u0SKdKfJeWIzMQLihsSilwAWg99owpRz1vnv0f3tD7Xzcg55G_tXQ20rMlcZv6jQHRi',
-                  width: 64,
-                  height: 64,
-                  fit: BoxFit.contain,
+                Expanded(
+                  child: Text(
+                    t.trophyName,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
-                const SizedBox(width: 32),
-                const Text(
-                  'VS',
-                  style: TextStyle(fontFamily: 'Inter', fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white54, fontStyle: FontStyle.italic),
-                ),
-                const SizedBox(width: 32),
-                Image.network(
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuBku3xZnMiES2-G5KUeCAPog3jqLPfKO1x8EjDnG0AxJ9g3Sicv3cyb7e-Z5Bg4pDnpJO8X_DjIae8xpLrCk7en-AZsY2d5hUiERvHYPk9-1W6KnNV1WXFSw2q_OAwJCI4ZAGwlJkLSxr_1_4n5Y0E5uC6Lnfo8CN39-cdbyWjoGfyW53y3QwHy6PHcq2IOYlv3TH7n-BLUtm7lvIKCxdYU-vD-KkBVtqSvyG2_9ULUji-E1Z2Vig_pPyPAMAohKKvzdUjHKQtB0lKh',
-                  width: 64,
-                  height: 64,
-                  fit: BoxFit.contain,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '×${t.winCount}',
+                    style: TextStyle(
+                      color: colorScheme.onPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const TicketSelectionScreen()),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  'GET TICKETS',
-                  style: TextStyle(fontFamily: 'Lexend', fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1.0),
+            subtitle: t.description != null && t.description!.trim().isNotEmpty
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      t.description!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                    ),
+                  )
+                : null,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final s in seasons)
+                      Chip(
+                        label: Text(s.label),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

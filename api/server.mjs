@@ -47,12 +47,51 @@ async function getTeamDetails(req, res) {
       return res.status(404).json({ error: 'Team not found' });
     }
     const team = teamRows[0];
-    
+
     const { rows: playerRows } = await pool.query(
       'SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob FROM players WHERE team_id = $1 ORDER BY jersey_number ASC',
       [teamId]
     );
-    res.json({ team, players: playerRows });
+
+    let trophies = [];
+    try {
+      const { rows: instRows } = await pool.query(
+        `SELECT t.trophy_id, t.trophy_name, t.trophy_description, t.trophy_image_url,
+                ti.season_start_year, ti.season_end_year
+         FROM trophy_instances ti
+         INNER JOIN trophy t ON t.trophy_id = ti.trophy_id
+         WHERE ti.team_id = $1
+         ORDER BY t.trophy_name ASC, ti.season_start_year DESC`,
+        [teamId]
+      );
+      const byTrophy = new Map();
+      for (const r of instRows) {
+        const id = r.trophy_id;
+        if (!byTrophy.has(id)) {
+          byTrophy.set(id, {
+            trophy_id: id,
+            trophy_name: r.trophy_name,
+            trophy_description: r.trophy_description,
+            trophy_image_url: r.trophy_image_url,
+            seasons: [],
+          });
+        }
+        byTrophy.get(id).seasons.push({
+          season_start_year: r.season_start_year,
+          season_end_year: r.season_end_year,
+        });
+      }
+      trophies = [...byTrophy.values()]
+        .map((t) => ({
+          ...t,
+          win_count: t.seasons.length,
+        }))
+        .sort((a, b) => b.win_count - a.win_count || String(a.trophy_name).localeCompare(String(b.trophy_name)));
+    } catch (trophyErr) {
+      console.warn('getTeamDetails trophies skipped:', trophyErr?.message ?? trophyErr);
+    }
+
+    res.json({ team, players: playerRows, trophies });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message ?? String(err) });
