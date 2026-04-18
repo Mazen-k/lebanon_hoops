@@ -19,7 +19,7 @@ const pool = new pg.Pool({
 async function listTeams(_req, res) {
   try {
     const { rows } = await pool.query(
-      'SELECT team_id, team_name, team_logos FROM teams ORDER BY team_name ASC',
+      'SELECT team_id, team_name, team_logo FROM teams ORDER BY team_name ASC',
     );
     res.json(rows);
   } catch (err) {
