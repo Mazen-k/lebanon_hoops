@@ -73,9 +73,9 @@ class _TeamsGridScreenState extends State<TeamsGridScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 96, 16, 120), 
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
-                  childAspectRatio: 0.85,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.4,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
                 ),
                 itemCount: _teams!.length,
                 itemBuilder: (context, index) {
@@ -104,103 +104,69 @@ class _TeamCard extends StatelessWidget {
         ));
       },
       child: Container(
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withAlpha(13)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.withAlpha(40)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha((255 * 0.1).round()),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            )
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
           ],
         ),
-        clipBehavior: Clip.hardEdge,
+        padding: const EdgeInsets.all(12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 3,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      colorScheme.surfaceContainerLow,
-                      colorScheme.surfaceContainerHighest,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Center(
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(10),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withAlpha(20)),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 10,
-                          offset: Offset(0, 4),
-                        )
-                      ],
-                      image: team.logoUrl != null && team.logoUrl!.isNotEmpty
-                          ? DecorationImage(
-                              image: NetworkImage(team.logoUrl!),
-                              fit: BoxFit.contain,
-                            )
-                          : null,
-                    ),
-                    child: team.logoUrl == null || team.logoUrl!.isEmpty
-                        ? Icon(
-                            Icons.shield,
-                            size: 28,
-                            color: colorScheme.primary.withAlpha(180),
-                          )
-                        : null,
+            if (team.logoUrl == null || team.logoUrl!.isEmpty)
+              Icon(
+                Icons.shield,
+                size: 56,
+                color: colorScheme.primary.withAlpha(80),
+              )
+            else
+              SizedBox(
+                height: 56,
+                width: 56,
+                child: Image.network(
+                  team.logoUrl!,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.centerLeft,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.shield,
+                    size: 56,
+                    color: colorScheme.primary.withAlpha(80),
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      team.teamName.toUpperCase(),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'Lexend',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: colorScheme.onSurface,
-                        letterSpacing: -0.5,
-                        height: 1.1,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+            const Spacer(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    team.teamName.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Lexend',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF151b2a),
+                      letterSpacing: -0.2,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'LBL TEAM',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.secondary,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                Icon(
+                  Icons.more_vert_rounded,
+                  size: 20,
+                  color: colorScheme.secondary,
+                ),
+              ],
             ),
           ],
         ),
