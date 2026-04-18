@@ -9,26 +9,34 @@ import * as cheerio from 'cheerio';
 
 const BASE = 'https://flb.web.geniussports.com';
 
-/** Build a Genius Sports iframe URL. */
-function gsUrl(path) {
-  return `${BASE}/?p=9&WHurl=${encodeURIComponent(path)}`;
-}
-
 /** Shared axios instance with a browser-like UA to avoid bot blocks. */
 const http = axios.create({
-  timeout: 15_000,
+  timeout: 20_000,
+  maxRedirects: 10,
   headers: {
     'User-Agent':
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    Connection: 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
   },
 });
 
-/** Fetch HTML and return a cheerio root. */
+/**
+ * Fetch a URL and return both the raw HTML string and a cheerio root.
+ * @param {string} url
+ * @returns {Promise<{ $: import('cheerio').CheerioAPI, html: string, finalUrl: string }>}
+ */
 async function fetchCheerio(url) {
-  const { data } = await http.get(url);
-  return cheerio.load(String(data));
+  const response = await http.get(url, { responseType: 'text' });
+  const html = String(response.data ?? '');
+  const finalUrl = response.request?.res?.responseUrl ?? response.config?.url ?? url;
+  const $ = cheerio.load(html);
+  return { $, html, finalUrl };
 }
 
 /**
@@ -68,13 +76,34 @@ function extractId(href, segment) {
 /**
  * Extract a matchId from a row element id attribute.
  * Handles patterns like: "extfix_2763946", "match_2763946", "2763946"
- * @param {string|undefined} rowId
- * @returns {number|null}
  */
 function matchIdFromRowId(rowId) {
   if (!rowId) return null;
-  const m = rowId.match(/(\d{5,})/); // match IDs are typically 7+ digits
+  const m = rowId.match(/(\d{5,})/);
   return m ? Number(m[1]) : null;
+}
+
+/** Log a detailed diagnostic snapshot of a fetched HTML page. */
+function logHtmlDiagnostics(label, url, finalUrl, html, $) {
+  console.log(`[FLB][${label}] ── Diagnostics ──────────────────────────────`);
+  console.log(`[FLB][${label}] Requested URL : ${url}`);
+  console.log(`[FLB][${label}] Final URL     : ${finalUrl}`);
+  console.log(`[FLB][${label}] html.length   : ${html.length}`);
+  console.log(`[FLB][${label}] <title>       : ${$('title').text().trim() || '(none)'}`);
+  console.log(`[FLB][${label}] <script> tags : ${$('script').length}`);
+  console.log(`[FLB][${label}] contains "match-wrap"        : ${html.includes('match-wrap')}`);
+  console.log(`[FLB][${label}] contains "competitionChooser": ${html.includes('competitionChooser')}`);
+  console.log(`[FLB][${label}] contains "Calendar"          : ${html.includes('Calendar')}`);
+  console.log(`[FLB][${label}] contains "geniussports"      : ${html.includes('geniussports')}`);
+  console.log(`[FLB][${label}] .match-wrap count: ${$('.match-wrap').length}`);
+  console.log(`[FLB][${label}] body text length : ${$('body').text().length}`);
+  console.log(`[FLB][${label}] HTML preview (first 2000 chars):\n${html.slice(0, 2000)}`);
+  console.log(`[FLB][${label}] ──────────────────────────────────────────────`);
+}
+
+/** Return true if the HTML looks like it contains real schedule content. */
+function looksLikeSchedule(html) {
+  return html.includes('match-wrap') || html.includes('extfix_');
 }
 
 // ─────────────────────────────────────────────
@@ -82,24 +111,29 @@ function matchIdFromRowId(rowId) {
 // ─────────────────────────────────────────────
 
 /**
- * Fetch the schedule page for a competition.
- * @param {number|string} competitionId
- * @returns {Promise<Array>}
+ * Build the list of candidate URLs to try for a competition schedule.
+ * Tries both encoded and unencoded WHurl forms, with and without trailing ?.
  */
-export async function getSchedule(competitionId) {
-  const url = gsUrl(`/competition/${competitionId}/schedule`);
-  const $ = await fetchCheerio(url);
+function scheduleUrlCandidates(competitionId) {
+  const path = `/competition/${competitionId}/schedule`;
+  return [
+    // Standard encoded form
+    `${BASE}/?p=9&WHurl=${encodeURIComponent(path)}`,
+    // Encoded with trailing ?
+    `${BASE}/?p=9&WHurl=${encodeURIComponent(path + '?')}`,
+    // Unencoded path
+    `${BASE}/?p=9&WHurl=${path}`,
+    // Unencoded with trailing ?
+    `${BASE}/?p=9&WHurl=${path}?`,
+  ];
+}
 
-  // ── Debug diagnostics ──────────────────────────────────────────────────
-  console.log(`[FLB] Schedule URL: ${url}`);
-  console.log(`[FLB] .match-wrap count: ${$('.match-wrap').length}`);
-  console.log(`[FLB] body text length: ${$('body').text().length}`);
-  // ──────────────────────────────────────────────────────────────────────
-
+/**
+ * Parse game rows from a cheerio root that is confirmed to contain schedule HTML.
+ */
+function parseScheduleRows($, competitionId) {
   const games = [];
 
-  // PRIMARY: FLB uses <div class="match-wrap" id="extfix_MATCHID">
-  // FALLBACK: generic table/div layouts used by other Genius Sports competitions
   const ROW_SELECTOR =
     '.match-wrap, #schedule .match-wrap, table.schedule tbody tr, .match-row, [class*="game-row"], [class*="schedule-row"]';
 
@@ -109,53 +143,46 @@ export async function getSchedule(competitionId) {
       const text = $el.text().trim();
       if (!text) return;
 
-      // ── matchId ────────────────────────────────────────────────────────
-      // 1. Try anchor href inside the row: /match/2763946/
+      // ── matchId ──────────────────────────────────────────────────────
       const matchLink =
         $el.find('a[href*="/match/"]').first().attr('href') ||
         $el.find('a[href*="matchId="]').first().attr('href') ||
         '';
       let matchId = extractId(matchLink, 'match');
 
-      // 2. Try matchId= query param in the href
       if (!matchId && matchLink) {
         const m = matchLink.match(/matchId=(\d+)/);
         if (m) matchId = Number(m[1]);
       }
 
-      // 3. Fallback: extract from the row element's id attribute
-      //    e.g. id="extfix_2763946"
+      // Fallback: row id attribute e.g. id="extfix_2763946"
       if (!matchId) {
         matchId = matchIdFromRowId($el.attr('id') ?? '');
       }
 
-      if (!matchId) return; // skip non-game rows (headers, separators, etc.)
+      if (!matchId) return;
 
-      // ── Status ─────────────────────────────────────────────────────────
+      // ── Status ───────────────────────────────────────────────────────
       const rawStatus =
         $el
-          .find(
-            '[class*="status"], .game-status, .match-status, .status-label, .match-state',
-          )
+          .find('[class*="status"], .game-status, .match-status, .status-label, .match-state')
           .first()
           .text()
           .trim() || '';
       const status = normalizeStatus(rawStatus);
       const isLive = status === 'live';
 
-      // ── Date / time ────────────────────────────────────────────────────
+      // ── Date / time ──────────────────────────────────────────────────
       const dateTimeText =
         $el
-          .find(
-            '[class*="date"], [class*="time"], .match-date, .game-date, .match-time, .kickoff',
-          )
+          .find('[class*="date"], [class*="time"], .match-date, .game-date, .match-time, .kickoff')
           .first()
           .text()
           .trim() ||
         $el.find('td').eq(0).text().trim() ||
         '';
 
-      // ── Venue ──────────────────────────────────────────────────────────
+      // ── Venue ─────────────────────────────────────────────────────────
       const venue =
         $el
           .find('[class*="venue"], [class*="arena"], .venue, .location')
@@ -166,7 +193,7 @@ export async function getSchedule(competitionId) {
       const venueLink = $el.find('a[href*="/venue/"]').first().attr('href') || '';
       const venueId = extractId(venueLink, 'venue');
 
-      // ── Teams ──────────────────────────────────────────────────────────
+      // ── Teams ─────────────────────────────────────────────────────────
       const teamLinks = $el.find('a[href*="/team/"]');
       const homeLink = teamLinks.eq(0).attr('href') || '';
       const awayLink = teamLinks.eq(1).attr('href') || '';
@@ -189,7 +216,7 @@ export async function getSchedule(competitionId) {
         $el.find('[class*="away"] [class*="name"]').first().text().trim() ||
         teamLinks.eq(1).text().trim();
 
-      // ── Logos ──────────────────────────────────────────────────────────
+      // ── Logos ─────────────────────────────────────────────────────────
       const toAbsImg = (src) =>
         src ? (src.startsWith('http') ? src : `${BASE}${src}`) : null;
 
@@ -202,7 +229,7 @@ export async function getSchedule(competitionId) {
         $el.find('[class*="away"] img').first().attr('src') ||
         '';
 
-      // ── Derived page URLs ──────────────────────────────────────────────
+      // ── Derived page URLs ─────────────────────────────────────────────
       const summaryUrl = `${BASE}/?p=9&WHurl=${encodeURIComponent(
         `/competition/${competitionId}/match/${matchId}/summary`,
       )}`;
@@ -225,16 +252,8 @@ export async function getSchedule(competitionId) {
         dateTimeText,
         venue,
         venueId,
-        homeTeam: {
-          id: homeId,
-          name: homeName,
-          logoUrl: toAbsImg(homeLogoImg),
-        },
-        awayTeam: {
-          id: awayId,
-          name: awayName,
-          logoUrl: toAbsImg(awayLogoImg),
-        },
+        homeTeam: { id: homeId, name: homeName, logoUrl: toAbsImg(homeLogoImg) },
+        awayTeam: { id: awayId, name: awayName, logoUrl: toAbsImg(awayLogoImg) },
         summaryUrl,
         boxScoreUrl,
         playByPlayUrl,
@@ -245,17 +264,53 @@ export async function getSchedule(competitionId) {
     }
   });
 
-  console.log(`[FLB] Parsed ${games.length} games for competition ${competitionId}`);
   return games;
+}
+
+/**
+ * Fetch the schedule page for a competition.
+ * Tries multiple URL candidates and logs full diagnostics for each attempt.
+ * @param {number|string} competitionId
+ * @returns {Promise<Array>}
+ */
+export async function getSchedule(competitionId) {
+  const candidates = scheduleUrlCandidates(competitionId);
+
+  for (let i = 0; i < candidates.length; i++) {
+    const url = candidates[i];
+    const label = `compId=${competitionId} attempt ${i + 1}/${candidates.length}`;
+
+    let result;
+    try {
+      result = await fetchCheerio(url);
+    } catch (err) {
+      console.error(`[FLB][${label}] fetch error: ${err.message ?? err}`);
+      continue;
+    }
+
+    const { $, html, finalUrl } = result;
+    logHtmlDiagnostics(label, url, finalUrl, html, $);
+
+    if (looksLikeSchedule(html)) {
+      console.log(`[FLB][${label}] ✓ Schedule content found — parsing rows`);
+      const games = parseScheduleRows($, competitionId);
+      console.log(`[FLB] Parsed ${games.length} games for competition ${competitionId}`);
+      return games;
+    }
+
+    console.log(`[FLB][${label}] ✗ No schedule content — trying next candidate`);
+  }
+
+  console.warn(
+    `[FLB] All ${candidates.length} URL candidates exhausted for competition ${competitionId}. Returning 0 games.`,
+  );
+  return [];
 }
 
 // ─────────────────────────────────────────────
 // 2. getBoxscore
 // ─────────────────────────────────────────────
 
-/**
- * Parse a boxscore header block (score, teams, status).
- */
 function parseBoxscoreHeader($, competitionId, matchId) {
   const rawStatus =
     $('[class*="status"], .game-status, .match-status').first().text().trim() || '';
@@ -294,12 +349,6 @@ function parseBoxscoreHeader($, competitionId, matchId) {
   };
 }
 
-/**
- * Parse a single team's boxscore table.
- * @param {import('cheerio').CheerioAPI} $ cheerio root
- * @param {import('cheerio').Element} tableEl
- * @param {'home'|'away'} side
- */
 function parseTeamTable($, tableEl, side) {
   const $table = $(tableEl);
 
@@ -368,8 +417,13 @@ function parseTeamTable($, tableEl, side) {
  * @param {number|string} matchId
  */
 export async function getBoxscore(competitionId, matchId) {
-  const url = gsUrl(`/competition/${competitionId}/match/${matchId}/boxscore`);
-  const $ = await fetchCheerio(url);
+  const url = `${BASE}/?p=9&WHurl=${encodeURIComponent(
+    `/competition/${competitionId}/match/${matchId}/boxscore`,
+  )}`;
+  const { $, html } = await fetchCheerio(url);
+
+  // Suppress unused warning — html kept for potential future diagnostics
+  void html;
 
   const header = parseBoxscoreHeader($, competitionId, matchId);
 
@@ -424,8 +478,10 @@ function isScoringType(eventType) {
  * @param {number|string} matchId
  */
 export async function getPlayByPlay(competitionId, matchId) {
-  const url = gsUrl(`/competition/${competitionId}/match/${matchId}/playbyplay`);
-  const $ = await fetchCheerio(url);
+  const url = `${BASE}/?p=9&WHurl=${encodeURIComponent(
+    `/competition/${competitionId}/match/${matchId}/playbyplay`,
+  )}`;
+  const { $ } = await fetchCheerio(url);
 
   const header = parseBoxscoreHeader($, competitionId, matchId);
   const homeTeamName = header.homeTeam.name;
@@ -445,27 +501,21 @@ export async function getPlayByPlay(competitionId, matchId) {
 
         const period =
           $el.find('[class*="period"], [class*="quarter"]').first().text().trim() ||
-          cells[0] ||
-          '';
+          cells[0] || '';
         const clock =
           $el.find('[class*="clock"], [class*="time"]').first().text().trim() ||
-          cells[1] ||
-          '';
+          cells[1] || '';
         const score =
           $el.find('[class*="score"]').first().text().trim() || cells[2] || '';
-
         const teamName =
           $el.find('[class*="team"]').first().text().trim() || cells[3] || '';
-        const playerCell = $el.find('[class*="player"]').first();
-        const player = playerCell.text().trim() || cells[4] || '';
+        const player =
+          $el.find('[class*="player"]').first().text().trim() || cells[4] || '';
         const playerNumber =
           $el.find('[class*="number"], [class*="jersey"]').first().text().trim() || '';
-
         const actionText =
           $el.find('[class*="action"], [class*="desc"]').first().text().trim() ||
-          cells[5] ||
-          cells[4] ||
-          '';
+          cells[5] || cells[4] || '';
 
         let eventType = 'event';
         const rowClass = ($el.attr('class') ?? '').toLowerCase();
@@ -475,44 +525,27 @@ export async function getPlayByPlay(competitionId, matchId) {
           rowClass.includes('freethrow') ||
           rowClass.includes('free-throw') ||
           /free.?throw/i.test(actionText)
-        )
-          eventType = 'freethrow';
-        else if (rowClass.includes('rebound') || /rebound/i.test(actionText))
-          eventType = 'rebound';
-        else if (rowClass.includes('turnover') || /turnover/i.test(actionText))
-          eventType = 'turnover';
+        ) eventType = 'freethrow';
+        else if (rowClass.includes('rebound') || /rebound/i.test(actionText)) eventType = 'rebound';
+        else if (rowClass.includes('turnover') || /turnover/i.test(actionText)) eventType = 'turnover';
         else if (rowClass.includes('foul') || /foul/i.test(actionText)) eventType = 'foul';
         else if (rowClass.includes('assist') || /assist/i.test(actionText)) eventType = 'assist';
         else if (rowClass.includes('block') || /block/i.test(actionText)) eventType = 'block';
         else if (rowClass.includes('steal') || /steal/i.test(actionText)) eventType = 'steal';
-        else if (rowClass.includes('sub') || /substitution/i.test(actionText))
-          eventType = 'substitution';
+        else if (rowClass.includes('sub') || /substitution/i.test(actionText)) eventType = 'substitution';
         else if (/quarter|period|start|end/i.test(actionText)) eventType = 'period_marker';
 
         const isScoringEvent =
           isScoringType(eventType) && /made|scored/i.test(actionText);
-
         const teamSide = resolveSide(teamName, homeTeamName, awayTeamName);
 
         const safeP = (period || 'P').replace(/\s+/g, '');
         const safeClock = (clock || '00:00').replace(/\s+/g, '');
-        const eventId = `${matchId}_${safeP}_${safeClock}_${eventType}_${score}`.replace(
-          /\s/g,
-          '',
-        );
+        const eventId = `${matchId}_${safeP}_${safeClock}_${eventType}_${score}`.replace(/\s/g, '');
 
         events.push({
-          eventId,
-          period,
-          clock,
-          score,
-          teamSide,
-          teamName,
-          player,
-          playerNumber,
-          actionText,
-          eventType,
-          isScoringEvent,
+          eventId, period, clock, score, teamSide, teamName,
+          player, playerNumber, actionText, eventType, isScoringEvent,
         });
       } catch (err) {
         console.error('[getPlayByPlay] row parse error:', err.message ?? err);
