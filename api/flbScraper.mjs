@@ -49,7 +49,7 @@ function normalizeStatus(raw) {
     s.includes('ot') ||
     s.includes('halftime') ||
     s.includes('half time') ||
-    /^\d+:\d+$/.test(s)          // clock like "08:43"
+    /^\d+:\d+$/.test(s)
   ) {
     return 'live';
   }
@@ -62,6 +62,18 @@ function extractId(href, segment) {
   if (!href) return null;
   const re = new RegExp(`/${segment}/(\\d+)`);
   const m = href.match(re);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Extract a matchId from a row element id attribute.
+ * Handles patterns like: "extfix_2763946", "match_2763946", "2763946"
+ * @param {string|undefined} rowId
+ * @returns {number|null}
+ */
+function matchIdFromRowId(rowId) {
+  if (!rowId) return null;
+  const m = rowId.match(/(\d{5,})/); // match IDs are typically 7+ digits
   return m ? Number(m[1]) : null;
 }
 
@@ -78,121 +90,162 @@ export async function getSchedule(competitionId) {
   const url = gsUrl(`/competition/${competitionId}/schedule`);
   const $ = await fetchCheerio(url);
 
+  // ── Debug diagnostics ──────────────────────────────────────────────────
+  console.log(`[FLB] Schedule URL: ${url}`);
+  console.log(`[FLB] .match-wrap count: ${$('.match-wrap').length}`);
+  console.log(`[FLB] body text length: ${$('body').text().length}`);
+  // ──────────────────────────────────────────────────────────────────────
+
   const games = [];
 
-  // Each game row is typically a <tr> or a <div> depending on the season.
-  // Genius Sports uses a table-based layout; rows contain team names, score, date, venue.
-  $('table.schedule tbody tr, .match-row, [class*="game-row"], [class*="schedule-row"]').each(
-    (_i, el) => {
-      try {
-        const $el = $(el);
-        const text = $el.text().trim();
-        if (!text) return;
+  // PRIMARY: FLB uses <div class="match-wrap" id="extfix_MATCHID">
+  // FALLBACK: generic table/div layouts used by other Genius Sports competitions
+  const ROW_SELECTOR =
+    '.match-wrap, #schedule .match-wrap, table.schedule tbody tr, .match-row, [class*="game-row"], [class*="schedule-row"]';
 
-        // Match link — contains match id
-        const matchLink =
-          $el.find('a[href*="/match/"]').first().attr('href') ||
-          $el.find('a[href*="matchId="]').first().attr('href') ||
-          '';
-        const matchId =
-          extractId(matchLink, 'match') ||
-          (() => {
-            const m = matchLink.match(/matchId=(\d+)/);
-            return m ? Number(m[1]) : null;
-          })();
-        if (!matchId) return; // skip non-game rows (headers etc.)
+  $(ROW_SELECTOR).each((_i, el) => {
+    try {
+      const $el = $(el);
+      const text = $el.text().trim();
+      if (!text) return;
 
-        // Status
-        const rawStatus =
-          $el.find('[class*="status"], .game-status, .match-status').first().text().trim() || '';
-        const status = normalizeStatus(rawStatus);
-        const isLive = status === 'live';
+      // ── matchId ────────────────────────────────────────────────────────
+      // 1. Try anchor href inside the row: /match/2763946/
+      const matchLink =
+        $el.find('a[href*="/match/"]').first().attr('href') ||
+        $el.find('a[href*="matchId="]').first().attr('href') ||
+        '';
+      let matchId = extractId(matchLink, 'match');
 
-        // Date / time
-        const dateTimeText =
-          $el
-            .find('[class*="date"], [class*="time"], .match-date, .game-date')
-            .first()
-            .text()
-            .trim() || $el.find('td').eq(0).text().trim();
-
-        // Venue
-        const venue =
-          $el.find('[class*="venue"], [class*="arena"], .venue').first().text().trim() || '';
-
-        // Venue id from link
-        const venueLink = $el.find('a[href*="/venue/"]').first().attr('href') || '';
-        const venueId = extractId(venueLink, 'venue');
-
-        // Teams
-        const teamLinks = $el.find('a[href*="/team/"]');
-        const homeLink = teamLinks.eq(0).attr('href') || '';
-        const awayLink = teamLinks.eq(1).attr('href') || '';
-
-        const homeId = extractId(homeLink, 'team');
-        const awayId = extractId(awayLink, 'team');
-        const homeName =
-          $el.find('[class*="home"] [class*="name"], .home-team .team-name').first().text().trim() ||
-          teamLinks.eq(0).text().trim();
-        const awayName =
-          $el
-            .find('[class*="away"] [class*="name"], .away-team .team-name')
-            .first()
-            .text()
-            .trim() || teamLinks.eq(1).text().trim();
-
-        // Logo urls
-        const homeLogoImg =
-          $el.find('[class*="home"] img, .home-team img').first().attr('src') || '';
-        const awayLogoImg =
-          $el.find('[class*="away"] img, .away-team img').first().attr('src') || '';
-        const toAbsImg = (src) =>
-          src ? (src.startsWith('http') ? src : `${BASE}${src}`) : null;
-
-        // Derived URLs
-        const summaryUrl = `${BASE}/?p=9&WHurl=${encodeURIComponent(
-          `/competition/${competitionId}/match/${matchId}/summary`,
-        )}`;
-        const boxScoreUrl = `${BASE}/?p=9&WHurl=${encodeURIComponent(
-          `/competition/${competitionId}/match/${matchId}/boxscore`,
-        )}`;
-        const playByPlayUrl = `${BASE}/?p=9&WHurl=${encodeURIComponent(
-          `/competition/${competitionId}/match/${matchId}/playbyplay`,
-        )}`;
-        const shotChartUrl = `${BASE}/?p=9&WHurl=${encodeURIComponent(
-          `/competition/${competitionId}/match/${matchId}/shotchart`,
-        )}`;
-
-        games.push({
-          competitionId: Number(competitionId),
-          matchId,
-          status,
-          rawStatus,
-          isLive,
-          dateTimeText,
-          venue,
-          venueId,
-          homeTeam: {
-            id: homeId,
-            name: homeName,
-            logoUrl: toAbsImg(homeLogoImg),
-          },
-          awayTeam: {
-            id: awayId,
-            name: awayName,
-            logoUrl: toAbsImg(awayLogoImg),
-          },
-          summaryUrl,
-          boxScoreUrl,
-          playByPlayUrl,
-          shotChartUrl,
-        });
-      } catch (err) {
-        console.error('[getSchedule] row parse error:', err.message ?? err);
+      // 2. Try matchId= query param in the href
+      if (!matchId && matchLink) {
+        const m = matchLink.match(/matchId=(\d+)/);
+        if (m) matchId = Number(m[1]);
       }
-    },
-  );
 
+      // 3. Fallback: extract from the row element's id attribute
+      //    e.g. id="extfix_2763946"
+      if (!matchId) {
+        matchId = matchIdFromRowId($el.attr('id') ?? '');
+      }
+
+      if (!matchId) return; // skip non-game rows (headers, separators, etc.)
+
+      // ── Status ─────────────────────────────────────────────────────────
+      const rawStatus =
+        $el
+          .find(
+            '[class*="status"], .game-status, .match-status, .status-label, .match-state',
+          )
+          .first()
+          .text()
+          .trim() || '';
+      const status = normalizeStatus(rawStatus);
+      const isLive = status === 'live';
+
+      // ── Date / time ────────────────────────────────────────────────────
+      const dateTimeText =
+        $el
+          .find(
+            '[class*="date"], [class*="time"], .match-date, .game-date, .match-time, .kickoff',
+          )
+          .first()
+          .text()
+          .trim() ||
+        $el.find('td').eq(0).text().trim() ||
+        '';
+
+      // ── Venue ──────────────────────────────────────────────────────────
+      const venue =
+        $el
+          .find('[class*="venue"], [class*="arena"], .venue, .location')
+          .first()
+          .text()
+          .trim() || '';
+
+      const venueLink = $el.find('a[href*="/venue/"]').first().attr('href') || '';
+      const venueId = extractId(venueLink, 'venue');
+
+      // ── Teams ──────────────────────────────────────────────────────────
+      const teamLinks = $el.find('a[href*="/team/"]');
+      const homeLink = teamLinks.eq(0).attr('href') || '';
+      const awayLink = teamLinks.eq(1).attr('href') || '';
+
+      const homeId = extractId(homeLink, 'team');
+      const awayId = extractId(awayLink, 'team');
+
+      // FLB-specific name selectors first, then generic fallbacks
+      const homeName =
+        $el.find('.home-team .teamnames').first().text().trim() ||
+        $el.find('.home-team .team-name').first().text().trim() ||
+        $el.find('.home-team a').first().text().trim() ||
+        $el.find('[class*="home"] [class*="name"]').first().text().trim() ||
+        teamLinks.eq(0).text().trim();
+
+      const awayName =
+        $el.find('.away-team .teamnames').first().text().trim() ||
+        $el.find('.away-team .team-name').first().text().trim() ||
+        $el.find('.away-team a').first().text().trim() ||
+        $el.find('[class*="away"] [class*="name"]').first().text().trim() ||
+        teamLinks.eq(1).text().trim();
+
+      // ── Logos ──────────────────────────────────────────────────────────
+      const toAbsImg = (src) =>
+        src ? (src.startsWith('http') ? src : `${BASE}${src}`) : null;
+
+      const homeLogoImg =
+        $el.find('.home-team img').first().attr('src') ||
+        $el.find('[class*="home"] img').first().attr('src') ||
+        '';
+      const awayLogoImg =
+        $el.find('.away-team img').first().attr('src') ||
+        $el.find('[class*="away"] img').first().attr('src') ||
+        '';
+
+      // ── Derived page URLs ──────────────────────────────────────────────
+      const summaryUrl = `${BASE}/?p=9&WHurl=${encodeURIComponent(
+        `/competition/${competitionId}/match/${matchId}/summary`,
+      )}`;
+      const boxScoreUrl = `${BASE}/?p=9&WHurl=${encodeURIComponent(
+        `/competition/${competitionId}/match/${matchId}/boxscore`,
+      )}`;
+      const playByPlayUrl = `${BASE}/?p=9&WHurl=${encodeURIComponent(
+        `/competition/${competitionId}/match/${matchId}/playbyplay`,
+      )}`;
+      const shotChartUrl = `${BASE}/?p=9&WHurl=${encodeURIComponent(
+        `/competition/${competitionId}/match/${matchId}/shotchart`,
+      )}`;
+
+      games.push({
+        competitionId: Number(competitionId),
+        matchId,
+        status,
+        rawStatus,
+        isLive,
+        dateTimeText,
+        venue,
+        venueId,
+        homeTeam: {
+          id: homeId,
+          name: homeName,
+          logoUrl: toAbsImg(homeLogoImg),
+        },
+        awayTeam: {
+          id: awayId,
+          name: awayName,
+          logoUrl: toAbsImg(awayLogoImg),
+        },
+        summaryUrl,
+        boxScoreUrl,
+        playByPlayUrl,
+        shotChartUrl,
+      });
+    } catch (err) {
+      console.error('[getSchedule] row parse error:', err.message ?? err);
+    }
+  });
+
+  console.log(`[FLB] Parsed ${games.length} games for competition ${competitionId}`);
   return games;
 }
 
@@ -243,14 +296,13 @@ function parseBoxscoreHeader($, competitionId, matchId) {
 
 /**
  * Parse a single team's boxscore table.
- * @param {CheerioAPI} $ cheerio root
- * @param {Element} tableEl
+ * @param {import('cheerio').CheerioAPI} $ cheerio root
+ * @param {import('cheerio').Element} tableEl
  * @param {'home'|'away'} side
  */
 function parseTeamTable($, tableEl, side) {
   const $table = $(tableEl);
 
-  // Determine column headers
   const headers = [];
   $table.find('thead tr th, thead tr td').each((_i, th) => {
     headers.push($(th).text().trim());
@@ -261,7 +313,6 @@ function parseTeamTable($, tableEl, side) {
   let teamId = null;
   let teamName = '';
 
-  // Try to find the team id from a link above the table or within
   const teamLink =
     $table.closest('[class*="team-section"]').find('a[href*="/team/"]').first().attr('href') ||
     $table.prev().find('a[href*="/team/"]').first().attr('href') || '';
@@ -283,7 +334,6 @@ function parseTeamTable($, tableEl, side) {
 
     if (cells.length === 0) return;
 
-    // Detect totals row (first cell says "Total" or "TOTALS")
     if (/^totals?$/i.test(cells[0]) || /^totals?$/i.test(cells[1] ?? '')) {
       headers.forEach((h, idx) => {
         if (h && cells[idx] !== undefined) totalsRow[h] = cells[idx];
@@ -291,12 +341,10 @@ function parseTeamTable($, tableEl, side) {
       return;
     }
 
-    // Player row: first cell is jersey number, second is name
     const playerNumber = cells[0] ?? '';
     const playerName = cells[1] ?? '';
     if (!playerName) return;
 
-    // Player id from link
     const playerLink =
       $(row).find('a[href*="/player/"]').first().attr('href') || '';
     const playerId = extractId(playerLink, 'player');
@@ -326,7 +374,6 @@ export async function getBoxscore(competitionId, matchId) {
   const header = parseBoxscoreHeader($, competitionId, matchId);
 
   const teams = [];
-  // Genius Sports boxscore: two adjacent tables or sections (home + away)
   const tables = $('table.boxscore, table[class*="stats"], table').toArray();
 
   if (tables.length >= 2) {
@@ -335,7 +382,6 @@ export async function getBoxscore(competitionId, matchId) {
   } else if (tables.length === 1) {
     teams.push(parseTeamTable($, tables[0], 'home'));
   } else {
-    // Fallback: look for section-based layout
     $('[class*="home-stats"], [class*="team-stats"]:first-of-type').each((_i, el) => {
       const innerTable = $(el).find('table').first();
       if (innerTable.length) teams.push(parseTeamTable($, innerTable, 'home'));
@@ -353,10 +399,7 @@ export async function getBoxscore(competitionId, matchId) {
 // 3. getPlayByPlay
 // ─────────────────────────────────────────────
 
-/**
- * Derive which side an event belongs to based on team name comparison.
- */
-function resolveSide(teamName, homeTeamName , awayTeamName) {
+function resolveSide(teamName, homeTeamName, awayTeamName) {
   if (!teamName) return null;
   const t = teamName.trim().toLowerCase();
   if (homeTeamName && t === homeTeamName.trim().toLowerCase()) return 'home';
@@ -364,7 +407,6 @@ function resolveSide(teamName, homeTeamName , awayTeamName) {
   return null;
 }
 
-/** Detect whether an event type is a scoring action. */
 function isScoringType(eventType) {
   const t = (eventType ?? '').toLowerCase();
   return (
@@ -391,7 +433,6 @@ export async function getPlayByPlay(competitionId, matchId) {
 
   const events = [];
 
-  // Events are typically in a table or list of divs
   $('table.pbp tbody tr, [class*="play-row"], [class*="event-row"], [class*="pbp-row"]').each(
     (_i, el) => {
       try {
@@ -402,8 +443,6 @@ export async function getPlayByPlay(competitionId, matchId) {
         const cells = [];
         $el.find('td').each((_j, td) => cells.push($(td).text().trim()));
 
-        // Typical columns: Period | Clock | Score | Team | Player | Action
-        // Column positions vary; we read them positionally and by class
         const period =
           $el.find('[class*="period"], [class*="quarter"]').first().text().trim() ||
           cells[0] ||
@@ -428,7 +467,6 @@ export async function getPlayByPlay(competitionId, matchId) {
           cells[4] ||
           '';
 
-        // Try to get event type from class or text pattern
         let eventType = 'event';
         const rowClass = ($el.attr('class') ?? '').toLowerCase();
         if (rowClass.includes('2pt') || /\b2pt\b/i.test(actionText)) eventType = '2pt';
@@ -439,13 +477,16 @@ export async function getPlayByPlay(competitionId, matchId) {
           /free.?throw/i.test(actionText)
         )
           eventType = 'freethrow';
-        else if (rowClass.includes('rebound') || /rebound/i.test(actionText)) eventType = 'rebound';
-        else if (rowClass.includes('turnover') || /turnover/i.test(actionText)) eventType = 'turnover';
+        else if (rowClass.includes('rebound') || /rebound/i.test(actionText))
+          eventType = 'rebound';
+        else if (rowClass.includes('turnover') || /turnover/i.test(actionText))
+          eventType = 'turnover';
         else if (rowClass.includes('foul') || /foul/i.test(actionText)) eventType = 'foul';
         else if (rowClass.includes('assist') || /assist/i.test(actionText)) eventType = 'assist';
         else if (rowClass.includes('block') || /block/i.test(actionText)) eventType = 'block';
         else if (rowClass.includes('steal') || /steal/i.test(actionText)) eventType = 'steal';
-        else if (rowClass.includes('sub') || /substitution/i.test(actionText)) eventType = 'substitution';
+        else if (rowClass.includes('sub') || /substitution/i.test(actionText))
+          eventType = 'substitution';
         else if (/quarter|period|start|end/i.test(actionText)) eventType = 'period_marker';
 
         const isScoringEvent =
@@ -453,9 +494,8 @@ export async function getPlayByPlay(competitionId, matchId) {
 
         const teamSide = resolveSide(teamName, homeTeamName, awayTeamName);
 
-        // Compose a deterministic event id
         const safeP = (period || 'P').replace(/\s+/g, '');
-        const safeClock = (clock || '00:00').replace(/\s+/g, '').replace(/:/g, ':');
+        const safeClock = (clock || '00:00').replace(/\s+/g, '');
         const eventId = `${matchId}_${safeP}_${safeClock}_${eventType}_${score}`.replace(
           /\s/g,
           '',
