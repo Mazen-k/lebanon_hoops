@@ -1,10 +1,93 @@
-import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import 'ticket_selection_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+  final PageController _newsController = PageController();
+  int _currentNewsIndex = 0;
+  Timer? _newsTimer;
+  final Set<int> _reminderIndices = {};
+  AnimationController? _pulseController;
+
+  final List<Map<String, dynamic>> _liveGamesData = [
+    {
+      'isLive': true,
+      'status': '4TH QUARTER - 2:14',
+      'team1Code': 'SAG',
+      'team2Code': 'RIY',
+      'score1': '88',
+      'score2': '82',
+      'team1Img': 'https://lh3.googleusercontent.com/aida-public/AB6AXuBeZhnyferj-0miau0a5BOEYCYhBmM9gCvWP3yHRNpv4Si_AcCoU0lwRW7hLmOevY0Eh_o5C2SjXiuZvB-mthKA1pjq9xWSFS7cc-Qk7IRAVpNjhnm8PG6w7_3tNwh-Sl5nKXeT6JZdltRtBsTJdE833AYv6oHj0RJhhPUYrEiv4cSC8cDKGT9t-2suTaGZPXApcZGC_rmuEmMD48AsRckdOW45rdhqvUzdyGx8EwRW4Xg3vUUy8JbsAzpgZRhSectMoKG739zI0JXd',
+      'team2Img': 'https://lh3.googleusercontent.com/aida-public/AB6AXuDUecrR3vIHtF6cEprw8zD9yiavYsEputoDcXvW3aymeq9zxNr7N0gT0JNnvYlTq1w8kL6dO0-TzUcscfOF7sXBqdH2uahMaTqx84a5W9wWDePp05ovXdizqswItr1LO4fnIzU92PTvfl1RZA3Rz9bfWDtVHnG0bepiIscjUd3ccJ9Gvs4iNDt8b4tZ8ZyHPMrUNS4hcKA_88kMNPJFI7HZt3FiEjpITO3u3jPfaBjtgJmf24irUBo2Uwu_vtZAPX0v39Ea3AY9c47u',
+    },
+    {
+      'isLive': false,
+      'status': 'HALF TIME',
+      'badgeText': 'LBL CUP',
+      'team1Code': 'BEI',
+      'team2Code': 'ANT',
+      'score1': '45',
+      'score2': '41',
+      'team1Img': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCERcE_itviUqsRb4ZzCp7yfhuHNph9wsobGv6kVpsuTtUd8qvqgDt7ee0bVFYpPTIF1KTSC3l0r0_bmMo-TbnQZjfsDjHDo1SvjHmwfxZGfkPqe_vzpfe9Go3xoOrbw_vRLsU5aINidXAWHGxnOYn2B4wTrJO0qe0qX_Op9RAyg56oNfYWPypXOp0TKVFSZbS4sFFJmtOpxJWY0Cds1ZGdi8Vq-PU1xuXM5oMZ6yQh5s2S02bsVs9uOMaoEiGGx-blUeVpOkk1QxdK',
+      'team2Img': 'https://lh3.googleusercontent.com/aida-public/AB6AXuBlopqXV-bzBWo8tkLEFGT2CZdR__srY_xmWXCunT3IVHmXrNeeGF66Ghre_S4hAdoKumBCvt089Vt3ZpUKmRqGV_7YwONWaNevJ3dFOX_q7w68D9zLyRVM3kneOmRbWV4K7MVqMFKCkPOrQp5MukJgPZVmYF1JNpLDw67VgQRe13qUy_uKjHwbyClZ2BNiTq76HxqQXjEMeAFtHQ7MnYe7bomTVAq2s2gCmV7Wkl1H6dczKDPKvaOnyRLlg1MhbDVBZPGKQZBUTG7P',
+    },
+  ];
+
+  final List<Map<String, String>> _breakingNews = [
+    {
+      'title': 'WAEL ARAKJI LEADS RIYADI TO THRILLING OVERTIME VICTORY',
+      'subtitle': 'The Lebanese point guard dropped 34 points in a historic performance at the Saeb Salam Arena tonight.',
+      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
+      'tag': 'BREAKING NEWS',
+    },
+    {
+      'title': 'SAGESSE SECURES CRITICAL WIN OVER ANTUNIEH',
+      'subtitle': 'The green team dominates the paint to stay top of the standings after a fierce battle at the Ghazir stadium.',
+      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
+      'tag': 'GAME REPORT',
+    },
+    {
+      'title': 'LBL CUP FINAL TICKETS NOW ON SALE',
+      'subtitle': 'Don\'t miss out on the biggest game of the season. Grab your tickets now for the showdown at Nouhad Nawfal Arena.',
+      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
+      'tag': 'TICKETS',
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _startNewsTimer();
+  }
+
+  void _startNewsTimer() {
+    _newsTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_newsController.hasClients) {
+        int nextIndex = (_currentNewsIndex + 1) % _breakingNews.length;
+        _newsController.animateToPage(
+          nextIndex,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.fastOutSlowIn,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pulseController?.dispose();
+    _newsTimer?.cancel();
+    _newsController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +156,66 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildLiveGamesSection(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    
+    if (_liveGamesData.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withAlpha(13)),
+          ),
+          child: Column(
+            children: [
+              Icon(Icons.sports_basketball_outlined, size: 48, color: colorScheme.secondary.withAlpha(100)),
+              const SizedBox(height: 16),
+              Text(
+                'NO LIVE GAMES RIGHT NOW',
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: colorScheme.onSurface,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Stay tuned for upcoming LBL action or re-watch previous highlights.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 24),
+              OutlinedButton(
+                onPressed: () {},
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: colorScheme.primary),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: Text(
+                  'VIEW RECENT RESULTS',
+                  style: TextStyle(
+                    fontFamily: 'Lexend',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -87,15 +230,37 @@ class HomeScreen extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary,
-                    shape: BoxShape.circle,
+                if (_pulseController != null)
+                  ScaleTransition(
+                    scale: Tween(begin: 0.85, end: 1.15).animate(
+                      CurvedAnimation(parent: _pulseController!, curve: Curves.easeInOut),
+                    ),
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: colorScheme.primary.withAlpha(150),
+                            blurRadius: 4,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 8),
                 Text(
                   'LIVE',
                   style: TextStyle(
@@ -112,35 +277,28 @@ class HomeScreen extends StatelessWidget {
         const SizedBox(height: 16),
         SizedBox(
           height: 156,
-          child: ListView(
+          child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            children: [
-              _buildLiveGameCard(
-                context: context,
-                isLive: true,
-                status: '4TH QUARTER - 2:14',
-                team1Code: 'SAG',
-                team2Code: 'RIY',
-                score1: '88',
-                score2: '82',
-                team1Img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBeZhnyferj-0miau0a5BOEYCYhBmM9gCvWP3yHRNpv4Si_AcCoU0lwRW7hLmOevY0Eh_o5C2SjXiuZvB-mthKA1pjq9xWSFS7cc-Qk7IRAVpNjhnm8PG6w7_3tNwh-Sl5nKXeT6JZdltRtBsTJdE833AYv6oHj0RJhhPUYrEiv4cSC8cDKGT9t-2suTaGZPXApcZGC_rmuEmMD48AsRckdOW45rdhqvUzdyGx8EwRW4Xg3vUUy8JbsAzpgZRhSectMoKG739zI0JXd',
-                team2Img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDUecrR3vIHtF6cEprw8zD9yiavYsEputoDcXvW3aymeq9zxNr7N0gT0JNnvYlTq1w8kL6dO0-TzUcscfOF7sXBqdH2uahMaTqx84a5W9wWDePp05ovXdizqswItr1LO4fnIzU92PTvfl1RZA3Rz9bfWDtVHnG0bepiIscjUd3ccJ9Gvs4iNDt8b4tZ8ZyHPMrUNS4hcKA_88kMNPJFI7HZt3FiEjpITO3u3jPfaBjtgJmf24irUBo2Uwu_vtZAPX0v39Ea3AY9c47u',
-              ),
-              const SizedBox(width: 16),
-              _buildLiveGameCard(
-                context: context,
-                isLive: false,
-                status: 'HALF TIME',
-                badgeText: 'LBL CUP',
-                team1Code: 'BEI',
-                team2Code: 'ANT',
-                score1: '45',
-                score2: '41',
-                team1Img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCERcE_itviUqsRb4ZzCp7yfhuHNph9wsobGv6kVpsuTtUd8qvqgDt7ee0bVFYpPTIF1KTSC3l0r0_bmMo-TbnQZjfsDjHDo1SvjHmwfxZGfkPqe_vzpfe9Go3xoOrbw_vRLsU5aINidXAWHGxnOYn2B4wTrJO0qe0qX_Op9RAyg56oNfYWPypXOp0TKVFSZbS4sFFJmtOpxJWY0Cds1ZGdi8Vq-PU1xuXM5oMZ6yQh5s2S02bsVs9uOMaoEiGGx-blUeVpOkk1QxdK',
-                team2Img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBlopqXV-bzBWo8tkLEFGT2CZdR__srY_xmWXCunT3IVHmXrNeeGF66Ghre_S4hAdoKumBCvt089Vt3ZpUKmRqGV_7YwONWaNevJ3dFOX_q7w68D9zLyRVM3kneOmRbWV4K7MVqMFKCkPOrQp5MukJgPZVmYF1JNpLDw67VgQRe13qUy_uKjHwbyClZ2BNiTq76HxqQXjEMeAFtHQ7MnYe7bomTVAq2s2gCmV7Wkl1H6dczKDPKvaOnyRLlg1MhbDVBZPGKQZBUTG7P',
-              ),
-            ],
+            itemCount: _liveGamesData.length,
+            itemBuilder: (context, index) {
+              final game = _liveGamesData[index];
+              return Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: _buildLiveGameCard(
+                  context: context,
+                  isLive: game['isLive'],
+                  status: game['status'],
+                  badgeText: game['badgeText'],
+                  team1Code: game['team1Code'],
+                  team2Code: game['team2Code'],
+                  score1: game['score1'],
+                  score2: game['score2'],
+                  team1Img: game['team1Img'],
+                  team2Img: game['team2Img'],
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -165,99 +323,111 @@ class HomeScreen extends StatelessWidget {
     final statusColor = colorScheme.onSurface.withAlpha(179);
     final vsColor = colorScheme.primary;
 
-    return Container(
-      width: 280,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withAlpha(13)), // border-white/5
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                status.toUpperCase(),
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                  color: statusColor,
-                ),
-              ),
-              if (isLive)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'Live',
-                    style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
-                )
-              else if (badgeText != null)
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Entering Live Game Center for $team1Code vs $team2Code...'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: colorScheme.primary,
+          ),
+        );
+      },
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withAlpha(13)), // border-white/5
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 Text(
-                  badgeText.toUpperCase(),
+                  status.toUpperCase(),
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: colorScheme.secondary,
+                    letterSpacing: 1.0,
+                    color: statusColor,
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildTeamColumn(context, team1Code, textColor, team1Img),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
+                if (isLive)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'Live',
+                      style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  )
+                else if (badgeText != null)
                   Text(
-                    score1,
+                    badgeText.toUpperCase(),
                     style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      color: textColor,
-                      height: 1.0,
+                      fontFamily: 'Inter',
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.secondary,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Text(
-                    '-',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      color: vsColor,
-                      height: 1.0,
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildTeamColumn(context, team1Code, textColor, team1Img),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      score1,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        color: textColor,
+                        height: 1.0,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    score2,
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      color: textColor,
-                      height: 1.0,
+                    const SizedBox(width: 16),
+                    Text(
+                      '-',
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        color: vsColor,
+                        height: 1.0,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              _buildTeamColumn(context, team2Code, textColor, team2Img),
-            ],
-          ),
-        ],
+                    const SizedBox(width: 16),
+                    Text(
+                      score2,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        color: textColor,
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+                _buildTeamColumn(context, team2Code, textColor, team2Img),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -297,88 +467,119 @@ class HomeScreen extends StatelessWidget {
         width: double.infinity,
         decoration: BoxDecoration(
           color: Colors.black,
-          borderRadius: BorderRadius.circular(24), // rounded-2xl
+          borderRadius: BorderRadius.circular(24),
         ),
         clipBehavior: Clip.hardEdge,
         child: Stack(
           children: [
-            Opacity(
-              opacity: 0.6, // opacity-60
-              child: Image.network(
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-              ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [colorScheme.surface, colorScheme.surface.withAlpha(102), Colors.transparent],
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  stops: const [0.0, 0.4, 1.0],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'BREAKING NEWS',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.0,
+            PageView.builder(
+              controller: _newsController,
+              onPageChanged: (index) {
+                setState(() => _currentNewsIndex = index);
+              },
+              itemCount: _breakingNews.length,
+              itemBuilder: (context, index) {
+                final item = _breakingNews[index];
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Opacity(
+                      opacity: 0.6,
+                      child: Image.network(
+                        item['image']!,
+                        fit: BoxFit.cover,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'WAEL ARAKJI LEADS RIYADI TO THRILLING OVERTIME VICTORY',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 30,
-                      color: colorScheme.onSurface,
-                      fontWeight: FontWeight.w900,
-                      fontStyle: FontStyle.italic,
-                      height: 1.0,
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            colorScheme.surface,
+                            colorScheme.surface.withAlpha(102),
+                            Colors.transparent
+                          ],
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          stops: const [0.0, 0.4, 1.0],
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'The Lebanese point guard dropped 34 points in a historic performance at the Saeb Salam Arena tonight.',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      color: colorScheme.onSurface.withAlpha(204), // text-on-surface/80
-                      height: 1.4,
+                    Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              item['tag']!,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            item['title']!,
+                            style: TextStyle(
+                              fontFamily: 'Lexend',
+                              fontSize: 30,
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w900,
+                              fontStyle: FontStyle.italic,
+                              height: 1.0,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            item['subtitle']!,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              color: colorScheme.onSurface
+                                  .withAlpha(204), // text-on-surface/80
+                              height: 1.4,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 40), // Space for dots
+                        ],
+                      ),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Container(width: 32, height: 4, decoration: BoxDecoration(color: colorScheme.primary, borderRadius: BorderRadius.circular(2))),
-                      const SizedBox(width: 8),
-                      Container(width: 8, height: 4, decoration: BoxDecoration(color: Colors.white.withAlpha(77), borderRadius: BorderRadius.circular(2))),
-                      const SizedBox(width: 8),
-                      Container(width: 8, height: 4, decoration: BoxDecoration(color: Colors.white.withAlpha(77), borderRadius: BorderRadius.circular(2))),
-                    ],
-                  )
-                ],
+                  ],
+                );
+              },
+            ),
+            Positioned(
+              bottom: 32,
+              left: 32,
+              child: Row(
+                children: List.generate(_breakingNews.length, (index) {
+                  final isSelected = _currentNewsIndex == index;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.only(right: 8),
+                    width: isSelected ? 32 : 8,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? colorScheme.primary
+                          : Colors.white.withAlpha(77),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  );
+                }),
               ),
             ),
           ],
@@ -396,7 +597,15 @@ class HomeScreen extends StatelessWidget {
           context,
           'UPCOMING BATTLES',
           trailing: TextButton(
-            onPressed: () {},
+            onPressed: () {
+              // Navigate to Standings/Schedule tab
+              final state = context.findAncestorStateOfType<State>(); 
+              // This is a bit hacky, but let's assume the user wants to see more.
+              // We'll just show a snackbar for now or navigate if we can find the shell state.
+               ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Opening Full Schedule...'), duration: Duration(seconds: 1)),
+              );
+            },
             child: Text(
               'VIEW SCHEDULE',
               style: TextStyle(
@@ -423,6 +632,7 @@ class HomeScreen extends StatelessWidget {
               final isFirst = index == 0;
               return _buildTicketCard(
                 context: context,
+                index: index,
                 date: isFirst ? 'FRIDAY, OCT 27 • 20:30' : 'SATURDAY, OCT 28 • 17:00',
                 venue: isFirst ? 'MANARA ARENA' : 'NOUHAD NAWFAL',
                 team1Code: isFirst ? 'CHA' : 'HOM',
@@ -439,6 +649,7 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildTicketCard({
     required BuildContext context,
+    required int index,
     required String date,
     required String venue,
     required String team1Code,
@@ -447,20 +658,26 @@ class HomeScreen extends StatelessWidget {
     required String team2Img,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isReminded = _reminderIndices.contains(index);
+
     return Container(
       width: 300,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withAlpha(13)),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2), 
+            blurRadius: 10, 
+            offset: const Offset(0, 4)
+          )
         ],
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerLow,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
@@ -469,10 +686,39 @@ class HomeScreen extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  date,
-                  style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant),
+                Expanded(
+                  child: Text(
+                    date,
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant),
+                  ),
                 ),
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      if (isReminded) {
+                        _reminderIndices.remove(index);
+                      } else {
+                        _reminderIndices.add(index);
+                      }
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(isReminded ? 'Reminder removed' : 'Reminder set for this game!'),
+                        duration: const Duration(seconds: 1),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: Icon(
+                    isReminded ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+                    color: isReminded ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                    size: 18,
+                  ),
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
@@ -589,7 +835,13 @@ class HomeScreen extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
               color: colorScheme.surfaceContainer,
-              border: Border.all(color: Colors.white.withAlpha(13)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 32,
+                  offset: const Offset(0, 16),
+                ),
+              ],
             ),
             child: Stack(
               children: [
@@ -716,7 +968,13 @@ class HomeScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withAlpha(13)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

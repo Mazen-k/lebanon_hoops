@@ -4,6 +4,7 @@ import cors from 'cors';
 import express from 'express';
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { startFlbJobs } from './flbSync.mjs';
 
 dotenv.config();
 
@@ -15,6 +16,9 @@ const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
+
+// Start FLB basketball data sync jobs (schedule refresh + live polling)
+startFlbJobs(pool);
 
 async function listTeams(_req, res) {
   try {
@@ -2072,6 +2076,96 @@ app.get('/api/public/playgrounds/:id/availability', getPublicPlaygroundAvailabil
 app.post('/public/reservations', postPublicReservationHandler);
 app.post('/api/public/reservations', postPublicReservationHandler);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FLB Game routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** GET /games  — upcoming + live + recent finals ordered by date */
+async function listGamesHandler(_req, res) {
+  try {
+    const { rows } = await pool.query(`
+      SELECT *
+      FROM games
+      WHERE status IN ('live', 'scheduled', 'final')
+      ORDER BY
+        CASE status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
+        updated_at DESC
+      LIMIT 200
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /games]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/games', listGamesHandler);
+app.get('/api/games', listGamesHandler);
+
+/** GET /games/:matchId — single game row */
+async function getGameHandler(req, res) {
+  const matchId = Number(req.params.matchId);
+  if (Number.isNaN(matchId)) return res.status(400).json({ error: 'matchId must be an integer' });
+  try {
+    const { rows } = await pool.query('SELECT * FROM games WHERE match_id = $1', [matchId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Game not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[GET /games/:matchId]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/games/:matchId', getGameHandler);
+app.get('/api/games/:matchId', getGameHandler);
+
+/** GET /games/:matchId/events — play-by-play timeline, newest first */
+async function getGameEventsHandler(req, res) {
+  const matchId = Number(req.params.matchId);
+  if (Number.isNaN(matchId)) return res.status(400).json({ error: 'matchId must be an integer' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM game_events WHERE match_id = $1 ORDER BY created_at DESC, event_id DESC`,
+      [matchId],
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /games/:matchId/events]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/games/:matchId/events', getGameEventsHandler);
+app.get('/api/games/:matchId/events', getGameEventsHandler);
+
+/** GET /games/:matchId/boxscore — full boxscore payload for stats tab */
+async function getGameBoxscoreHandler(req, res) {
+  const matchId = Number(req.params.matchId);
+  if (Number.isNaN(matchId)) return res.status(400).json({ error: 'matchId must be an integer' });
+  try {
+    const [gameRes, teamsRes, playersRes] = await Promise.all([
+      pool.query('SELECT * FROM games WHERE match_id = $1', [matchId]),
+      pool.query('SELECT * FROM team_boxscores WHERE match_id = $1 ORDER BY side', [matchId]),
+      pool.query(
+        'SELECT * FROM player_boxscores WHERE match_id = $1 ORDER BY side, player_name',
+        [matchId],
+      ),
+    ]);
+    if (gameRes.rows.length === 0) return res.status(404).json({ error: 'Game not found' });
+    res.json({
+      game: gameRes.rows[0],
+      teams: teamsRes.rows,
+      players: playersRes.rows,
+    });
+  } catch (err) {
+    console.error('[GET /games/:matchId/boxscore]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/games/:matchId/boxscore', getGameBoxscoreHandler);
+app.get('/api/games/:matchId/boxscore', getGameBoxscoreHandler);
+
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, '0.0.0.0', () => {
   console.log(`BasketballApp API listening on http://127.0.0.1:${port}`);
@@ -2086,4 +2180,5 @@ app.listen(port, '0.0.0.0', () => {
   console.log('  GET /cards/catalog  PUT/PATCH /wishlist  trade: /trade/rooms …');
   console.log('  GET /public/courts  GET /public/courts/:id/playgrounds  GET /public/playgrounds/:id/availability?date=…');
   console.log('  POST /public/reservations { user_id, availability_id }');
+  console.log('  GET /games  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore');
 });
