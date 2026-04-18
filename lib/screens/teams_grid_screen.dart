@@ -148,12 +148,20 @@ class _TeamCard extends StatelessWidget {
                           offset: Offset(0, 4),
                         )
                       ],
+                      image: team.logoUrl != null && team.logoUrl!.isNotEmpty
+                          ? DecorationImage(
+                              image: NetworkImage(team.logoUrl!),
+                              fit: BoxFit.contain,
+                            )
+                          : null,
                     ),
-                    child: Icon(
-                      Icons.shield,
-                      size: 28,
-                      color: colorScheme.primary.withAlpha(180),
-                    ),
+                    child: team.logoUrl == null || team.logoUrl!.isEmpty
+                        ? Icon(
+                            Icons.shield,
+                            size: 28,
+                            color: colorScheme.primary.withAlpha(180),
+                          )
+                        : null,
                   ),
                 ),
               ),

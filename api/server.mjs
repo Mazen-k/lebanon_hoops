@@ -19,7 +19,7 @@ const pool = new pg.Pool({
 async function listTeams(_req, res) {
   try {
     const { rows } = await pool.query(
-      'SELECT team_id, team_name FROM teams ORDER BY team_name ASC',
+      'SELECT team_id, team_name, team_logos FROM teams ORDER BY team_name ASC',
     );
     res.json(rows);
   } catch (err) {
@@ -40,7 +40,7 @@ async function getTeamDetails(req, res) {
   }
   try {
     const { rows: teamRows } = await pool.query(
-      'SELECT team_id, team_name FROM teams WHERE team_id = $1',
+      'SELECT team_id, team_name, team_logos FROM teams WHERE team_id = $1',
       [teamId]
     );
     if (teamRows.length === 0) {
