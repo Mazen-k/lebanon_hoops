@@ -24,7 +24,7 @@ class Team {
     if (parsedId == null) {
       throw FormatException('Invalid team_id: $id');
     }
-    final logo = json['team_logo_url'] ?? json['teamLogoUrl'] ?? json['logo_url'] ?? json['logoUrl'] ?? json['team_logos'];
+    final logo = json['team_logo_url'] ?? json['teamLogoUrl'] ?? json['logo_url'] ?? json['logoUrl'] ?? json['team_logo'];
     final city = json['city'] ?? json['home_city'] ?? json['homeCity'];
     final about = json['about'] ?? json['description'] ?? json['club_summary'] ?? json['clubSummary'];
     return Team(

@@ -40,7 +40,7 @@ async function getTeamDetails(req, res) {
   }
   try {
     const { rows: teamRows } = await pool.query(
-      'SELECT team_id, team_name, team_logos FROM teams WHERE team_id = $1',
+      'SELECT team_id, team_name, team_logo FROM teams WHERE team_id = $1',
       [teamId]
     );
     if (teamRows.length === 0) {
