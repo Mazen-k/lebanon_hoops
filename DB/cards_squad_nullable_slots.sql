@@ -1,2 +1,2 @@
 -- Deprecated: older API used guard1..center with NULL empties.
--- Current schema uses pg, sg, sf, pf, c with DEFAULT -1. See cards_squad_schema.sql.
+-- Current schema uses "PG", "SG", "PF", "SF", "C" with DEFAULT -1. See cards_squad_schema.sql.
