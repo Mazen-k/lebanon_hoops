@@ -2248,10 +2248,10 @@ async function fetchPlayCardSummariesForSquad(client, cardIds) {
   return m;
 }
 
-/** DB columns `PG`, `SG`, `PF`, `SF`, `C` (quoted in SQL). API slots stay pg/sg/sf/pf/c. Empty slots: DB NULL, JSON card_id -1. */
-const CARDS_SQUAD_SQL_COLS = '"PG", "SG", "PF", "SF", "C"';
+/** DB columns pg, sg, sf, pf, c (lowercase; PostgreSQL folds unquoted identifiers). API slots same keys. Empty: DB NULL, JSON card_id -1. */
+const CARDS_SQUAD_SQL_COLS = 'pg, sg, sf, pf, c';
 
-const SQUAD_SLOT_DB_COL = { pg: 'PG', sg: 'SG', sf: 'SF', pf: 'PF', c: 'C' };
+const SQUAD_SLOT_DB_COL = { pg: 'pg', sg: 'sg', sf: 'sf', pf: 'pf', c: 'c' };
 
 function squadSlotRawFromRow(row, slotKey) {
   const name = SQUAD_SLOT_DB_COL[slotKey];
@@ -2517,10 +2517,10 @@ async function postCardsSquadHandler(req, res) {
     await validateSquadLineupPositions(client, slotPg, slotSg, slotSf, slotPf, slotC);
 
     const { rows: ins } = await client.query(
-      `INSERT INTO cards_squad (user_id, squad_number, squad_name, "PG", "SG", "PF", "SF", "C")
+      `INSERT INTO cards_squad (user_id, squad_number, squad_name, pg, sg, sf, pf, c)
        VALUES ($1::int, $2::int, $3, $4::int, $5::int, $6::int, $7::int, $8::int)
        RETURNING id, user_id, squad_number, squad_name, ${CARDS_SQUAD_SQL_COLS}`,
-      [userId, squadNumber, nm, slotPg, slotSg, slotPf, slotSf, slotC],
+      [userId, squadNumber, nm, slotPg, slotSg, slotSf, slotPf, slotC],
     );
     const row = ins[0];
     await client.query('COMMIT');
@@ -2618,14 +2618,14 @@ async function patchCardsSquadHandler(req, res) {
 
     await client.query(
       `UPDATE cards_squad
-       SET squad_name = $1, "PG" = $2, "SG" = $3, "PF" = $4, "SF" = $5, "C" = $6
+       SET squad_name = $1, pg = $2, sg = $3, sf = $4, pf = $5, c = $6
        WHERE id = $7::int`,
       [
         nextName,
         squadSlotToSqlParam(slotPg),
         squadSlotToSqlParam(slotSg),
-        squadSlotToSqlParam(slotPf),
         squadSlotToSqlParam(slotSf),
+        squadSlotToSqlParam(slotPf),
         squadSlotToSqlParam(slotC),
         row.id,
       ],

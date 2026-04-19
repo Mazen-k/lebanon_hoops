@@ -1,4 +1,4 @@
-/// One slot on a 1v1 squad (API keys `pg`…`c`; DB columns `"PG"`…`"C"`).
+/// One slot on a 1v1 squad (API keys `pg`…`c`; DB columns `pg`…`c`).
 class CardsSquadSlotCard {
   const CardsSquadSlotCard({
     required this.cardId,
