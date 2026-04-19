@@ -2248,18 +2248,19 @@ async function fetchPlayCardSummariesForSquad(client, cardIds) {
   return m;
 }
 
+/** DB columns are pg, sg, sf, pf, c (PostgreSQL lowercases unquoted PG…); -1 = empty slot. */
 function buildCardsSquadPayload(row, summaryMap) {
   const pairs = [
-    ['guard1', 'pg'],
-    ['guard2', 'sg'],
-    ['forward1', 'sf'],
-    ['forward2', 'pf'],
-    ['center', 'c'],
+    ['pg', 'pg'],
+    ['sg', 'sg'],
+    ['sf', 'sf'],
+    ['pf', 'pf'],
+    ['c', 'c'],
   ];
   const slots = {};
   for (const [col, key] of pairs) {
     const rawId = row[col];
-    const id = rawId == null ? -1 : Number(rawId);
+    const id = rawId == null || rawId === -1 ? -1 : Number(rawId); // DB stores -1 for empty
     if (!Number.isFinite(id) || id <= 0) {
       slots[key] = {
         card_id: -1,
@@ -2311,30 +2312,37 @@ function buildCardsSquadPayload(row, summaryMap) {
 
 async function loadOrCreateCardsSquadRow(client, userId, squadNumber) {
   const sel = await client.query(
-    `SELECT id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center
+    `SELECT id, user_id, squad_number, squad_name, pg, sg, sf, pf, c
      FROM cards_squad WHERE user_id = $1::int AND squad_number = $2::int`,
     [userId, squadNumber],
   );
   if (sel.rows.length > 0) return { row: sel.rows[0] };
   const defaultName = `Squad ${squadNumber}`;
   const ins = await client.query(
-    `INSERT INTO cards_squad (user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center)
-     VALUES ($1::int, $2::int, $3, NULL, NULL, NULL, NULL, NULL)
+    `INSERT INTO cards_squad (user_id, squad_number, squad_name)
+     VALUES ($1::int, $2::int, $3)
      ON CONFLICT (user_id, squad_number) DO NOTHING
-     RETURNING id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center`,
+     RETURNING id, user_id, squad_number, squad_name, pg, sg, sf, pf, c`,
     [userId, squadNumber, defaultName],
   );
   if (ins.rows.length > 0) return { row: ins.rows[0] };
   const again = await client.query(
-    `SELECT id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center
+    `SELECT id, user_id, squad_number, squad_name, pg, sg, sf, pf, c
      FROM cards_squad WHERE user_id = $1::int AND squad_number = $2::int`,
     [userId, squadNumber],
   );
   return { row: again.rows[0] };
 }
 
-async function validateUserOwnsSquadMultiset(client, userId, g1, g2, f1, f2, c) {
-  const multiset = [g1, g2, f1, f2, c].filter((id) => id != null && Number.isInteger(id) && id > 0);
+function squadSlotIntFromRow(v) {
+  if (v == null || v === -1) return -1;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return -1;
+  return n;
+}
+
+async function validateUserOwnsSquadMultiset(client, userId, slotPg, slotSg, slotSf, slotPf, slotC) {
+  const multiset = [slotPg, slotSg, slotSf, slotPf, slotC].filter((id) => id != null && Number.isInteger(id) && id > 0);
   if (multiset.length === 0) return;
   const needed = new Map();
   for (const id of multiset) {
@@ -2367,16 +2375,16 @@ async function validateUserOwnsSquadMultiset(client, userId, g1, g2, f1, f2, c) 
   }
 }
 
-async function validateSquadLineupPositions(client, g1, g2, f1, f2, c) {
+async function validateSquadLineupPositions(client, slotPg, slotSg, slotSf, slotPf, slotC) {
   const slots = [
-    ['pg', g1],
-    ['sg', g2],
-    ['sf', f1],
-    ['pf', f2],
-    ['c', c],
+    ['pg', slotPg],
+    ['sg', slotSg],
+    ['sf', slotSf],
+    ['pf', slotPf],
+    ['c', slotC],
   ];
   for (const [slotKey, cardId] of slots) {
-    if (cardId == null || cardId <= 0) continue;
+    if (cardId == null || cardId <= 0 || cardId === -1) continue;
     const expected = slotKeyToPositionCode(slotKey);
     const { rows } = await client.query(
       `SELECT COALESCE(NULLIF(TRIM(p.position), ''), '?') AS position
@@ -2402,7 +2410,7 @@ async function validateSquadLineupPositions(client, g1, g2, f1, f2, c) {
   }
 }
 
-/** GET /cards/squad?squad_number=1..3&user_id=… — creates empty row (all slots NULL) on first open */
+/** GET /cards/squad?squad_number=1..3&user_id=… — creates empty row (pg..c = -1) on first open */
 async function getCardsSquadHandler(req, res) {
   const rawUser = req.query.user_id ?? req.query.userId;
   const rawSq = req.query.squad_number ?? req.query.squadNumber;
@@ -2420,19 +2428,19 @@ async function getCardsSquadHandler(req, res) {
     if (u.length === 0) return res.status(404).json({ error: 'User not found.' });
 
     const sel = await client.query(
-      `SELECT id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center
+      `SELECT id, user_id, squad_number, squad_name, pg, sg, sf, pf, c
        FROM cards_squad WHERE user_id = $1::int AND squad_number = $2::int`,
       [userId, squadNumber],
     );
     if (sel.rows.length > 0) {
       const row = sel.rows[0];
       const sm = await fetchPlayCardSummariesForSquad(client, [
-        row.guard1,
-        row.guard2,
-        row.forward1,
-        row.forward2,
-        row.center,
-      ]);
+        squadSlotIntFromRow(row.pg),
+        squadSlotIntFromRow(row.sg),
+        squadSlotIntFromRow(row.sf),
+        squadSlotIntFromRow(row.pf),
+        squadSlotIntFromRow(row.c),
+      ].filter((id) => id > 0));
       return res.json({ squad: buildCardsSquadPayload(row, sm) });
     }
 
@@ -2441,12 +2449,12 @@ async function getCardsSquadHandler(req, res) {
     await client.query('COMMIT');
     const row = created.row;
     const sm = await fetchPlayCardSummariesForSquad(client, [
-      row.guard1,
-      row.guard2,
-      row.forward1,
-      row.forward2,
-      row.center,
-    ]);
+      squadSlotIntFromRow(row.pg),
+      squadSlotIntFromRow(row.sg),
+      squadSlotIntFromRow(row.sf),
+      squadSlotIntFromRow(row.pf),
+      squadSlotIntFromRow(row.c),
+    ].filter((id) => id > 0));
     res.json({ squad: buildCardsSquadPayload(row, sm) });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -2506,11 +2514,11 @@ async function patchCardsSquadHandler(req, res) {
       nextName = nm;
     }
 
-    let g1 = row.guard1;
-    let g2 = row.guard2;
-    let f1 = row.forward1;
-    let f2 = row.forward2;
-    let c = row.center;
+    let slotPg = squadSlotIntFromRow(row.pg);
+    let slotSg = squadSlotIntFromRow(row.sg);
+    let slotSf = squadSlotIntFromRow(row.sf);
+    let slotPf = squadSlotIntFromRow(row.pf);
+    let slotC = squadSlotIntFromRow(row.c);
 
     if (hasSlots) {
       const pg = parseSlotUpdate(slotsIn.pg ?? slotsIn.guard1);
@@ -2518,24 +2526,24 @@ async function patchCardsSquadHandler(req, res) {
       const sf = parseSlotUpdate(slotsIn.sf ?? slotsIn.forward1);
       const pf = parseSlotUpdate(slotsIn.pf ?? slotsIn.forward2);
       const ce = parseSlotUpdate(slotsIn.c ?? slotsIn.center);
-      if (pg !== undefined) g1 = pg;
-      if (sg !== undefined) g2 = sg;
-      if (sf !== undefined) f1 = sf;
-      if (pf !== undefined) f2 = pf;
-      if (ce !== undefined) c = ce;
-      await validateUserOwnsSquadMultiset(client, userId, g1, g2, f1, f2, c);
-      await validateSquadLineupPositions(client, g1, g2, f1, f2, c);
+      if (pg !== undefined) slotPg = pg === null ? -1 : pg;
+      if (sg !== undefined) slotSg = sg === null ? -1 : sg;
+      if (sf !== undefined) slotSf = sf === null ? -1 : sf;
+      if (pf !== undefined) slotPf = pf === null ? -1 : pf;
+      if (ce !== undefined) slotC = ce === null ? -1 : ce;
+      await validateUserOwnsSquadMultiset(client, userId, slotPg, slotSg, slotSf, slotPf, slotC);
+      await validateSquadLineupPositions(client, slotPg, slotSg, slotSf, slotPf, slotC);
     }
 
     await client.query(
       `UPDATE cards_squad
-       SET squad_name = $1, guard1 = $2, guard2 = $3, forward1 = $4, forward2 = $5, center = $6
+       SET squad_name = $1, pg = $2, sg = $3, sf = $4, pf = $5, c = $6
        WHERE id = $7::int`,
-      [nextName, g1, g2, f1, f2, c, row.id],
+      [nextName, slotPg, slotSg, slotSf, slotPf, slotC, row.id],
     );
 
     const { rows: fresh } = await client.query(
-      `SELECT id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center
+      `SELECT id, user_id, squad_number, squad_name, pg, sg, sf, pf, c
        FROM cards_squad WHERE id = $1::int`,
       [row.id],
     );
@@ -2543,12 +2551,12 @@ async function patchCardsSquadHandler(req, res) {
     await client.query('COMMIT');
 
     const sm = await fetchPlayCardSummariesForSquad(client, [
-      row.guard1,
-      row.guard2,
-      row.forward1,
-      row.forward2,
-      row.center,
-    ]);
+      squadSlotIntFromRow(row.pg),
+      squadSlotIntFromRow(row.sg),
+      squadSlotIntFromRow(row.sf),
+      squadSlotIntFromRow(row.pf),
+      squadSlotIntFromRow(row.c),
+    ].filter((id) => id > 0));
     res.json({ squad: buildCardsSquadPayload(row, sm) });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

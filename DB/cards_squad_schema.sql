@@ -1,5 +1,8 @@
--- 1v1 lineup storage (apply once if missing).
--- Maps UI positions: guard1=PG, guard2=SG, forward1=SF, forward2=PF, center=C.
+-- 1v1 lineup: five slots named PG, SG, SF, PF, C in DDL; PostgreSQL folds unquoted identifiers to lowercase
+-- columns pg, sg, sf, pf, c. Empty slot = -1 (NOT NULL DEFAULT -1).
+--
+-- If you use FOREIGN KEY (pg) REFERENCES play_cards(card_id), PostgreSQL still checks -1 against play_cards.
+-- You need either a sentinel row play_cards.card_id = -1, or drop those FKs and rely on API validation.
 
 CREATE TABLE IF NOT EXISTS cards_squad (
     id SERIAL PRIMARY KEY,
@@ -7,31 +10,30 @@ CREATE TABLE IF NOT EXISTS cards_squad (
     squad_number INT NOT NULL CHECK (squad_number IN (1, 2, 3)),
     squad_name VARCHAR(100) NOT NULL,
 
-    -- NULL = empty slot (API uses card_id -1 for clients). guard1=PG, guard2=SG, forward1=SF, forward2=PF.
-    guard1 INT,
-    guard2 INT,
-    forward1 INT,
-    forward2 INT,
-    center INT,
+    pg INT NOT NULL DEFAULT -1,
+    sg INT NOT NULL DEFAULT -1,
+    sf INT NOT NULL DEFAULT -1,
+    pf INT NOT NULL DEFAULT -1,
+    c INT NOT NULL DEFAULT -1,
 
     CONSTRAINT fk_cards_squad_user
         FOREIGN KEY (user_id) REFERENCES users(user_id)
         ON DELETE CASCADE,
 
-    CONSTRAINT fk_cards_squad_guard1
-        FOREIGN KEY (guard1) REFERENCES play_cards(card_id),
+    CONSTRAINT fk_cards_squad_pg
+        FOREIGN KEY (pg) REFERENCES play_cards(card_id),
 
-    CONSTRAINT fk_cards_squad_guard2
-        FOREIGN KEY (guard2) REFERENCES play_cards(card_id),
+    CONSTRAINT fk_cards_squad_sg
+        FOREIGN KEY (sg) REFERENCES play_cards(card_id),
 
-    CONSTRAINT fk_cards_squad_forward1
-        FOREIGN KEY (forward1) REFERENCES play_cards(card_id),
+    CONSTRAINT fk_cards_squad_sf
+        FOREIGN KEY (sf) REFERENCES play_cards(card_id),
 
-    CONSTRAINT fk_cards_squad_forward2
-        FOREIGN KEY (forward2) REFERENCES play_cards(card_id),
+    CONSTRAINT fk_cards_squad_pf
+        FOREIGN KEY (pf) REFERENCES play_cards(card_id),
 
-    CONSTRAINT fk_cards_squad_center
-        FOREIGN KEY (center) REFERENCES play_cards(card_id),
+    CONSTRAINT fk_cards_squad_c
+        FOREIGN KEY (c) REFERENCES play_cards(card_id),
 
     CONSTRAINT unique_user_squad_number
         UNIQUE (user_id, squad_number)
