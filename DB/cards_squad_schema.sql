@@ -7,11 +7,12 @@ CREATE TABLE IF NOT EXISTS cards_squad (
     squad_number INT NOT NULL CHECK (squad_number IN (1, 2, 3)),
     squad_name VARCHAR(100) NOT NULL,
 
-    guard1 INT NOT NULL,
-    guard2 INT NOT NULL,
-    forward1 INT NOT NULL,
-    forward2 INT NOT NULL,
-    center INT NOT NULL,
+    -- NULL = empty slot (API uses card_id -1 for clients). guard1=PG, guard2=SG, forward1=SF, forward2=PF.
+    guard1 INT,
+    guard2 INT,
+    forward1 INT,
+    forward2 INT,
+    center INT,
 
     CONSTRAINT fk_cards_squad_user
         FOREIGN KEY (user_id) REFERENCES users(user_id)

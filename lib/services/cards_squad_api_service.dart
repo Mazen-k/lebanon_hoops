@@ -87,7 +87,7 @@ class CardsSquadApiService {
       }
       final raw = decoded['squad'];
       if (raw == null) {
-        return const CardsSquadLoadResult.needMoreInstances(have: 0, need: 5);
+        throw CardsSquadApiException('Squad response missing squad data.');
       }
       if (raw is! Map<String, dynamic>) {
         throw CardsSquadApiException('Invalid squad object');

@@ -2180,6 +2180,52 @@ function intOrNull(v) {
   return n;
 }
 
+/** undefined = leave unchanged; null = clear slot; positive int = assign card */
+function parseSlotUpdate(v) {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (v === '') return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return undefined;
+  if (n === -1 || n === 0) return null;
+  if (!Number.isInteger(n) || n < 0) {
+    const err = new Error('Slot value must be a positive card_id, -1 to clear, or null.');
+    err.statusCode = 400;
+    throw err;
+  }
+  return n;
+}
+
+function slotKeyToPositionCode(slotKey) {
+  return { pg: 'PG', sg: 'SG', sf: 'SF', pf: 'PF', c: 'C' }[slotKey] ?? null;
+}
+
+/** Map `players.position` text to PG | SG | SF | PF | C (strict for lineup rules). */
+function normalizeDbBasketballPosition(raw) {
+  const t = String(raw ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\./g, '')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ');
+  if (!t || t === '?') return null;
+  if (['PG', 'SG', 'SF', 'PF', 'C'].includes(t)) return t;
+  const longForm = new Map([
+    ['POINT GUARD', 'PG'],
+    ['SHOOTING GUARD', 'SG'],
+    ['SMALL FORWARD', 'SF'],
+    ['POWER FORWARD', 'PF'],
+    ['CENTER', 'C'],
+    ['CENTRE', 'C'],
+  ]);
+  if (longForm.has(t)) return longForm.get(t);
+  if (t.includes('POINT') && t.includes('GUARD')) return 'PG';
+  if (t.includes('SHOOTING') && t.includes('GUARD')) return 'SG';
+  if (t.includes('SMALL') && t.includes('FORWARD')) return 'SF';
+  if (t.includes('POWER') && t.includes('FORWARD')) return 'PF';
+  return null;
+}
+
 async function fetchPlayCardSummariesForSquad(client, cardIds) {
   const uniq = [...new Set(cardIds.filter((x) => Number.isInteger(x) && x > 0))];
   if (uniq.length === 0) return new Map();
@@ -2212,7 +2258,27 @@ function buildCardsSquadPayload(row, summaryMap) {
   ];
   const slots = {};
   for (const [col, key] of pairs) {
-    const id = row[col];
+    const rawId = row[col];
+    const id = rawId == null ? -1 : Number(rawId);
+    if (!Number.isFinite(id) || id <= 0) {
+      slots[key] = {
+        card_id: -1,
+        cardId: -1,
+        player_id: null,
+        playerId: null,
+        overall: null,
+        position: slotKeyToPositionCode(key),
+        first_name: '',
+        firstName: '',
+        last_name: '',
+        lastName: '',
+        team_name: null,
+        teamName: null,
+        card_type: null,
+        cardType: null,
+      };
+      continue;
+    }
     const s = summaryMap.get(id);
     slots[key] = {
       card_id: id,
@@ -2250,30 +2316,13 @@ async function loadOrCreateCardsSquadRow(client, userId, squadNumber) {
     [userId, squadNumber],
   );
   if (sel.rows.length > 0) return { row: sel.rows[0] };
-  const { rows: cntRows } = await client.query(
-    `SELECT COUNT(*)::int AS c FROM card_instances WHERE user_id = $1::int`,
-    [userId],
-  );
-  const total = cntRows[0]?.c ?? 0;
-  if (total < 5) {
-    return { need_instances: true, have: total, need: 5 };
-  }
-  const { rows: inst5 } = await client.query(
-    `SELECT card_id FROM card_instances WHERE user_id = $1::int ORDER BY card_instance_id ASC LIMIT 5`,
-    [userId],
-  );
-  const g1 = inst5[0].card_id;
-  const g2 = inst5[1].card_id;
-  const f1 = inst5[2].card_id;
-  const f2 = inst5[3].card_id;
-  const c = inst5[4].card_id;
   const defaultName = `Squad ${squadNumber}`;
   const ins = await client.query(
     `INSERT INTO cards_squad (user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center)
-     VALUES ($1::int, $2::int, $3, $4::int, $5::int, $6::int, $7::int, $8::int)
+     VALUES ($1::int, $2::int, $3, NULL, NULL, NULL, NULL, NULL)
      ON CONFLICT (user_id, squad_number) DO NOTHING
      RETURNING id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center`,
-    [userId, squadNumber, defaultName, g1, g2, f1, f2, c],
+    [userId, squadNumber, defaultName],
   );
   if (ins.rows.length > 0) return { row: ins.rows[0] };
   const again = await client.query(
@@ -2285,14 +2334,10 @@ async function loadOrCreateCardsSquadRow(client, userId, squadNumber) {
 }
 
 async function validateUserOwnsSquadMultiset(client, userId, g1, g2, f1, f2, c) {
-  const multiset = [g1, g2, f1, f2, c];
+  const multiset = [g1, g2, f1, f2, c].filter((id) => id != null && Number.isInteger(id) && id > 0);
+  if (multiset.length === 0) return;
   const needed = new Map();
   for (const id of multiset) {
-    if (!Number.isInteger(id) || id <= 0) {
-      const err = new Error('Each lineup slot must be a positive integer card_id.');
-      err.statusCode = 400;
-      throw err;
-    }
     needed.set(id, (needed.get(id) || 0) + 1);
   }
   const ids = [...needed.keys()];
@@ -2322,7 +2367,42 @@ async function validateUserOwnsSquadMultiset(client, userId, g1, g2, f1, f2, c) 
   }
 }
 
-/** GET /cards/squad?squad_number=1..3&user_id=… — creates row when user has ≥5 card_instances */
+async function validateSquadLineupPositions(client, g1, g2, f1, f2, c) {
+  const slots = [
+    ['pg', g1],
+    ['sg', g2],
+    ['sf', f1],
+    ['pf', f2],
+    ['c', c],
+  ];
+  for (const [slotKey, cardId] of slots) {
+    if (cardId == null || cardId <= 0) continue;
+    const expected = slotKeyToPositionCode(slotKey);
+    const { rows } = await client.query(
+      `SELECT COALESCE(NULLIF(TRIM(p.position), ''), '?') AS position
+       FROM play_cards pc
+       LEFT JOIN players p ON p.player_id = pc.player_id
+       WHERE pc.card_id = $1::int
+       LIMIT 1`,
+      [cardId],
+    );
+    if (rows.length === 0) {
+      const err = new Error(`Unknown card_id ${cardId}.`);
+      err.statusCode = 400;
+      throw err;
+    }
+    const dbPos = normalizeDbBasketballPosition(rows[0].position);
+    if (dbPos == null || dbPos !== expected) {
+      const err = new Error(
+        `Card ${cardId} is listed as "${rows[0].position}" — only ${expected} players can fill this slot.`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+}
+
+/** GET /cards/squad?squad_number=1..3&user_id=… — creates empty row (all slots NULL) on first open */
 async function getCardsSquadHandler(req, res) {
   const rawUser = req.query.user_id ?? req.query.userId;
   const rawSq = req.query.squad_number ?? req.query.squadNumber;
@@ -2358,15 +2438,6 @@ async function getCardsSquadHandler(req, res) {
 
     await client.query('BEGIN');
     const created = await loadOrCreateCardsSquadRow(client, userId, squadNumber);
-    if (created.need_instances) {
-      await client.query('ROLLBACK');
-      return res.json({
-        squad: null,
-        need_instances: true,
-        have: created.have,
-        need: created.need,
-      });
-    }
     await client.query('COMMIT');
     const row = created.row;
     const sm = await fetchPlayCardSummariesForSquad(client, [
@@ -2393,7 +2464,7 @@ async function getCardsSquadHandler(req, res) {
   }
 }
 
-/** PATCH /cards/squad — body: { user_id, squad_number, squad_name?, slots?: { pg, sg, sf, pf, c } } (partial slots merge) */
+/** PATCH /cards/squad — body: { user_id, squad_number, squad_name?, slots?: { pg, sg, sf, pf, c } } (use -1 or null to clear) */
 async function patchCardsSquadHandler(req, res) {
   const body = req.body ?? {};
   const rawUser = body.user_id ?? body.userId;
@@ -2422,15 +2493,6 @@ async function patchCardsSquadHandler(req, res) {
 
     await client.query('BEGIN');
     const created = await loadOrCreateCardsSquadRow(client, userId, squadNumber);
-    if (created.need_instances) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: `You need at least ${created.need} cards in your collection to use squads (you have ${created.have}).`,
-        need_instances: true,
-        have: created.have,
-        need: created.need,
-      });
-    }
     let row = created.row;
 
     let nextName = row.squad_name;
@@ -2451,17 +2513,18 @@ async function patchCardsSquadHandler(req, res) {
     let c = row.center;
 
     if (hasSlots) {
-      const pg = intOrNull(slotsIn.pg ?? slotsIn.guard1);
-      const sg = intOrNull(slotsIn.sg ?? slotsIn.guard2);
-      const sf = intOrNull(slotsIn.sf ?? slotsIn.forward1);
-      const pf = intOrNull(slotsIn.pf ?? slotsIn.forward2);
-      const ce = intOrNull(slotsIn.c ?? slotsIn.center);
-      if (pg != null) g1 = pg;
-      if (sg != null) g2 = sg;
-      if (sf != null) f1 = sf;
-      if (pf != null) f2 = pf;
-      if (ce != null) c = ce;
+      const pg = parseSlotUpdate(slotsIn.pg ?? slotsIn.guard1);
+      const sg = parseSlotUpdate(slotsIn.sg ?? slotsIn.guard2);
+      const sf = parseSlotUpdate(slotsIn.sf ?? slotsIn.forward1);
+      const pf = parseSlotUpdate(slotsIn.pf ?? slotsIn.forward2);
+      const ce = parseSlotUpdate(slotsIn.c ?? slotsIn.center);
+      if (pg !== undefined) g1 = pg;
+      if (sg !== undefined) g2 = sg;
+      if (sf !== undefined) f1 = sf;
+      if (pf !== undefined) f2 = pf;
+      if (ce !== undefined) c = ce;
       await validateUserOwnsSquadMultiset(client, userId, g1, g2, f1, f2, c);
+      await validateSquadLineupPositions(client, g1, g2, f1, f2, c);
     }
 
     await client.query(

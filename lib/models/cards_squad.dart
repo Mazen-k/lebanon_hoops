@@ -16,7 +16,10 @@ class CardsSquadSlotCard {
   final int? overall;
   final String? teamName;
 
+  bool get isEmpty => cardId <= 0;
+
   String get playerLabel {
+    if (isEmpty) return '';
     final a = firstName.trim();
     final b = lastName.trim();
     if (a.isEmpty && b.isEmpty) return 'Card #$cardId';
@@ -24,11 +27,13 @@ class CardsSquadSlotCard {
   }
 
   factory CardsSquadSlotCard.fromJson(Map<String, dynamic> json) {
-    int n(String a, [String? b]) {
-      final v = json[a] ?? (b != null ? json[b] : null);
-      if (v is int) return v;
-      if (v == null) throw FormatException('Missing $a');
-      return int.parse(v.toString());
+    int cardIdFromJson() {
+      final raw = json['card_id'] ?? json['cardId'];
+      if (raw == null) return -1;
+      if (raw is int) return raw < 0 ? -1 : raw;
+      final p = int.tryParse(raw.toString());
+      if (p == null || p < 0) return -1;
+      return p;
     }
 
     int? opt(String a, [String? b]) {
@@ -38,9 +43,11 @@ class CardsSquadSlotCard {
       return int.tryParse(v.toString());
     }
 
+    final cid = cardIdFromJson();
+
     return CardsSquadSlotCard(
-      cardId: n('card_id', 'cardId'),
-      position: (json['position'] ?? '?').toString(),
+      cardId: cid,
+      position: (json['position'] ?? (cid <= 0 ? '' : '?')).toString(),
       firstName: (json['first_name'] ?? json['firstName'] ?? '').toString(),
       lastName: (json['last_name'] ?? json['lastName'] ?? '').toString(),
       overall: opt('overall'),
@@ -81,8 +88,8 @@ class CardsSquadPayload {
     final slots = <String, CardsSquadSlotCard>{};
     for (final key in slotOrder) {
       final v = sm[key];
-      if (v is Map<String, dynamic>) {
-        slots[key] = CardsSquadSlotCard.fromJson(v);
+      if (v is Map) {
+        slots[key] = CardsSquadSlotCard.fromJson(Map<String, dynamic>.from(v));
       }
     }
     if (slots.length != 5) {
