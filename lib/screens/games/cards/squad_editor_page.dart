@@ -59,6 +59,8 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
   String? _error;
   CardsSquadPayload? _squad;
   bool _saving = false;
+  bool _persisted = false;
+  bool _dirty = false;
 
   @override
   void initState() {
@@ -88,8 +90,19 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
         });
         return;
       }
+      if (!r.exists) {
+        setState(() {
+          _squad = CardsSquadPayload.draft(widget.squadNumber);
+          _persisted = false;
+          _dirty = false;
+          _loading = false;
+        });
+        return;
+      }
       setState(() {
         _squad = r.squad;
+        _persisted = true;
+        _dirty = false;
         _loading = false;
       });
     } on CardsSquadApiException catch (e) {
@@ -163,7 +176,11 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
     }
     if (newName == null || newName.isEmpty) return;
     if (newName == squad.squadName) return;
-    await _applyPatch(squadName: newName);
+    if (!mounted) return;
+    setState(() {
+      _squad = squad.copyWith(squadName: newName);
+      if (_persisted) _dirty = true;
+    });
   }
 
   Future<void> _pickSlot(String slotKey) async {
@@ -354,29 +371,110 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
     if (!mounted) return;
     if (picked == null) return;
     if (picked == 'clear') {
-      await _applyPatch(slots: {slotKey: -1});
+      if (!mounted) return;
+      setState(() {
+        _squad = squad.copyWith(slots: {...squad.slots, slotKey: _emptySlotCard(slotKey)});
+        if (_persisted) _dirty = true;
+      });
       return;
     }
     if (picked is! int) return;
-    await _applyPatch(slots: {slotKey: picked});
+    final c = eligible.firstWhere((e) => e.cardId == picked);
+    if (!mounted) return;
+    setState(() {
+      _squad = squad.copyWith(slots: {...squad.slots, slotKey: _slotFromCollection(c)});
+      if (_persisted) _dirty = true;
+    });
   }
 
-  Future<void> _applyPatch({String? squadName, Map<String, int>? slots}) async {
-    if (_saving) return;
+  CardsSquadSlotCard _slotFromCollection(CollectionCard c) {
+    return CardsSquadSlotCard(
+      cardId: c.cardId,
+      position: c.position,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      overall: c.overall,
+      teamName: c.teamName,
+    );
+  }
+
+  CardsSquadSlotCard _emptySlotCard(String slotKey) {
+    final role = _squadRoleForSlotKey(slotKey) ?? '?';
+    return CardsSquadSlotCard(cardId: -1, position: role, firstName: '', lastName: '');
+  }
+
+  bool _allSlotsFilled(CardsSquadPayload s) {
+    return CardsSquadPayload.slotOrder.every((k) => !s.slots[k]!.isEmpty);
+  }
+
+  Map<String, int> _slotIntsForApi(CardsSquadPayload s) {
+    return {
+      for (final k in CardsSquadPayload.slotOrder) k: s.slots[k]!.cardId <= 0 ? -1 : s.slots[k]!.cardId,
+    };
+  }
+
+  Future<void> _createSquadInDb() async {
+    final s = _squad;
+    if (s == null || _saving || !_allSlotsFilled(s)) return;
+    setState(() => _saving = true);
+    final userId = await _userId();
+    try {
+      final slots = {for (final k in CardsSquadPayload.slotOrder) k: s.slots[k]!.cardId};
+      final updated = await _squadApi.createSquad(
+        userId: userId,
+        squadNumber: widget.squadNumber,
+        squadName: s.squadName,
+        slots: slots,
+      );
+      if (mounted) {
+        setState(() {
+          _squad = updated;
+          _persisted = true;
+          _dirty = false;
+          _saving = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Squad created.'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    } on CardsSquadApiException catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), behavior: SnackBarBehavior.floating),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveSquadToDb() async {
+    final s = _squad;
+    if (s == null || !_persisted || !_dirty || _saving) return;
     setState(() => _saving = true);
     final userId = await _userId();
     try {
       final updated = await _squadApi.patchSquad(
         userId: userId,
         squadNumber: widget.squadNumber,
-        squadName: squadName,
-        slots: slots,
+        squadName: s.squadName,
+        slots: _slotIntsForApi(s),
       );
       if (mounted) {
         setState(() {
           _squad = updated;
+          _dirty = false;
           _saving = false;
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Squad saved.'), behavior: SnackBarBehavior.floating),
+        );
       }
     } on CardsSquadApiException catch (e) {
       if (mounted) {
@@ -534,6 +632,48 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
               },
             ),
           ),
+          const SizedBox(height: 20),
+          if (!_persisted) ...[
+            FilledButton(
+              onPressed: (_saving || !_allSlotsFilled(squad)) ? null : _createSquadInDb,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                backgroundColor: CardGameUiTheme.gold,
+                foregroundColor: const Color(0xFF1A120C),
+              ),
+              child: Text(_saving ? 'Creating...' : 'Create squad'),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Fill all five positions, then create your squad in the database.',
+              style: TextStyle(
+                color: CardGameUiTheme.onDark.withAlpha(140),
+                fontSize: 12,
+                height: 1.35,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ] else ...[
+            FilledButton(
+              onPressed: (_saving || !_dirty) ? null : _saveSquadToDb,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                backgroundColor: CardGameUiTheme.gold,
+                foregroundColor: const Color(0xFF1A120C),
+              ),
+              child: Text(_saving ? 'Saving...' : 'Save squad'),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Tap Save after you change the lineup or rename the squad.',
+              style: TextStyle(
+                color: CardGameUiTheme.onDark.withAlpha(140),
+                fontSize: 12,
+                height: 1.35,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
       ),
     );

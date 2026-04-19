@@ -1,0 +1,20 @@
+-- Run once if you already have cards_squad with NOT NULL DEFAULT -1 on slot columns.
+-- Clears invalid -1 FK values, then allows NULL for empty slots.
+
+UPDATE cards_squad SET "PG" = NULL WHERE "PG" IS NOT NULL AND "PG" <= 0;
+UPDATE cards_squad SET "SG" = NULL WHERE "SG" IS NOT NULL AND "SG" <= 0;
+UPDATE cards_squad SET "PF" = NULL WHERE "PF" IS NOT NULL AND "PF" <= 0;
+UPDATE cards_squad SET "SF" = NULL WHERE "SF" IS NOT NULL AND "SF" <= 0;
+UPDATE cards_squad SET "C" = NULL WHERE "C" IS NOT NULL AND "C" <= 0;
+
+ALTER TABLE cards_squad ALTER COLUMN "PG" DROP NOT NULL;
+ALTER TABLE cards_squad ALTER COLUMN "SG" DROP NOT NULL;
+ALTER TABLE cards_squad ALTER COLUMN "PF" DROP NOT NULL;
+ALTER TABLE cards_squad ALTER COLUMN "SF" DROP NOT NULL;
+ALTER TABLE cards_squad ALTER COLUMN "C" DROP NOT NULL;
+
+ALTER TABLE cards_squad ALTER COLUMN "PG" DROP DEFAULT;
+ALTER TABLE cards_squad ALTER COLUMN "SG" DROP DEFAULT;
+ALTER TABLE cards_squad ALTER COLUMN "PF" DROP DEFAULT;
+ALTER TABLE cards_squad ALTER COLUMN "SF" DROP DEFAULT;
+ALTER TABLE cards_squad ALTER COLUMN "C" DROP DEFAULT;

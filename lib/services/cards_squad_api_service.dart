@@ -17,13 +17,23 @@ class CardsSquadLoadResult {
   const CardsSquadLoadResult.ok(CardsSquadPayload this.squad)
       : needInstances = false,
         have = 0,
-        need = 5;
+        need = 5,
+        exists = true;
+
+  const CardsSquadLoadResult.noSquad()
+      : squad = null,
+        needInstances = false,
+        have = 0,
+        need = 5,
+        exists = false;
 
   const CardsSquadLoadResult.needMoreInstances({required this.have, required this.need})
       : squad = null,
-        needInstances = true;
+        needInstances = true,
+        exists = false;
 
   final CardsSquadPayload? squad;
+  final bool exists;
   final bool needInstances;
   final int have;
   final int need;
@@ -85,6 +95,9 @@ class CardsSquadApiService {
         final need = int.tryParse('${decoded['need'] ?? 5}') ?? 5;
         return CardsSquadLoadResult.needMoreInstances(have: have, need: need);
       }
+      if (decoded['exists'] == false) {
+        return const CardsSquadLoadResult.noSquad();
+      }
       final raw = decoded['squad'];
       if (raw == null) {
         throw CardsSquadApiException('Squad response missing squad data.');
@@ -93,6 +106,69 @@ class CardsSquadApiService {
         throw CardsSquadApiException('Invalid squad object');
       }
       return CardsSquadLoadResult.ok(CardsSquadPayload.fromJson(raw));
+    } finally {
+      if (_client == null) {
+        own.close();
+      }
+    }
+  }
+
+  /// `POST /cards/squad` — first persist; all five [slots] must be positive card ids.
+  Future<CardsSquadPayload> createSquad({
+    required int userId,
+    required int squadNumber,
+    required String squadName,
+    required Map<String, int> slots,
+  }) async {
+    if (squadNumber < 1 || squadNumber > 3) {
+      throw CardsSquadApiException('squad_number must be 1, 2, or 3');
+    }
+    for (final k in CardsSquadPayload.slotOrder) {
+      final v = slots[k];
+      if (v == null || v <= 0) {
+        throw CardsSquadApiException('All five positions must have a valid card before creating the squad.');
+      }
+    }
+    final path = BackendConfig.cardsSquadPath;
+    final alt = path.startsWith('api/') ? path.substring(4) : 'api/$path';
+    final body = <String, dynamic>{
+      'user_id': userId,
+      'squad_number': squadNumber,
+      'squad_name': squadName,
+      'slots': slots,
+    };
+    final own = _client ?? http.Client();
+    try {
+      Future<http.Response> postP(String p) => own
+          .post(
+            _baseUri(p),
+            headers: const {'Accept': 'application/json', 'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 25));
+
+      var res = await postP(path);
+      if (res.statusCode == 404) res = await postP(alt);
+      final bodyStr = utf8.decode(res.bodyBytes, allowMalformed: true);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        var msg = 'Create squad failed (${res.statusCode})';
+        try {
+          final err = jsonDecode(bodyStr);
+          if (err is Map && err['error'] != null) msg = err['error'].toString();
+        } catch (_) {
+          if (bodyStr.isNotEmpty && bodyStr.length < 220) msg = bodyStr;
+        }
+        throw CardsSquadApiException(msg);
+      }
+      final decoded = jsonDecode(bodyStr);
+      if (decoded is! Map<String, dynamic>) {
+        throw CardsSquadApiException('Invalid squad POST response');
+      }
+      final raw = decoded['squad'];
+      if (raw is! Map<String, dynamic>) {
+        throw CardsSquadApiException('Response missing squad');
+      }
+      return CardsSquadPayload.fromJson(raw);
     } finally {
       if (_client == null) {
         own.close();

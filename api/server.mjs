@@ -2248,7 +2248,7 @@ async function fetchPlayCardSummariesForSquad(client, cardIds) {
   return m;
 }
 
-/** DB columns `PG`, `SG`, `PF`, `SF`, `C` (quoted in SQL). API slots stay pg/sg/sf/pf/c. Empty = -1. */
+/** DB columns `PG`, `SG`, `PF`, `SF`, `C` (quoted in SQL). API slots stay pg/sg/sf/pf/c. Empty slots: DB NULL, JSON card_id -1. */
 const CARDS_SQUAD_SQL_COLS = '"PG", "SG", "PF", "SF", "C"';
 
 const SQUAD_SLOT_DB_COL = { pg: 'PG', sg: 'SG', sf: 'SF', pf: 'PF', c: 'C' };
@@ -2268,6 +2268,24 @@ function squadSlotIntFromRow(v) {
 
 function squadSlotFromRow(row, slotKey) {
   return squadSlotIntFromRow(squadSlotRawFromRow(row, slotKey));
+}
+
+/** Map logical slot (-1 / empty) to SQL NULL so FK to play_cards is not violated. */
+function squadSlotToSqlParam(v) {
+  if (v == null || v === -1) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+function parseSlotStrictPositive(v, label) {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n <= 0) {
+    const err = new Error(`slots.${label} must be a positive card_id.`);
+    err.statusCode = 400;
+    throw err;
+  }
+  return n;
 }
 
 function buildCardsSquadPayload(row, summaryMap) {
@@ -2325,28 +2343,13 @@ function buildCardsSquadPayload(row, summaryMap) {
   };
 }
 
-async function loadOrCreateCardsSquadRow(client, userId, squadNumber) {
+async function loadCardsSquadRow(client, userId, squadNumber) {
   const sel = await client.query(
     `SELECT id, user_id, squad_number, squad_name, ${CARDS_SQUAD_SQL_COLS}
      FROM cards_squad WHERE user_id = $1::int AND squad_number = $2::int`,
     [userId, squadNumber],
   );
-  if (sel.rows.length > 0) return { row: sel.rows[0] };
-  const defaultName = `Squad ${squadNumber}`;
-  const ins = await client.query(
-    `INSERT INTO cards_squad (user_id, squad_number, squad_name)
-     VALUES ($1::int, $2::int, $3)
-     ON CONFLICT (user_id, squad_number) DO NOTHING
-     RETURNING id, user_id, squad_number, squad_name, ${CARDS_SQUAD_SQL_COLS}`,
-    [userId, squadNumber, defaultName],
-  );
-  if (ins.rows.length > 0) return { row: ins.rows[0] };
-  const again = await client.query(
-    `SELECT id, user_id, squad_number, squad_name, ${CARDS_SQUAD_SQL_COLS}
-     FROM cards_squad WHERE user_id = $1::int AND squad_number = $2::int`,
-    [userId, squadNumber],
-  );
-  return { row: again.rows[0] };
+  return sel.rows[0] ?? null;
 }
 
 async function validateUserOwnsSquadMultiset(client, userId, slotPg, slotSg, slotSf, slotPf, slotC) {
@@ -2418,7 +2421,7 @@ async function validateSquadLineupPositions(client, slotPg, slotSg, slotSf, slot
   }
 }
 
-/** GET /cards/squad?squad_number=1..3&user_id=… — creates empty row (pg..c = -1) on first open */
+/** GET /cards/squad?squad_number=1..3&user_id=… — returns { exists, squad? }; no row is created until POST. */
 async function getCardsSquadHandler(req, res) {
   const rawUser = req.query.user_id ?? req.query.userId;
   const rawSq = req.query.squad_number ?? req.query.squadNumber;
@@ -2435,27 +2438,10 @@ async function getCardsSquadHandler(req, res) {
     const { rows: u } = await client.query(`SELECT 1 FROM users WHERE user_id = $1::int`, [userId]);
     if (u.length === 0) return res.status(404).json({ error: 'User not found.' });
 
-    const sel = await client.query(
-      `SELECT id, user_id, squad_number, squad_name, ${CARDS_SQUAD_SQL_COLS}
-       FROM cards_squad WHERE user_id = $1::int AND squad_number = $2::int`,
-      [userId, squadNumber],
-    );
-    if (sel.rows.length > 0) {
-      const row = sel.rows[0];
-      const sm = await fetchPlayCardSummariesForSquad(client, [
-        squadSlotFromRow(row, 'pg'),
-        squadSlotFromRow(row, 'sg'),
-        squadSlotFromRow(row, 'sf'),
-        squadSlotFromRow(row, 'pf'),
-        squadSlotFromRow(row, 'c'),
-      ].filter((id) => id > 0));
-      return res.json({ squad: buildCardsSquadPayload(row, sm) });
+    const row = await loadCardsSquadRow(client, userId, squadNumber);
+    if (row == null) {
+      return res.json({ exists: false });
     }
-
-    await client.query('BEGIN');
-    const created = await loadOrCreateCardsSquadRow(client, userId, squadNumber);
-    await client.query('COMMIT');
-    const row = created.row;
     const sm = await fetchPlayCardSummariesForSquad(client, [
       squadSlotFromRow(row, 'pg'),
       squadSlotFromRow(row, 'sg'),
@@ -2463,9 +2449,8 @@ async function getCardsSquadHandler(req, res) {
       squadSlotFromRow(row, 'pf'),
       squadSlotFromRow(row, 'c'),
     ].filter((id) => id > 0));
-    res.json({ squad: buildCardsSquadPayload(row, sm) });
+    return res.json({ exists: true, squad: buildCardsSquadPayload(row, sm) });
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     console.error('[GET /cards/squad]', err);
     const msg = err.message ?? String(err);
     if (msg.includes('cards_squad') && msg.toLowerCase().includes('relation')) {
@@ -2480,7 +2465,89 @@ async function getCardsSquadHandler(req, res) {
   }
 }
 
-/** PATCH /cards/squad — body: { user_id, squad_number, squad_name?, slots?: { pg, sg, sf, pf, c } } (use -1 or null to clear) */
+/** POST /cards/squad — create row: all five slots must be positive card_ids. Body: { user_id, squad_number, squad_name?, slots } */
+async function postCardsSquadHandler(req, res) {
+  const body = req.body ?? {};
+  const rawUser = body.user_id ?? body.userId;
+  const rawSq = body.squad_number ?? body.squadNumber;
+  if (rawUser == null || rawUser === '' || Number.isNaN(Number(rawUser))) {
+    return res.status(400).json({ error: 'user_id is required (integer).' });
+  }
+  const squadNumber = parseCardsSquadNumber(rawSq);
+  if (squadNumber == null) {
+    return res.status(400).json({ error: 'squad_number must be 1, 2, or 3.' });
+  }
+  const userId = Number(rawUser);
+  const slotsIn = body.slots;
+  if (slotsIn == null || typeof slotsIn !== 'object') {
+    return res.status(400).json({ error: 'slots is required with pg, sg, sf, pf, c (positive card ids).' });
+  }
+  let slotPg;
+  let slotSg;
+  let slotSf;
+  let slotPf;
+  let slotC;
+  try {
+    slotPg = parseSlotStrictPositive(slotsIn.pg ?? slotsIn.guard1, 'pg');
+    slotSg = parseSlotStrictPositive(slotsIn.sg ?? slotsIn.guard2, 'sg');
+    slotSf = parseSlotStrictPositive(slotsIn.sf ?? slotsIn.forward1, 'sf');
+    slotPf = parseSlotStrictPositive(slotsIn.pf ?? slotsIn.forward2, 'pf');
+    slotC = parseSlotStrictPositive(slotsIn.c ?? slotsIn.center, 'c');
+  } catch (e) {
+    return res.status(e.statusCode ?? 400).json({ error: e.message });
+  }
+
+  const nameRaw = body.squad_name ?? body.squadName;
+  let nm = nameRaw != null ? String(nameRaw).trim() : '';
+  if (!nm) nm = `Squad ${squadNumber}`;
+  if (nm.length > 100) nm = nm.slice(0, 100);
+
+  const client = await pool.connect();
+  try {
+    const { rows: u } = await client.query(`SELECT 1 FROM users WHERE user_id = $1::int`, [userId]);
+    if (u.length === 0) return res.status(404).json({ error: 'User not found.' });
+
+    await client.query('BEGIN');
+    const existing = await loadCardsSquadRow(client, userId, squadNumber);
+    if (existing != null) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Squad already exists for this slot. Use Save to update.' });
+    }
+    await validateUserOwnsSquadMultiset(client, userId, slotPg, slotSg, slotSf, slotPf, slotC);
+    await validateSquadLineupPositions(client, slotPg, slotSg, slotSf, slotPf, slotC);
+
+    const { rows: ins } = await client.query(
+      `INSERT INTO cards_squad (user_id, squad_number, squad_name, "PG", "SG", "PF", "SF", "C")
+       VALUES ($1::int, $2::int, $3, $4::int, $5::int, $6::int, $7::int, $8::int)
+       RETURNING id, user_id, squad_number, squad_name, ${CARDS_SQUAD_SQL_COLS}`,
+      [userId, squadNumber, nm, slotPg, slotSg, slotPf, slotSf, slotC],
+    );
+    const row = ins[0];
+    await client.query('COMMIT');
+
+    const sm = await fetchPlayCardSummariesForSquad(client, [slotPg, slotSg, slotSf, slotPf, slotC]);
+    res.status(201).json({ exists: true, squad: buildCardsSquadPayload(row, sm) });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Squad already exists for this slot. Use Save to update.' });
+    }
+    const code = err.statusCode ?? 500;
+    console.error('[POST /cards/squad]', err);
+    const msg = err.message ?? String(err);
+    if (msg.includes('cards_squad') && msg.toLowerCase().includes('relation')) {
+      return res.status(503).json({
+        error:
+          'Database table cards_squad is missing. Apply the migration that creates cards_squad.',
+      });
+    }
+    res.status(code >= 400 && code < 600 ? code : 500).json({ error: msg });
+  } finally {
+    client.release();
+  }
+}
+
+/** PATCH /cards/squad — update existing row only. Body: { user_id, squad_number, squad_name?, slots? } (-1 or null clears a slot in DB). */
 async function patchCardsSquadHandler(req, res) {
   const body = req.body ?? {};
   const rawUser = body.user_id ?? body.userId;
@@ -2508,8 +2575,14 @@ async function patchCardsSquadHandler(req, res) {
     if (u.length === 0) return res.status(404).json({ error: 'User not found.' });
 
     await client.query('BEGIN');
-    const created = await loadOrCreateCardsSquadRow(client, userId, squadNumber);
-    let row = created.row;
+    let row = await loadCardsSquadRow(client, userId, squadNumber);
+    if (row == null) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        error:
+          'No squad saved yet for this slot. Fill all five positions, then tap Create squad.',
+      });
+    }
 
     let nextName = row.squad_name;
     if (hasName) {
@@ -2547,7 +2620,15 @@ async function patchCardsSquadHandler(req, res) {
       `UPDATE cards_squad
        SET squad_name = $1, "PG" = $2, "SG" = $3, "PF" = $4, "SF" = $5, "C" = $6
        WHERE id = $7::int`,
-      [nextName, slotPg, slotSg, slotPf, slotSf, slotC, row.id],
+      [
+        nextName,
+        squadSlotToSqlParam(slotPg),
+        squadSlotToSqlParam(slotSg),
+        squadSlotToSqlParam(slotPf),
+        squadSlotToSqlParam(slotSf),
+        squadSlotToSqlParam(slotC),
+        row.id,
+      ],
     );
 
     const { rows: fresh } = await client.query(
@@ -2565,7 +2646,7 @@ async function patchCardsSquadHandler(req, res) {
       squadSlotFromRow(row, 'pf'),
       squadSlotFromRow(row, 'c'),
     ].filter((id) => id > 0));
-    res.json({ squad: buildCardsSquadPayload(row, sm) });
+    res.json({ exists: true, squad: buildCardsSquadPayload(row, sm) });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     const code = err.statusCode ?? 500;
@@ -2585,6 +2666,8 @@ async function patchCardsSquadHandler(req, res) {
 
 app.get('/cards/squad', getCardsSquadHandler);
 app.get('/api/cards/squad', getCardsSquadHandler);
+app.post('/cards/squad', postCardsSquadHandler);
+app.post('/api/cards/squad', postCardsSquadHandler);
 app.patch('/cards/squad', patchCardsSquadHandler);
 app.patch('/api/cards/squad', patchCardsSquadHandler);
 
@@ -2603,5 +2686,5 @@ app.listen(port, '0.0.0.0', () => {
   console.log('  GET /public/courts  GET /public/courts/:id/playgrounds  GET /public/playgrounds/:id/availability?date=…');
   console.log('  POST /public/reservations { user_id, availability_id }');
   console.log('  GET /games  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore');
-  console.log('  GET /cards/squad?squad_number=1..3&user_id=…  PATCH /cards/squad (1v1 lineups)');
+  console.log('  GET/POST/PATCH /cards/squad …user_id=… (1v1 lineups; POST creates, PATCH updates)');
 });

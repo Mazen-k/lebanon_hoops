@@ -103,4 +103,45 @@ class CardsSquadPayload {
       slots: slots,
     );
   }
+
+  /// Local-only editor state before `POST /cards/squad` (not persisted; [id] is 0).
+  factory CardsSquadPayload.draft(int squadNumber) {
+    CardsSquadSlotCard empty(String key) {
+      final pos = switch (key) {
+        'pg' => 'PG',
+        'sg' => 'SG',
+        'sf' => 'SF',
+        'pf' => 'PF',
+        'c' => 'C',
+        _ => '?',
+      };
+      return CardsSquadSlotCard(cardId: -1, position: pos, firstName: '', lastName: '');
+    }
+
+    final slots = <String, CardsSquadSlotCard>{};
+    for (final k in slotOrder) {
+      slots[k] = empty(k);
+    }
+    return CardsSquadPayload(
+      id: 0,
+      squadNumber: squadNumber,
+      squadName: 'Squad $squadNumber',
+      slots: slots,
+    );
+  }
+
+  bool get isPersisted => id > 0;
+
+  CardsSquadPayload copyWith({
+    int? id,
+    String? squadName,
+    Map<String, CardsSquadSlotCard>? slots,
+  }) {
+    return CardsSquadPayload(
+      id: id ?? this.id,
+      squadNumber: squadNumber,
+      squadName: squadName ?? this.squadName,
+      slots: slots != null ? Map<String, CardsSquadSlotCard>.from(slots) : Map<String, CardsSquadSlotCard>.from(this.slots),
+    );
+  }
 }

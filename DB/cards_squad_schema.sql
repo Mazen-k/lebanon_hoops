@@ -1,8 +1,6 @@
--- 1v1 lineup: five slot columns named "PG", "SG", "PF", "SF", "C" (quoted so they stay uppercase).
--- Empty slot = -1 (NOT NULL DEFAULT -1).
---
--- If you use FOREIGN KEY ("PG") REFERENCES play_cards(card_id), PostgreSQL still checks -1 against play_cards.
--- You need either a sentinel row play_cards.card_id = -1, or drop those FKs and rely on API validation.
+-- 1v1 lineup: slot columns "PG", "SG", "PF", "SF", "C" (quoted, uppercase).
+-- Empty slot = NULL (FK to play_cards allows NULL; avoids invalid -1 references).
+-- Rows are created only via POST /cards/squad when all five slots are filled (app flow).
 
 CREATE TABLE IF NOT EXISTS cards_squad (
     id SERIAL PRIMARY KEY,
@@ -10,11 +8,11 @@ CREATE TABLE IF NOT EXISTS cards_squad (
     squad_number INT NOT NULL CHECK (squad_number IN (1, 2, 3)),
     squad_name VARCHAR(100) NOT NULL,
 
-    "PG" INT NOT NULL DEFAULT -1,
-    "SG" INT NOT NULL DEFAULT -1,
-    "PF" INT NOT NULL DEFAULT -1,
-    "SF" INT NOT NULL DEFAULT -1,
-    "C" INT NOT NULL DEFAULT -1,
+    "PG" INT,
+    "SG" INT,
+    "PF" INT,
+    "SF" INT,
+    "C" INT,
 
     CONSTRAINT fk_cards_squad_user
         FOREIGN KEY (user_id) REFERENCES users(user_id)

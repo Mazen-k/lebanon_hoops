@@ -1,2 +1,2 @@
 -- Deprecated: older API used guard1..center with NULL empties.
--- Current schema uses "PG", "SG", "PF", "SF", "C" with DEFAULT -1. See cards_squad_schema.sql.
+-- Current schema: "PG"…"C" nullable (NULL = empty). See cards_squad_schema.sql and cards_squad_alter_nullable_slots.sql.
