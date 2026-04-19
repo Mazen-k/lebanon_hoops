@@ -2166,6 +2166,349 @@ async function getGameBoxscoreHandler(req, res) {
 app.get('/games/:matchId/boxscore', getGameBoxscoreHandler);
 app.get('/api/games/:matchId/boxscore', getGameBoxscoreHandler);
 
+// --- 1v1 card squads (`cards_squad`) ---
+function parseCardsSquadNumber(raw) {
+  const n = Number(raw);
+  if (Number.isNaN(n) || n < 1 || n > 3) return null;
+  return n;
+}
+
+function intOrNull(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  if (!Number.isInteger(n)) return null;
+  return n;
+}
+
+async function fetchPlayCardSummariesForSquad(client, cardIds) {
+  const uniq = [...new Set(cardIds.filter((x) => Number.isInteger(x) && x > 0))];
+  if (uniq.length === 0) return new Map();
+  const { rows } = await client.query(
+    `SELECT pc.card_id, pc.card_type, pc.player_id, pc.attack, pc.defend, pc.card_image,
+        COALESCE(NULLIF(TRIM(p.position), ''), '?') AS position,
+        COALESCE(NULLIF(TRIM(p.nationality), ''), '') AS nationality,
+        COALESCE(NULLIF(TRIM(p.first_name), ''), '') AS first_name,
+        COALESCE(NULLIF(TRIM(p.last_name), ''), '') AS last_name,
+        t.team_id, t.team_name,
+        ROUND((pc.attack + pc.defend) / 2.0)::int AS overall
+     FROM play_cards pc
+     LEFT JOIN players p ON p.player_id = pc.player_id
+     LEFT JOIN teams t ON t.team_id = p.team_id
+     WHERE pc.card_id = ANY($1::int[])`,
+    [uniq],
+  );
+  const m = new Map();
+  for (const r of rows) m.set(r.card_id, r);
+  return m;
+}
+
+function buildCardsSquadPayload(row, summaryMap) {
+  const pairs = [
+    ['guard1', 'pg'],
+    ['guard2', 'sg'],
+    ['forward1', 'sf'],
+    ['forward2', 'pf'],
+    ['center', 'c'],
+  ];
+  const slots = {};
+  for (const [col, key] of pairs) {
+    const id = row[col];
+    const s = summaryMap.get(id);
+    slots[key] = {
+      card_id: id,
+      cardId: id,
+      player_id: s?.player_id ?? null,
+      playerId: s?.player_id ?? null,
+      overall: s?.overall ?? null,
+      position: s?.position ?? '?',
+      first_name: s?.first_name ?? '',
+      firstName: s?.first_name ?? '',
+      last_name: s?.last_name ?? '',
+      lastName: s?.last_name ?? '',
+      team_name: s?.team_name ?? null,
+      teamName: s?.team_name ?? null,
+      card_type: s?.card_type ?? null,
+      cardType: s?.card_type ?? null,
+    };
+  }
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    userId: row.user_id,
+    squad_number: row.squad_number,
+    squadNumber: row.squad_number,
+    squad_name: row.squad_name,
+    squadName: row.squad_name,
+    slots,
+  };
+}
+
+async function loadOrCreateCardsSquadRow(client, userId, squadNumber) {
+  const sel = await client.query(
+    `SELECT id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center
+     FROM cards_squad WHERE user_id = $1::int AND squad_number = $2::int`,
+    [userId, squadNumber],
+  );
+  if (sel.rows.length > 0) return { row: sel.rows[0] };
+  const { rows: cntRows } = await client.query(
+    `SELECT COUNT(*)::int AS c FROM card_instances WHERE user_id = $1::int`,
+    [userId],
+  );
+  const total = cntRows[0]?.c ?? 0;
+  if (total < 5) {
+    return { need_instances: true, have: total, need: 5 };
+  }
+  const { rows: inst5 } = await client.query(
+    `SELECT card_id FROM card_instances WHERE user_id = $1::int ORDER BY card_instance_id ASC LIMIT 5`,
+    [userId],
+  );
+  const g1 = inst5[0].card_id;
+  const g2 = inst5[1].card_id;
+  const f1 = inst5[2].card_id;
+  const f2 = inst5[3].card_id;
+  const c = inst5[4].card_id;
+  const defaultName = `Squad ${squadNumber}`;
+  const ins = await client.query(
+    `INSERT INTO cards_squad (user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center)
+     VALUES ($1::int, $2::int, $3, $4::int, $5::int, $6::int, $7::int, $8::int)
+     ON CONFLICT (user_id, squad_number) DO NOTHING
+     RETURNING id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center`,
+    [userId, squadNumber, defaultName, g1, g2, f1, f2, c],
+  );
+  if (ins.rows.length > 0) return { row: ins.rows[0] };
+  const again = await client.query(
+    `SELECT id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center
+     FROM cards_squad WHERE user_id = $1::int AND squad_number = $2::int`,
+    [userId, squadNumber],
+  );
+  return { row: again.rows[0] };
+}
+
+async function validateUserOwnsSquadMultiset(client, userId, g1, g2, f1, f2, c) {
+  const multiset = [g1, g2, f1, f2, c];
+  const needed = new Map();
+  for (const id of multiset) {
+    if (!Number.isInteger(id) || id <= 0) {
+      const err = new Error('Each lineup slot must be a positive integer card_id.');
+      err.statusCode = 400;
+      throw err;
+    }
+    needed.set(id, (needed.get(id) || 0) + 1);
+  }
+  const ids = [...needed.keys()];
+  const { rows } = await client.query(
+    `SELECT card_id, COUNT(*)::int AS cnt
+     FROM card_instances
+     WHERE user_id = $1::int AND card_id = ANY($2::int[])
+     GROUP BY card_id`,
+    [userId, ids],
+  );
+  const owned = new Map(rows.map((r) => [r.card_id, r.cnt]));
+  for (const [cardId, need] of needed) {
+    const have = owned.get(cardId) ?? 0;
+    if (have < need) {
+      const err = new Error(
+        `Not enough copies of card ${cardId} in your collection for this lineup (need ${need}, have ${have}).`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+  const { rows: pc } = await client.query(`SELECT card_id FROM play_cards WHERE card_id = ANY($1::int[])`, [ids]);
+  if (pc.length !== ids.length) {
+    const err = new Error('One or more card_id values are not valid play_cards.');
+    err.statusCode = 400;
+    throw err;
+  }
+}
+
+/** GET /cards/squad?squad_number=1..3&user_id=… — creates row when user has ≥5 card_instances */
+async function getCardsSquadHandler(req, res) {
+  const rawUser = req.query.user_id ?? req.query.userId;
+  const rawSq = req.query.squad_number ?? req.query.squadNumber;
+  if (rawUser == null || rawUser === '' || Number.isNaN(Number(rawUser))) {
+    return res.status(400).json({ error: 'user_id query parameter is required (integer).' });
+  }
+  const squadNumber = parseCardsSquadNumber(rawSq);
+  if (squadNumber == null) {
+    return res.status(400).json({ error: 'squad_number must be 1, 2, or 3.' });
+  }
+  const userId = Number(rawUser);
+  const client = await pool.connect();
+  try {
+    const { rows: u } = await client.query(`SELECT 1 FROM users WHERE user_id = $1::int`, [userId]);
+    if (u.length === 0) return res.status(404).json({ error: 'User not found.' });
+
+    const sel = await client.query(
+      `SELECT id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center
+       FROM cards_squad WHERE user_id = $1::int AND squad_number = $2::int`,
+      [userId, squadNumber],
+    );
+    if (sel.rows.length > 0) {
+      const row = sel.rows[0];
+      const sm = await fetchPlayCardSummariesForSquad(client, [
+        row.guard1,
+        row.guard2,
+        row.forward1,
+        row.forward2,
+        row.center,
+      ]);
+      return res.json({ squad: buildCardsSquadPayload(row, sm) });
+    }
+
+    await client.query('BEGIN');
+    const created = await loadOrCreateCardsSquadRow(client, userId, squadNumber);
+    if (created.need_instances) {
+      await client.query('ROLLBACK');
+      return res.json({
+        squad: null,
+        need_instances: true,
+        have: created.have,
+        need: created.need,
+      });
+    }
+    await client.query('COMMIT');
+    const row = created.row;
+    const sm = await fetchPlayCardSummariesForSquad(client, [
+      row.guard1,
+      row.guard2,
+      row.forward1,
+      row.forward2,
+      row.center,
+    ]);
+    res.json({ squad: buildCardsSquadPayload(row, sm) });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[GET /cards/squad]', err);
+    const msg = err.message ?? String(err);
+    if (msg.includes('cards_squad') && msg.toLowerCase().includes('relation')) {
+      return res.status(503).json({
+        error:
+          'Database table cards_squad is missing. Apply the migration that creates cards_squad.',
+      });
+    }
+    res.status(500).json({ error: msg });
+  } finally {
+    client.release();
+  }
+}
+
+/** PATCH /cards/squad — body: { user_id, squad_number, squad_name?, slots?: { pg, sg, sf, pf, c } } (partial slots merge) */
+async function patchCardsSquadHandler(req, res) {
+  const body = req.body ?? {};
+  const rawUser = body.user_id ?? body.userId;
+  const rawSq = body.squad_number ?? body.squadNumber;
+  if (rawUser == null || rawUser === '' || Number.isNaN(Number(rawUser))) {
+    return res.status(400).json({ error: 'user_id is required (integer).' });
+  }
+  const squadNumber = parseCardsSquadNumber(rawSq);
+  if (squadNumber == null) {
+    return res.status(400).json({ error: 'squad_number must be 1, 2, or 3.' });
+  }
+  const userId = Number(rawUser);
+  const nameRaw = body.squad_name ?? body.squadName;
+  const slotsIn = body.slots;
+  const hasName = nameRaw !== undefined && nameRaw !== null;
+  const hasSlots = slotsIn != null && typeof slotsIn === 'object';
+
+  if (!hasName && !hasSlots) {
+    return res.status(400).json({ error: 'Provide squad_name and/or slots to update.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const { rows: u } = await client.query(`SELECT 1 FROM users WHERE user_id = $1::int`, [userId]);
+    if (u.length === 0) return res.status(404).json({ error: 'User not found.' });
+
+    await client.query('BEGIN');
+    const created = await loadOrCreateCardsSquadRow(client, userId, squadNumber);
+    if (created.need_instances) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `You need at least ${created.need} cards in your collection to use squads (you have ${created.have}).`,
+        need_instances: true,
+        have: created.have,
+        need: created.need,
+      });
+    }
+    let row = created.row;
+
+    let nextName = row.squad_name;
+    if (hasName) {
+      let nm = String(nameRaw).trim();
+      if (!nm) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'squad_name cannot be empty.' });
+      }
+      if (nm.length > 100) nm = nm.slice(0, 100);
+      nextName = nm;
+    }
+
+    let g1 = row.guard1;
+    let g2 = row.guard2;
+    let f1 = row.forward1;
+    let f2 = row.forward2;
+    let c = row.center;
+
+    if (hasSlots) {
+      const pg = intOrNull(slotsIn.pg ?? slotsIn.guard1);
+      const sg = intOrNull(slotsIn.sg ?? slotsIn.guard2);
+      const sf = intOrNull(slotsIn.sf ?? slotsIn.forward1);
+      const pf = intOrNull(slotsIn.pf ?? slotsIn.forward2);
+      const ce = intOrNull(slotsIn.c ?? slotsIn.center);
+      if (pg != null) g1 = pg;
+      if (sg != null) g2 = sg;
+      if (sf != null) f1 = sf;
+      if (pf != null) f2 = pf;
+      if (ce != null) c = ce;
+      await validateUserOwnsSquadMultiset(client, userId, g1, g2, f1, f2, c);
+    }
+
+    await client.query(
+      `UPDATE cards_squad
+       SET squad_name = $1, guard1 = $2, guard2 = $3, forward1 = $4, forward2 = $5, center = $6
+       WHERE id = $7::int`,
+      [nextName, g1, g2, f1, f2, c, row.id],
+    );
+
+    const { rows: fresh } = await client.query(
+      `SELECT id, user_id, squad_number, squad_name, guard1, guard2, forward1, forward2, center
+       FROM cards_squad WHERE id = $1::int`,
+      [row.id],
+    );
+    row = fresh[0];
+    await client.query('COMMIT');
+
+    const sm = await fetchPlayCardSummariesForSquad(client, [
+      row.guard1,
+      row.guard2,
+      row.forward1,
+      row.forward2,
+      row.center,
+    ]);
+    res.json({ squad: buildCardsSquadPayload(row, sm) });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    const code = err.statusCode ?? 500;
+    console.error('[PATCH /cards/squad]', err);
+    const msg = err.message ?? String(err);
+    if (msg.includes('cards_squad') && msg.toLowerCase().includes('relation')) {
+      return res.status(503).json({
+        error:
+          'Database table cards_squad is missing. Apply the migration that creates cards_squad.',
+      });
+    }
+    res.status(code >= 400 && code < 600 ? code : 500).json({ error: msg });
+  } finally {
+    client.release();
+  }
+}
+
+app.get('/cards/squad', getCardsSquadHandler);
+app.get('/api/cards/squad', getCardsSquadHandler);
+app.patch('/cards/squad', patchCardsSquadHandler);
+app.patch('/api/cards/squad', patchCardsSquadHandler);
+
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, '0.0.0.0', () => {
   console.log(`BasketballApp API listening on http://127.0.0.1:${port}`);
@@ -2181,4 +2524,5 @@ app.listen(port, '0.0.0.0', () => {
   console.log('  GET /public/courts  GET /public/courts/:id/playgrounds  GET /public/playgrounds/:id/availability?date=…');
   console.log('  POST /public/reservations { user_id, availability_id }');
   console.log('  GET /games  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore');
+  console.log('  GET /cards/squad?squad_number=1..3&user_id=…  PATCH /cards/squad (1v1 lineups)');
 });

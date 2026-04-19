@@ -1,0 +1,99 @@
+/// One slot on a 1v1 squad (maps to `cards_squad.guard1` … `center`).
+class CardsSquadSlotCard {
+  const CardsSquadSlotCard({
+    required this.cardId,
+    required this.position,
+    required this.firstName,
+    required this.lastName,
+    this.overall,
+    this.teamName,
+  });
+
+  final int cardId;
+  final String position;
+  final String firstName;
+  final String lastName;
+  final int? overall;
+  final String? teamName;
+
+  String get playerLabel {
+    final a = firstName.trim();
+    final b = lastName.trim();
+    if (a.isEmpty && b.isEmpty) return 'Card #$cardId';
+    return '$a $b'.trim();
+  }
+
+  factory CardsSquadSlotCard.fromJson(Map<String, dynamic> json) {
+    int n(String a, [String? b]) {
+      final v = json[a] ?? (b != null ? json[b] : null);
+      if (v is int) return v;
+      if (v == null) throw FormatException('Missing $a');
+      return int.parse(v.toString());
+    }
+
+    int? opt(String a, [String? b]) {
+      final v = json[a] ?? (b != null ? json[b] : null);
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    return CardsSquadSlotCard(
+      cardId: n('card_id', 'cardId'),
+      position: (json['position'] ?? '?').toString(),
+      firstName: (json['first_name'] ?? json['firstName'] ?? '').toString(),
+      lastName: (json['last_name'] ?? json['lastName'] ?? '').toString(),
+      overall: opt('overall'),
+      teamName: json['team_name']?.toString() ?? json['teamName']?.toString(),
+    );
+  }
+}
+
+/// Full squad row + resolved slot cards from `GET /cards/squad`.
+class CardsSquadPayload {
+  const CardsSquadPayload({
+    required this.id,
+    required this.squadNumber,
+    required this.squadName,
+    required this.slots,
+  });
+
+  final int id;
+  final int squadNumber;
+  final String squadName;
+  final Map<String, CardsSquadSlotCard> slots;
+
+  static const slotOrder = ['pg', 'sg', 'sf', 'pf', 'c'];
+
+  factory CardsSquadPayload.fromJson(Map<String, dynamic> json) {
+    int n(String a, [String? b]) {
+      final v = json[a] ?? (b != null ? json[b] : null);
+      if (v is int) return v;
+      if (v == null) throw FormatException('Missing $a');
+      return int.parse(v.toString());
+    }
+
+    final rawSlots = json['slots'];
+    if (rawSlots is! Map) {
+      throw const FormatException('Missing slots map');
+    }
+    final sm = Map<String, dynamic>.from(rawSlots);
+    final slots = <String, CardsSquadSlotCard>{};
+    for (final key in slotOrder) {
+      final v = sm[key];
+      if (v is Map<String, dynamic>) {
+        slots[key] = CardsSquadSlotCard.fromJson(v);
+      }
+    }
+    if (slots.length != 5) {
+      throw const FormatException('Squad must have 5 slots');
+    }
+
+    return CardsSquadPayload(
+      id: n('id'),
+      squadNumber: n('squad_number', 'squadNumber'),
+      squadName: (json['squad_name'] ?? json['squadName'] ?? '').toString(),
+      slots: slots,
+    );
+  }
+}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'card_mode_placeholders.dart';
 import 'cards_hub_image_paths.dart';
+import 'one_v_one_page.dart';
 import 'open_packs_page.dart';
 import 'trade_hub_page.dart';
 import 'view_collection_page.dart';

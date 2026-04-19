@@ -101,6 +101,13 @@ abstract final class BackendConfig {
   /// `GET public/playgrounds/:id/availability?date=YYYY-MM-DD`, `POST public/reservations`
   /// with JSON `{ "user_id", "availability_id" }`. Apply `lebanon_hoops/DB/court_reservation_schema.sql` once if tables are missing.
 
+  /// `GET ?user_id=…&squad_number=1..3` — 1v1 lineup; `PATCH` JSON body updates name and/or slots.
+  static String get cardsSquadPath {
+    const fromEnv = String.fromEnvironment('API_CARDS_SQUAD_PATH', defaultValue: '');
+    if (fromEnv.isNotEmpty) return fromEnv.trim().replaceAll(RegExp(r'^/+'), '');
+    return 'cards/squad';
+  }
+
   /// GET `?user_id=…` — returns `username` and `card_coins` for the cards hub header.
   static String get userWalletPath {
     const fromEnv = String.fromEnvironment('API_USER_WALLET_PATH', defaultValue: '');
