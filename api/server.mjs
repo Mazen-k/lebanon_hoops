@@ -1905,7 +1905,7 @@ app.get('/api/trade/instances', tradeableInstancesHandler);
 // --- In-memory 1v1 friend rooms (card battle) ---
 const oneVOneRooms = new Map();
 const OVO_MATCH_ROUNDS_TO_WIN = 2;
-const OVO_SUBROUNDS_TO_WIN_ROUND = 2;
+const OVO_PLAYS_PER_ROUND = 5;
 const OVO_SQUAD_PICK_MS = 5000;
 const OVO_LOCKED_SQUAD_MS = 2500;
 const OVO_REVEAL_MS = 3500;
@@ -1936,9 +1936,11 @@ async function ovoUserHasThreeFullSquads(client, userId) {
   return true;
 }
 
-async function ovoPickRandomSquadNumber(client, userId) {
+async function ovoPickRandomSquadNumber(client, userId, excludedSquads = []) {
+  const ex = new Set((excludedSquads ?? []).map((n) => Number(n)).filter((n) => n >= 1 && n <= 3));
   const valid = [];
   for (let sn = 1; sn <= 3; sn += 1) {
+    if (ex.has(sn)) continue;
     const row = await loadCardsSquadRow(client, userId, sn);
     if (!row) continue;
     let ok = true;
@@ -1964,8 +1966,12 @@ async function ovoBuildSquadSnapshot(client, userId, squadNumber) {
 function ovoInitRound(room, roundFirstUid) {
   room.round_first_actor = roundFirstUid;
   room.subround_first_actor = roundFirstUid;
-  room.round_point_wins = {};
-  for (const u of room.users) room.round_point_wins[u] = 0;
+  room.round_play_wins = {};
+  for (const u of room.users) room.round_play_wins[u] = 0;
+  room.used_slots = {};
+  for (const u of room.users) room.used_slots[u] = [];
+  room.plays_completed_this_round = 0;
+  room.last_non_tie_winner = null;
   room.battle_step = 'lead';
   room.lead_pending = null;
   room.response_pending = null;
@@ -1992,6 +1998,9 @@ async function ovoTryStartSquadPick(client, room) {
   room.squad_ready = { [a]: true, [b]: true };
   room.squad_pick = { [a]: null, [b]: null };
   room.squad_pick_deadline = Date.now() + OVO_SQUAD_PICK_MS;
+  if (!room.squads_used_per_user) room.squads_used_per_user = {};
+  if (!room.squads_used_per_user[a]) room.squads_used_per_user[a] = [];
+  if (!room.squads_used_per_user[b]) room.squads_used_per_user[b] = [];
 }
 
 async function ovoMaybePromoteFromNeedSquads(client, room) {
@@ -2006,8 +2015,12 @@ async function ovoFinalizeSquadPickPhase(client, room, now) {
   const bothChosen = room.squad_pick[a] != null && room.squad_pick[b] != null;
   if (!bothChosen && !deadlineHit) return;
   if (!bothChosen && deadlineHit) {
-    if (room.squad_pick[a] == null) room.squad_pick[a] = await ovoPickRandomSquadNumber(client, a);
-    if (room.squad_pick[b] == null) room.squad_pick[b] = await ovoPickRandomSquadNumber(client, b);
+    if (room.squad_pick[a] == null) {
+      room.squad_pick[a] = await ovoPickRandomSquadNumber(client, a, room.squads_used_per_user?.[a] ?? []);
+    }
+    if (room.squad_pick[b] == null) {
+      room.squad_pick[b] = await ovoPickRandomSquadNumber(client, b, room.squads_used_per_user?.[b] ?? []);
+    }
   }
   const snapA = await ovoBuildSquadSnapshot(client, a, room.squad_pick[a]);
   const snapB = await ovoBuildSquadSnapshot(client, b, room.squad_pick[b]);
@@ -2024,14 +2037,22 @@ function ovoStartBattleFromLocked(room, now) {
   if (room.phase !== 'locked_squad') return;
   if (room.locked_squad_deadline == null || now < room.locked_squad_deadline) return;
   room.phase = 'battle';
-  room.match_round_wins = {};
-  for (const u of room.users) room.match_round_wins[u] = 0;
-  room.round_index = 1;
-  room.prev_round_winner = null;
+  if (!room.match_round_wins) {
+    room.match_round_wins = {};
+    for (const u of room.users) room.match_round_wins[u] = 0;
+  }
+  if (room.round_index == null || room.round_index < 1) room.round_index = 1;
+  room.battle_session_count = (room.battle_session_count ?? 0) + 1;
   const [u0, u1] = room.users;
-  const rnd = Math.random() < 0.5 ? u0 : u1;
-  room.round_first_actor = rnd;
-  ovoInitRound(room, rnd);
+  if (room.battle_session_count === 1) {
+    const rnd = Math.random() < 0.5 ? u0 : u1;
+    room.round_first_actor = rnd;
+    ovoInitRound(room, rnd);
+  } else {
+    const wl = room.prev_round_winner ?? u0;
+    room.round_first_actor = wl;
+    ovoInitRound(room, wl);
+  }
 }
 
 function ovoScoreSubround(leadMode, leadAtk, leadDef, respAtk, respDef) {
@@ -2044,18 +2065,35 @@ function ovoScoreSubround(leadMode, leadAtk, leadDef, respAtk, respDef) {
 function ovoApplyReveal(room) {
   const rev = room.reveal;
   if (!rev) return;
+  const leadUid = rev.lead_uid;
+  const respUid = rev.respond_uid;
+  const leadSlot = rev.lead_slot;
+  const respSlot = rev.respond_slot;
+  if (!room.used_slots) room.used_slots = {};
+  if (!room.used_slots[leadUid]) room.used_slots[leadUid] = [];
+  if (!room.used_slots[respUid]) room.used_slots[respUid] = [];
+  if (leadSlot && !room.used_slots[leadUid].includes(leadSlot)) room.used_slots[leadUid].push(leadSlot);
+  if (respSlot && !room.used_slots[respUid].includes(respSlot)) room.used_slots[respUid].push(respSlot);
+  room.plays_completed_this_round = (room.plays_completed_this_round ?? 0) + 1;
+
   const { winner_uid, tie } = rev;
   if (!tie && winner_uid != null) {
-    room.round_point_wins[winner_uid] = (room.round_point_wins[winner_uid] ?? 0) + 1;
+    room.round_play_wins[winner_uid] = (room.round_play_wins[winner_uid] ?? 0) + 1;
     room.subround_first_actor = winner_uid;
+    room.last_non_tie_winner = winner_uid;
   }
+
   const [a, b] = room.users;
-  const wa = room.round_point_wins[a] ?? 0;
-  const wb = room.round_point_wins[b] ?? 0;
-  let roundWinner = null;
-  if (wa >= OVO_SUBROUNDS_TO_WIN_ROUND) roundWinner = a;
-  else if (wb >= OVO_SUBROUNDS_TO_WIN_ROUND) roundWinner = b;
-  if (roundWinner != null) {
+  const wa = room.round_play_wins[a] ?? 0;
+  const wb = room.round_play_wins[b] ?? 0;
+  const playsDone = room.plays_completed_this_round ?? 0;
+
+  if (playsDone >= OVO_PLAYS_PER_ROUND) {
+    let roundWinner = null;
+    if (wa > wb) roundWinner = a;
+    else if (wb > wa) roundWinner = b;
+    else roundWinner = room.last_non_tie_winner ?? a;
+
     room.match_round_wins[roundWinner] = (room.match_round_wins[roundWinner] ?? 0) + 1;
     room.prev_round_winner = roundWinner;
     const ma = room.match_round_wins[a] ?? 0;
@@ -2068,13 +2106,28 @@ function ovoApplyReveal(room) {
       room.reveal_deadline = null;
       return;
     }
+    if (!room.squads_used_per_user) room.squads_used_per_user = {};
+    for (const u of room.users) {
+      const sn = room.squad_snapshots?.[u]?.squad_number;
+      if (sn != null) {
+        if (!room.squads_used_per_user[u]) room.squads_used_per_user[u] = [];
+        room.squads_used_per_user[u].push(Number(sn));
+      }
+    }
     room.round_index = (room.round_index ?? 1) + 1;
-    room.round_point_wins = { [a]: 0, [b]: 0 };
-    const nextLead = roundWinner;
-    room.round_first_actor = nextLead;
-    ovoInitRound(room, nextLead);
+    room.phase = 'pick_squad';
+    room.squad_pick = { [a]: null, [b]: null };
+    room.squad_pick_deadline = Date.now() + OVO_SQUAD_PICK_MS;
+    room.squad_snapshots = null;
+    room.locked_squad_deadline = null;
+    room.battle_step = 'idle';
+    room.round_play_wins = null;
+    room.used_slots = null;
+    room.plays_completed_this_round = null;
     room.reveal = null;
     room.reveal_deadline = null;
+    room.lead_pending = null;
+    room.response_pending = null;
     return;
   }
   room.battle_step = 'lead';
@@ -2126,6 +2179,7 @@ async function oneVOneCreateHandler(req, res) {
     squad_pick: {},
     squad_snapshots: null,
     match_winner: null,
+    squads_used_per_user: { [uid]: [] },
   });
   res.status(201).json({ code, host: true });
 }
@@ -2148,6 +2202,10 @@ async function oneVOneJoinHandler(req, res) {
   if (rows.length === 0) return res.status(400).json({ error: 'User not found' });
   room.users.push(uid);
   room.usernames[uid] = rows[0].username;
+  if (!room.squads_used_per_user) room.squads_used_per_user = {};
+  for (const u of room.users) {
+    room.squads_used_per_user[u] = room.squads_used_per_user[u] ?? [];
+  }
   const client = await pool.connect();
   try {
     await ovoTryStartSquadPick(client, room);
@@ -2189,6 +2247,10 @@ async function oneVOneSquadPickHandler(req, res) {
   if (room.phase !== 'pick_squad') return res.status(400).json({ error: 'Not in squad pick phase' });
   const client = await pool.connect();
   try {
+    const used = room.squads_used_per_user?.[uid] ?? [];
+    if (used.includes(sn)) {
+      return res.status(400).json({ error: 'You already used this squad earlier in the match. Pick another.' });
+    }
     const row = await loadCardsSquadRow(client, uid, sn);
     if (!row) return res.status(400).json({ error: 'Squad not found' });
     for (const k of ['pg', 'sg', 'sf', 'pf', 'c']) {
@@ -2224,6 +2286,8 @@ async function oneVOneLeadHandler(req, res) {
   if (!snap?.squad?.slots?.[slot]) return res.status(400).json({ error: 'Invalid squad state' });
   const card = snap.squad.slots[slot];
   if (!card?.card_id || card.card_id <= 0) return res.status(400).json({ error: 'Empty slot' });
+  const used = room.used_slots?.[uid] ?? [];
+  if (used.includes(slot)) return res.status(400).json({ error: 'This player was already used this round' });
   room.lead_pending = { uid, slot, mode };
   room.battle_step = 'respond';
   res.json({ ok: true });
@@ -2253,6 +2317,8 @@ async function oneVOneRespondHandler(req, res) {
   if (!snap?.squad?.slots?.[slot]) return res.status(400).json({ error: 'Invalid squad state' });
   const respCard = snap.squad.slots[slot];
   if (!respCard?.card_id || respCard.card_id <= 0) return res.status(400).json({ error: 'Empty slot' });
+  const usedR = room.used_slots?.[uid] ?? [];
+  if (usedR.includes(slot)) return res.status(400).json({ error: 'This player was already used this round' });
   const leadSnap = room.squad_snapshots[lead.uid];
   const leadCard = leadSnap.squad.slots[lead.slot];
   const leadAtk = Number(leadCard.attack ?? 0);
@@ -2315,8 +2381,12 @@ async function oneVOneStateHandler(req, res) {
       my_squad_number: room.squad_pick?.[userId] ?? null,
       my_squad: room.squad_snapshots?.[userId] ?? null,
       match_round_wins: room.match_round_wins ?? null,
-      round_point_wins: room.round_point_wins ?? null,
+      round_play_wins: room.round_play_wins ?? null,
       round_index: room.round_index ?? null,
+      plays_per_round: OVO_PLAYS_PER_ROUND,
+      plays_completed_this_round: room.plays_completed_this_round ?? null,
+      my_used_slots: room.used_slots?.[userId] ?? [],
+      squads_used_my: room.squads_used_per_user?.[userId] ?? [],
       battle_step: room.battle_step ?? null,
       subround_first_actor: room.subround_first_actor ?? null,
       round_first_actor: room.round_first_actor ?? null,

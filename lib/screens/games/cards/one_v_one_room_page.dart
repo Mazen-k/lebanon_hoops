@@ -103,6 +103,18 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
     return left.clamp(0, 99);
   }
 
+  Set<String> _myUsedSlots(Map<String, dynamic> s) {
+    final raw = s['my_used_slots'];
+    if (raw is! List) return {};
+    return raw.map((e) => e.toString().toLowerCase()).where((e) => e.isNotEmpty).toSet();
+  }
+
+  Set<int> _squadsUsedMy(Map<String, dynamic> s) {
+    final raw = s['squads_used_my'];
+    if (raw is! List) return {};
+    return raw.map((e) => int.tryParse(e.toString()) ?? 0).where((n) => n >= 1 && n <= 3).toSet();
+  }
+
   CardsSquadPayload? _parseMySquad() {
     final raw = _state?['my_squad'];
     if (raw is! Map<String, dynamic>) return null;
@@ -247,6 +259,7 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
                     squad: _parseMySquad()!,
                     readOnly: true,
                     showCombatStats: true,
+                    disabledSlots: _myUsedSlots(s),
                   ),
                 ],
               ],
@@ -261,6 +274,7 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
                     squad: _parseMySquad()!,
                     readOnly: phase != 'battle' || s['battle_step'] == 'reveal',
                     showCombatStats: true,
+                    disabledSlots: _myUsedSlots(s),
                     onSlotTap: phase == 'battle' && s['battle_step'] != 'reveal' ? _onSlotBattleTap : null,
                   ),
               ],
@@ -276,13 +290,15 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
     final peer = s['peer_user_id'];
     final peerId = peer is int ? peer : int.tryParse(peer?.toString() ?? '');
     final mrw = s['match_round_wins'];
-    final rpw = s['round_point_wins'];
+    final rpwRaw = s['round_play_wins'] ?? s['round_point_wins'];
     final mrMap = mrw is Map ? Map<dynamic, dynamic>.from(mrw) : null;
-    final rpMap = rpw is Map ? Map<dynamic, dynamic>.from(rpw) : null;
+    final rpMap = rpwRaw is Map ? Map<dynamic, dynamic>.from(rpwRaw) : null;
     final myRounds = _intMap(mrMap, uid);
     final peerRounds = peerId != null ? _intMap(mrMap, peerId) : 0;
     final myPts = _intMap(rpMap, uid);
     final peerPts = peerId != null ? _intMap(rpMap, peerId) : 0;
+    final done = int.tryParse(s['plays_completed_this_round']?.toString() ?? '') ?? 0;
+    final maxPlays = int.tryParse(s['plays_per_round']?.toString() ?? '') ?? 5;
     final names = s['usernames'];
     final nameMap = names is Map ? Map<dynamic, dynamic>.from(names) : const {};
     final myName = nameMap[uid]?.toString() ?? 'You';
@@ -305,16 +321,16 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
         ),
         const SizedBox(height: 10),
         Text(
-          'This round — first to 2 points',
+          'This round — $maxPlays plays, each lineup card once · Plays done: $done / $maxPlays',
           textAlign: TextAlign.center,
           style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(160), fontSize: 11, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            Expanded(child: _scorePill('$myName · points', '$myPts', true)),
+            Expanded(child: _scorePill('$myName · play wins', '$myPts', true)),
             const SizedBox(width: 10),
-            Expanded(child: _scorePill('$peerName · points', '$peerPts', false)),
+            Expanded(child: _scorePill('$peerName · play wins', '$peerPts', false)),
           ],
         ),
       ],
@@ -373,7 +389,10 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
           _banner('Waiting for opponent to answer your pick', Icons.hourglass_top_rounded),
         if (hintLine != null && (s['is_my_respond_turn'] == true)) _banner(hintLine, Icons.visibility_rounded),
         if (s['is_my_lead_turn'] == true)
-          _banner('Your turn — tap a card, then choose Attack or Defend.', Icons.touch_app_rounded),
+          _banner(
+            'Your turn — tap an available card, then choose Attack or Defend. Used cards stay on court but cannot be picked again.',
+            Icons.touch_app_rounded,
+          ),
         if (s['is_my_respond_turn'] == true && hintLine == null)
           _banner('Your turn — tap a card to respond.', Icons.touch_app_rounded),
       ],
@@ -584,9 +603,18 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
     final map = picked is Map ? Map<dynamic, dynamic>.from(picked) : const {};
     final mine = map[uid] ?? map['$uid'];
     final sec = _pickSecondsLeft();
+    final banned = _squadsUsedMy(s);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (banned.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              'You cannot pick a squad you already used this match (${banned.join(', ')}).',
+              style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(170), fontSize: 12.5, height: 1.35),
+            ),
+          ),
         Text(
           mine != null
               ? 'You locked squad $mine. Waiting for opponent or countdown…'
@@ -601,15 +629,29 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(right: n == 3 ? 0 : 8),
-                    child: FilledButton(
-                      onPressed: () => _pickSquad(n),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: CardGameUiTheme.gold,
-                        foregroundColor: const Color(0xFF1A120C),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: Text('Squad $n'),
-                    ),
+                    child: banned.contains(n)
+                        ? OutlinedButton(
+                            onPressed: null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: CardGameUiTheme.onDark.withAlpha(120),
+                              side: BorderSide(color: CardGameUiTheme.onDark.withAlpha(60)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: Text(
+                              'Squad $n\n(already used)',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 12, height: 1.2),
+                            ),
+                          )
+                        : FilledButton(
+                            onPressed: () => _pickSquad(n),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: CardGameUiTheme.gold,
+                              foregroundColor: const Color(0xFF1A120C),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: Text('Squad $n'),
+                          ),
                   ),
                 ),
               ],

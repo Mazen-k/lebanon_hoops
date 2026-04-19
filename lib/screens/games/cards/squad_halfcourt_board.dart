@@ -11,12 +11,15 @@ class SquadHalfcourtBoard extends StatelessWidget {
     required this.squad,
     this.readOnly = true,
     this.showCombatStats = false,
+    this.disabledSlots = const {},
     this.onSlotTap,
   });
 
   final CardsSquadPayload squad;
   final bool readOnly;
   final bool showCombatStats;
+  /// Slot keys already played this round — shown greyed and not tappable.
+  final Set<String> disabledSlots;
   final void Function(String slotKey)? onSlotTap;
 
   static String slotLabel(String key) {
@@ -56,17 +59,19 @@ class SquadHalfcourtBoard extends StatelessWidget {
 
   Widget _slotAt(double w, double h, String key, double fx, double fy) {
     final card = squad.slots[key]!;
+    final used = disabledSlots.contains(key);
     return Positioned(
       left: w * fx - _CourtSlotChip.slotStackWidth / 2,
       top: h * fy - _CourtSlotChip.slotStackHeight / 2,
       width: _CourtSlotChip.slotStackWidth,
-      height: _CourtSlotChip.slotStackHeight + (showCombatStats && !card.isEmpty ? 18 : 0),
+      height: _CourtSlotChip.slotStackHeight + (showCombatStats && !card.isEmpty && !used ? 18 : 0),
       child: _CourtSlotChip(
         label: slotLabel(key),
         card: card,
         isEmpty: card.isEmpty,
-        showCombatStats: showCombatStats,
-        onTap: readOnly || onSlotTap == null ? null : () => onSlotTap!(key),
+        showCombatStats: showCombatStats && !used,
+        slotUsed: used,
+        onTap: readOnly || onSlotTap == null || used ? null : () => onSlotTap!(key),
       ),
     );
   }
@@ -78,6 +83,7 @@ class _CourtSlotChip extends StatelessWidget {
     required this.card,
     required this.isEmpty,
     required this.showCombatStats,
+    this.slotUsed = false,
     required this.onTap,
   });
 
@@ -91,6 +97,7 @@ class _CourtSlotChip extends StatelessWidget {
   final CardsSquadSlotCard card;
   final bool isEmpty;
   final bool showCombatStats;
+  final bool slotUsed;
   final VoidCallback? onTap;
 
   @override
@@ -103,54 +110,82 @@ class _CourtSlotChip extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: _cardW,
-              height: _cardH,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: CardGameUiTheme.gold.withAlpha(isEmpty ? 75 : 110),
-                  width: isEmpty ? 1.8 : 1.4,
-                ),
-                color: isEmpty ? CardGameUiTheme.elevated.withAlpha(220) : null,
-                boxShadow: [
-                  BoxShadow(
-                    color: CardGameUiTheme.orangeGlow.withAlpha(isEmpty ? 22 : 40),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: isEmpty
-                  ? Center(
-                      child: Icon(
-                        Icons.add_rounded,
-                        size: 44,
-                        color: CardGameUiTheme.gold.withAlpha(onTap == null ? 90 : 220),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: _cardW,
+                  height: _cardH,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: CardGameUiTheme.gold.withAlpha(isEmpty ? 75 : (slotUsed ? 50 : 110)),
+                      width: isEmpty ? 1.8 : 1.4,
+                    ),
+                    color: isEmpty ? CardGameUiTheme.elevated.withAlpha(220) : null,
+                    boxShadow: [
+                      BoxShadow(
+                        color: CardGameUiTheme.orangeGlow.withAlpha(isEmpty ? 22 : (slotUsed ? 10 : 40)),
+                        blurRadius: 12,
+                        offset: const Offset(0, 5),
                       ),
-                    )
-                  : BundledPlayCardImage(
-                      cardId: card.cardId,
-                      fit: BoxFit.cover,
-                      width: _cardW,
-                      height: _cardH,
-                      fallbackImageUrl: card.cardImage,
-                      errorPlaceholder: ColoredBox(
-                        color: CardGameUiTheme.panel,
-                        child: Center(
-                          child: Text(
-                            card.playerLabel,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: CardGameUiTheme.onDark,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: isEmpty
+                      ? Center(
+                          child: Icon(
+                            Icons.add_rounded,
+                            size: 44,
+                            color: CardGameUiTheme.gold.withAlpha(onTap == null ? 90 : 220),
+                          ),
+                        )
+                      : Opacity(
+                          opacity: slotUsed ? 0.35 : 1,
+                          child: BundledPlayCardImage(
+                            cardId: card.cardId,
+                            fit: BoxFit.cover,
+                            width: _cardW,
+                            height: _cardH,
+                            fallbackImageUrl: card.cardImage,
+                            errorPlaceholder: ColoredBox(
+                              color: CardGameUiTheme.panel,
+                              child: Center(
+                                child: Text(
+                                  card.playerLabel,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: CardGameUiTheme.onDark,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
                             ),
+                          ),
+                        ),
+                ),
+                if (slotUsed && !isEmpty)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: Colors.black.withAlpha(150),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'USED',
+                          style: TextStyle(
+                            color: CardGameUiTheme.gold,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                            letterSpacing: 1,
                           ),
                         ),
                       ),
                     ),
+                  ),
+              ],
             ),
             if (showCombatStats && !isEmpty && (card.attack != null || card.defend != null)) ...[
               const SizedBox(height: 2),

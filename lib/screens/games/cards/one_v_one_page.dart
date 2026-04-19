@@ -47,7 +47,7 @@ class _OneVOnePageState extends State<OneVOnePage> {
                   child: _OneVOneTopTile(
                     icon: Icons.group_rounded,
                     title: 'Play against a friend',
-                    subtitle: 'Room code — best of 3 rounds',
+                    subtitle: 'Room code — best of 3; each round is 5 plays',
                     onTap: () => _showFriendRoomDialog(context),
                   ),
                 ),
@@ -398,7 +398,7 @@ class _FriendOneVOneDialogState extends State<_FriendOneVOneDialog> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Both players need three full squads. Match is best of 3 rounds; each round is first to 2 points.',
+              'Both players need three full squads. Best-of-3 match: each round is five scoring plays — use each of your five cards once. After each round you must pick a different squad than any you already used this match.',
               textAlign: TextAlign.center,
               style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(150), fontSize: 12, height: 1.35),
             ),
