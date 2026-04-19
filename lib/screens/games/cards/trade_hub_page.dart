@@ -524,6 +524,7 @@ class _WishlistThumb extends StatelessWidget {
             : BundledPlayCardImage(
                 cardId: card!.cardId,
                 fit: BoxFit.cover,
+                fallbackImageUrl: card!.cardImage,
                 errorPlaceholder: Center(
                   child: Padding(
                     padding: const EdgeInsets.all(6),

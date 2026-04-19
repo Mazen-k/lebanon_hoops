@@ -2314,6 +2314,7 @@ function buildCardsSquadPayload(row, summaryMap) {
       continue;
     }
     const s = summaryMap.get(id);
+    const img = s?.card_image ?? s?.cardImage;
     slots[key] = {
       card_id: id,
       cardId: id,
@@ -2329,6 +2330,8 @@ function buildCardsSquadPayload(row, summaryMap) {
       teamName: s?.team_name ?? null,
       card_type: s?.card_type ?? null,
       cardType: s?.card_type ?? null,
+      card_image: img ?? null,
+      cardImage: img ?? null,
     };
   }
   return {

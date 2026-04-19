@@ -341,6 +341,7 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
                                   BundledPlayCardImage(
                                     cardId: c.cardId,
                                     fit: BoxFit.cover,
+                                    fallbackImageUrl: c.cardImage,
                                     errorPlaceholder: ColoredBox(
                                       color: CardGameUiTheme.panel,
                                       child: Center(
@@ -419,6 +420,7 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
       lastName: c.lastName,
       overall: c.overall,
       teamName: c.teamName,
+      cardImage: c.cardImage,
     );
   }
 
@@ -782,6 +784,7 @@ class _CourtSlotChip extends StatelessWidget {
                       fit: BoxFit.cover,
                       width: _cardW,
                       height: _cardH,
+                      fallbackImageUrl: card.cardImage,
                       errorPlaceholder: ColoredBox(
                         color: CardGameUiTheme.panel,
                         child: Center(

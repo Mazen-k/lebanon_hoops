@@ -385,6 +385,7 @@ class _WishlistCatalogTile extends StatelessWidget {
               BundledPlayCardImage(
                 cardId: card.cardId,
                 fit: BoxFit.cover,
+                fallbackImageUrl: card.cardImage,
                 errorPlaceholder: ColoredBox(
                   color: CardGameUiTheme.panel,
                   child: Center(

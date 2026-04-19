@@ -7,6 +7,7 @@ class CardsSquadSlotCard {
     required this.lastName,
     this.overall,
     this.teamName,
+    this.cardImage,
   });
 
   final int cardId;
@@ -15,6 +16,7 @@ class CardsSquadSlotCard {
   final String lastName;
   final int? overall;
   final String? teamName;
+  final String? cardImage;
 
   bool get isEmpty => cardId <= 0;
 
@@ -45,6 +47,8 @@ class CardsSquadSlotCard {
 
     final cid = cardIdFromJson();
 
+    final img = json['card_image'] ?? json['cardImage'];
+
     return CardsSquadSlotCard(
       cardId: cid,
       position: (json['position'] ?? (cid <= 0 ? '' : '?')).toString(),
@@ -52,6 +56,7 @@ class CardsSquadSlotCard {
       lastName: (json['last_name'] ?? json['lastName'] ?? '').toString(),
       overall: opt('overall'),
       teamName: json['team_name']?.toString() ?? json['teamName']?.toString(),
+      cardImage: img?.toString(),
     );
   }
 }

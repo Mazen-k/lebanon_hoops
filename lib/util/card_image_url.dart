@@ -3,9 +3,31 @@ import 'package:flutter/material.dart';
 import '../config/backend_config.dart';
 
 /// Bundled play card art: `assets/images/cards/<card_id>.png` (e.g. card 1 → `assets/images/cards/1.png`).
+///
+/// **Must match** `play_cards.card_id` exactly. Use **PNG**; other extensions are not tried here.
+/// Declare the folder in `pubspec.yaml` (`assets/images/cards/`) and do a **full restart** after adding files.
 String bundledPlayCardAssetPath(int cardId) => 'assets/images/cards/$cardId.png';
 
-/// Fills space with the local card PNG, or [errorPlaceholder] if the asset is missing or [cardId] ≤ 0.
+Widget _networkCardImage({
+  required String? rawUrl,
+  required BoxFit fit,
+  required double? width,
+  required double? height,
+  required Widget errorPlaceholder,
+}) {
+  final u = displayableCardImageUrl(rawUrl);
+  if (u == null || u.isEmpty) return errorPlaceholder;
+  return Image.network(
+    u,
+    fit: fit,
+    width: width,
+    height: height,
+    gaplessPlayback: true,
+    errorBuilder: (_, _, _) => errorPlaceholder,
+  );
+}
+
+/// Local PNG first; if missing and [fallbackImageUrl] is set (e.g. `play_cards.card_image`), loads that URL.
 class BundledPlayCardImage extends StatelessWidget {
   const BundledPlayCardImage({
     super.key,
@@ -14,6 +36,7 @@ class BundledPlayCardImage extends StatelessWidget {
     this.width,
     this.height,
     required this.errorPlaceholder,
+    this.fallbackImageUrl,
   });
 
   final int cardId;
@@ -21,6 +44,8 @@ class BundledPlayCardImage extends StatelessWidget {
   final double? width;
   final double? height;
   final Widget errorPlaceholder;
+  /// When the bundled asset is missing, try this (Drive URL, https, or API path).
+  final String? fallbackImageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +56,13 @@ class BundledPlayCardImage extends StatelessWidget {
       width: width,
       height: height,
       gaplessPlayback: true,
-      errorBuilder: (_, _, _) => errorPlaceholder,
+      errorBuilder: (_, _, _) => _networkCardImage(
+        rawUrl: fallbackImageUrl,
+        fit: fit,
+        width: width,
+        height: height,
+        errorPlaceholder: errorPlaceholder,
+      ),
     );
   }
 }

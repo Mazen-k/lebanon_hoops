@@ -311,6 +311,7 @@ class _PickerCardImageFill extends StatelessWidget {
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
+      fallbackImageUrl: card.cardImage,
       errorPlaceholder: placeholder,
     );
   }
