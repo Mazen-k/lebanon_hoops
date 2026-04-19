@@ -1902,6 +1902,463 @@ async function tradeableInstancesHandler(req, res) {
 app.get('/trade/instances', tradeableInstancesHandler);
 app.get('/api/trade/instances', tradeableInstancesHandler);
 
+// --- In-memory 1v1 friend rooms (card battle) ---
+const oneVOneRooms = new Map();
+const OVO_MATCH_ROUNDS_TO_WIN = 2;
+const OVO_SUBROUNDS_TO_WIN_ROUND = 2;
+const OVO_SQUAD_PICK_MS = 5000;
+const OVO_LOCKED_SQUAD_MS = 2500;
+const OVO_REVEAL_MS = 3500;
+
+function genOneVOneCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 6; i += 1) s += chars[Math.floor(Math.random() * chars.length)];
+  if (oneVOneRooms.has(s)) return genOneVOneCode();
+  return s;
+}
+
+function pruneStaleOneVOneRooms() {
+  const now = Date.now();
+  for (const [code, room] of oneVOneRooms) {
+    if (now - room.createdAt > 60 * 60 * 1000) oneVOneRooms.delete(code);
+  }
+}
+
+async function ovoUserHasThreeFullSquads(client, userId) {
+  for (let sn = 1; sn <= 3; sn += 1) {
+    const row = await loadCardsSquadRow(client, userId, sn);
+    if (!row) return false;
+    for (const k of ['pg', 'sg', 'sf', 'pf', 'c']) {
+      if (squadSlotFromRow(row, k) <= 0) return false;
+    }
+  }
+  return true;
+}
+
+async function ovoPickRandomSquadNumber(client, userId) {
+  const valid = [];
+  for (let sn = 1; sn <= 3; sn += 1) {
+    const row = await loadCardsSquadRow(client, userId, sn);
+    if (!row) continue;
+    let ok = true;
+    for (const k of ['pg', 'sg', 'sf', 'pf', 'c']) {
+      if (squadSlotFromRow(row, k) <= 0) ok = false;
+    }
+    if (ok) valid.push(sn);
+  }
+  if (valid.length === 0) return 1;
+  return valid[Math.floor(Math.random() * valid.length)];
+}
+
+async function ovoBuildSquadSnapshot(client, userId, squadNumber) {
+  const row = await loadCardsSquadRow(client, userId, squadNumber);
+  if (!row) return null;
+  const ids = ['pg', 'sg', 'sf', 'pf', 'c'].map((k) => squadSlotFromRow(row, k)).filter((id) => id > 0);
+  if (ids.length !== 5) return null;
+  const sm = await fetchPlayCardSummariesForSquad(client, ids);
+  const payload = buildCardsSquadPayload(row, sm);
+  return { squad_number: squadNumber, squad: payload };
+}
+
+function ovoInitRound(room, roundFirstUid) {
+  room.round_first_actor = roundFirstUid;
+  room.subround_first_actor = roundFirstUid;
+  room.round_point_wins = {};
+  for (const u of room.users) room.round_point_wins[u] = 0;
+  room.battle_step = 'lead';
+  room.lead_pending = null;
+  room.response_pending = null;
+  room.reveal = null;
+  room.reveal_deadline = null;
+}
+
+function ovoPeer(room, uid) {
+  return room.users.find((u) => u !== uid) ?? null;
+}
+
+async function ovoTryStartSquadPick(client, room) {
+  if (room.users.length < 2) return;
+  const [a, b] = room.users;
+  const okA = await ovoUserHasThreeFullSquads(client, a);
+  const okB = await ovoUserHasThreeFullSquads(client, b);
+  if (!okA || !okB) {
+    room.phase = 'need_squads';
+    room.squad_ready = { [a]: okA, [b]: okB };
+    room.squad_pick_deadline = null;
+    return;
+  }
+  room.phase = 'pick_squad';
+  room.squad_ready = { [a]: true, [b]: true };
+  room.squad_pick = { [a]: null, [b]: null };
+  room.squad_pick_deadline = Date.now() + OVO_SQUAD_PICK_MS;
+}
+
+async function ovoMaybePromoteFromNeedSquads(client, room) {
+  if (room.phase !== 'need_squads' || room.users.length < 2) return;
+  await ovoTryStartSquadPick(client, room);
+}
+
+async function ovoFinalizeSquadPickPhase(client, room, now) {
+  if (room.phase !== 'pick_squad') return;
+  const [a, b] = room.users;
+  const deadlineHit = room.squad_pick_deadline != null && now >= room.squad_pick_deadline;
+  const bothChosen = room.squad_pick[a] != null && room.squad_pick[b] != null;
+  if (!bothChosen && !deadlineHit) return;
+  if (!bothChosen && deadlineHit) {
+    if (room.squad_pick[a] == null) room.squad_pick[a] = await ovoPickRandomSquadNumber(client, a);
+    if (room.squad_pick[b] == null) room.squad_pick[b] = await ovoPickRandomSquadNumber(client, b);
+  }
+  const snapA = await ovoBuildSquadSnapshot(client, a, room.squad_pick[a]);
+  const snapB = await ovoBuildSquadSnapshot(client, b, room.squad_pick[b]);
+  if (!snapA || !snapB) {
+    room.phase = 'need_squads';
+    return;
+  }
+  room.squad_snapshots = { [a]: snapA, [b]: snapB };
+  room.phase = 'locked_squad';
+  room.locked_squad_deadline = now + OVO_LOCKED_SQUAD_MS;
+}
+
+function ovoStartBattleFromLocked(room, now) {
+  if (room.phase !== 'locked_squad') return;
+  if (room.locked_squad_deadline == null || now < room.locked_squad_deadline) return;
+  room.phase = 'battle';
+  room.match_round_wins = {};
+  for (const u of room.users) room.match_round_wins[u] = 0;
+  room.round_index = 1;
+  room.prev_round_winner = null;
+  const [u0, u1] = room.users;
+  const rnd = Math.random() < 0.5 ? u0 : u1;
+  room.round_first_actor = rnd;
+  ovoInitRound(room, rnd);
+}
+
+function ovoScoreSubround(leadMode, leadAtk, leadDef, respAtk, respDef) {
+  if (leadMode === 'attack') {
+    return { lead_score: leadAtk, resp_score: respDef };
+  }
+  return { lead_score: leadDef, resp_score: respAtk };
+}
+
+function ovoApplyReveal(room) {
+  const rev = room.reveal;
+  if (!rev) return;
+  const { winner_uid, tie } = rev;
+  if (!tie && winner_uid != null) {
+    room.round_point_wins[winner_uid] = (room.round_point_wins[winner_uid] ?? 0) + 1;
+    room.subround_first_actor = winner_uid;
+  }
+  const [a, b] = room.users;
+  const wa = room.round_point_wins[a] ?? 0;
+  const wb = room.round_point_wins[b] ?? 0;
+  let roundWinner = null;
+  if (wa >= OVO_SUBROUNDS_TO_WIN_ROUND) roundWinner = a;
+  else if (wb >= OVO_SUBROUNDS_TO_WIN_ROUND) roundWinner = b;
+  if (roundWinner != null) {
+    room.match_round_wins[roundWinner] = (room.match_round_wins[roundWinner] ?? 0) + 1;
+    room.prev_round_winner = roundWinner;
+    const ma = room.match_round_wins[a] ?? 0;
+    const mb = room.match_round_wins[b] ?? 0;
+    if (ma >= OVO_MATCH_ROUNDS_TO_WIN || mb >= OVO_MATCH_ROUNDS_TO_WIN) {
+      room.phase = 'match_over';
+      room.match_winner = ma >= OVO_MATCH_ROUNDS_TO_WIN ? a : b;
+      room.battle_step = 'done';
+      room.reveal = null;
+      room.reveal_deadline = null;
+      return;
+    }
+    room.round_index = (room.round_index ?? 1) + 1;
+    room.round_point_wins = { [a]: 0, [b]: 0 };
+    const nextLead = roundWinner;
+    room.round_first_actor = nextLead;
+    ovoInitRound(room, nextLead);
+    room.reveal = null;
+    room.reveal_deadline = null;
+    return;
+  }
+  room.battle_step = 'lead';
+  room.lead_pending = null;
+  room.response_pending = null;
+  room.reveal = null;
+  room.reveal_deadline = null;
+}
+
+function ovoMaybeExpireReveal(room, now) {
+  if (room.phase !== 'battle' || room.battle_step !== 'reveal') return;
+  if (room.reveal_deadline == null || now < room.reveal_deadline) return;
+  ovoApplyReveal(room);
+}
+
+async function ovoAdvanceRoom(client, room, now) {
+  await ovoMaybePromoteFromNeedSquads(client, room);
+  if (room.phase === 'pick_squad') {
+    await ovoFinalizeSquadPickPhase(client, room, now);
+  }
+  if (room.phase === 'locked_squad') {
+    ovoStartBattleFromLocked(room, now);
+  }
+  ovoMaybeExpireReveal(room, now);
+}
+
+function ovoSlotPositionFromSnapshot(snap, slotKey) {
+  const slots = snap?.squad?.slots ?? {};
+  const s = slots[slotKey];
+  return s?.position != null ? String(s.position) : slotKey.toUpperCase();
+}
+
+async function oneVOneCreateHandler(req, res) {
+  pruneStaleOneVOneRooms();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  if (userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'user_id is required' });
+  }
+  const uid = Number(userId);
+  const { rows } = await pool.query(`SELECT username FROM users WHERE user_id = $1::int`, [uid]);
+  if (rows.length === 0) return res.status(400).json({ error: 'User not found' });
+  const code = genOneVOneCode();
+  oneVOneRooms.set(code, {
+    code,
+    createdAt: Date.now(),
+    users: [uid],
+    usernames: { [uid]: rows[0].username },
+    phase: 'lobby',
+    squad_pick: {},
+    squad_snapshots: null,
+    match_winner: null,
+  });
+  res.status(201).json({ code, host: true });
+}
+
+async function oneVOneJoinHandler(req, res) {
+  pruneStaleOneVOneRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  if (!code || userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  const uid = Number(userId);
+  const room = oneVOneRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found or expired' });
+  if (room.users.includes(uid)) {
+    return res.json({ code, joined: true, peer: room.users.find((u) => u !== uid) ?? null });
+  }
+  if (room.users.length >= 2) return res.status(409).json({ error: 'Room is full' });
+  const { rows } = await pool.query(`SELECT username FROM users WHERE user_id = $1::int`, [uid]);
+  if (rows.length === 0) return res.status(400).json({ error: 'User not found' });
+  room.users.push(uid);
+  room.usernames[uid] = rows[0].username;
+  const client = await pool.connect();
+  try {
+    await ovoTryStartSquadPick(client, room);
+  } finally {
+    client.release();
+  }
+  res.json({ code, joined: true, peer: room.users[0] });
+}
+
+async function oneVOneLeaveHandler(req, res) {
+  pruneStaleOneVOneRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  if (!code || userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  const uid = Number(userId);
+  const room = oneVOneRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  room.users = room.users.filter((u) => u !== uid);
+  if (room.users.length === 0) oneVOneRooms.delete(code);
+  res.json({ left: true });
+}
+
+async function oneVOneSquadPickHandler(req, res) {
+  pruneStaleOneVOneRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  const rawSq = req.body?.squad_number ?? req.body?.squadNumber;
+  if (!code || userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  const uid = Number(userId);
+  const sn = parseCardsSquadNumber(rawSq);
+  if (sn == null) return res.status(400).json({ error: 'squad_number must be 1, 2, or 3' });
+  const room = oneVOneRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (!room.users.includes(uid)) return res.status(403).json({ error: 'Not a member' });
+  if (room.phase !== 'pick_squad') return res.status(400).json({ error: 'Not in squad pick phase' });
+  const client = await pool.connect();
+  try {
+    const row = await loadCardsSquadRow(client, uid, sn);
+    if (!row) return res.status(400).json({ error: 'Squad not found' });
+    for (const k of ['pg', 'sg', 'sf', 'pf', 'c']) {
+      if (squadSlotFromRow(row, k) <= 0) return res.status(400).json({ error: 'Squad must be complete' });
+    }
+    room.squad_pick[uid] = sn;
+    await ovoFinalizeSquadPickPhase(client, room, Date.now());
+  } finally {
+    client.release();
+  }
+  res.json({ ok: true });
+}
+
+async function oneVOneLeadHandler(req, res) {
+  pruneStaleOneVOneRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  const slot = (req.body?.slot ?? '').toString().trim().toLowerCase();
+  const mode = (req.body?.mode ?? '').toString().trim().toLowerCase();
+  if (!code || userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  if (!['pg', 'sg', 'sf', 'pf', 'c'].includes(slot)) return res.status(400).json({ error: 'Invalid slot' });
+  if (mode !== 'attack' && mode !== 'defend') return res.status(400).json({ error: 'mode must be attack or defend' });
+  const uid = Number(userId);
+  const room = oneVOneRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (room.phase !== 'battle' || room.battle_step !== 'lead') {
+    return res.status(400).json({ error: 'Not your turn to lead' });
+  }
+  if (room.subround_first_actor !== uid) return res.status(400).json({ error: 'Not your turn to lead' });
+  const snap = room.squad_snapshots?.[uid];
+  if (!snap?.squad?.slots?.[slot]) return res.status(400).json({ error: 'Invalid squad state' });
+  const card = snap.squad.slots[slot];
+  if (!card?.card_id || card.card_id <= 0) return res.status(400).json({ error: 'Empty slot' });
+  room.lead_pending = { uid, slot, mode };
+  room.battle_step = 'respond';
+  res.json({ ok: true });
+}
+
+async function oneVOneRespondHandler(req, res) {
+  pruneStaleOneVOneRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const userId = req.body?.user_id ?? req.body?.userId;
+  const slot = (req.body?.slot ?? '').toString().trim().toLowerCase();
+  if (!code || userId == null || Number.isNaN(Number(userId))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  if (!['pg', 'sg', 'sf', 'pf', 'c'].includes(slot)) return res.status(400).json({ error: 'Invalid slot' });
+  const uid = Number(userId);
+  const room = oneVOneRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (room.phase !== 'battle' || room.battle_step !== 'respond') {
+    return res.status(400).json({ error: 'Cannot respond now' });
+  }
+  const lead = room.lead_pending;
+  if (!lead || lead.uid === uid) return res.status(400).json({ error: 'Invalid respond turn' });
+  const peer = ovoPeer(room, lead.uid);
+  if (peer !== uid) return res.status(403).json({ error: 'Not your turn to respond' });
+  const needMode = lead.mode === 'attack' ? 'defend' : 'attack';
+  const snap = room.squad_snapshots?.[uid];
+  if (!snap?.squad?.slots?.[slot]) return res.status(400).json({ error: 'Invalid squad state' });
+  const respCard = snap.squad.slots[slot];
+  if (!respCard?.card_id || respCard.card_id <= 0) return res.status(400).json({ error: 'Empty slot' });
+  const leadSnap = room.squad_snapshots[lead.uid];
+  const leadCard = leadSnap.squad.slots[lead.slot];
+  const leadAtk = Number(leadCard.attack ?? 0);
+  const leadDef = Number(leadCard.defend ?? 0);
+  const respAtk = Number(respCard.attack ?? 0);
+  const respDef = Number(respCard.defend ?? 0);
+  const scores = ovoScoreSubround(lead.mode, leadAtk, leadDef, respAtk, respDef);
+  let winner_uid = null;
+  let tie = false;
+  if (scores.lead_score > scores.resp_score) winner_uid = lead.uid;
+  else if (scores.resp_score > scores.lead_score) winner_uid = uid;
+  else tie = true;
+  room.response_pending = { uid, slot, implicit_mode: needMode };
+  room.reveal = {
+    lead_uid: lead.uid,
+    respond_uid: uid,
+    lead_slot: lead.slot,
+    respond_slot: slot,
+    lead_mode: lead.mode,
+    respond_mode: needMode,
+    lead_card_id: leadCard.card_id,
+    respond_card_id: respCard.card_id,
+    lead_score: scores.lead_score,
+    respond_score: scores.resp_score,
+    winner_uid,
+    tie,
+    lead_label: `${leadCard.first_name ?? ''} ${leadCard.last_name ?? ''}`.trim(),
+    respond_label: `${respCard.first_name ?? ''} ${respCard.last_name ?? ''}`.trim(),
+  };
+  room.battle_step = 'reveal';
+  room.reveal_deadline = Date.now() + OVO_REVEAL_MS;
+  room.lead_pending = null;
+  res.json({ ok: true });
+}
+
+async function oneVOneStateHandler(req, res) {
+  pruneStaleOneVOneRooms();
+  const code = (req.params.code ?? '').toUpperCase();
+  const raw = req.query.user_id ?? req.query.userId;
+  if (!code || raw == null || Number.isNaN(Number(raw))) {
+    return res.status(400).json({ error: 'code and user_id are required' });
+  }
+  const userId = Number(raw);
+  const room = oneVOneRooms.get(code);
+  if (!room) return res.status(404).json({ error: 'Room not found or expired' });
+  if (!room.users.includes(userId)) return res.status(403).json({ error: 'Not a member of this room' });
+  const client = await pool.connect();
+  try {
+    const now = Date.now();
+    await ovoAdvanceRoom(client, room, now);
+    const peerId = room.users.find((u) => u !== userId) ?? null;
+    const out = {
+      code: room.code,
+      phase: room.phase,
+      usernames: room.usernames,
+      peer_user_id: peerId,
+      squad_pick_deadline: room.squad_pick_deadline ?? null,
+      squad_pick: room.squad_pick ?? {},
+      squad_ready: room.squad_ready ?? null,
+      my_squad_number: room.squad_pick?.[userId] ?? null,
+      my_squad: room.squad_snapshots?.[userId] ?? null,
+      match_round_wins: room.match_round_wins ?? null,
+      round_point_wins: room.round_point_wins ?? null,
+      round_index: room.round_index ?? null,
+      battle_step: room.battle_step ?? null,
+      subround_first_actor: room.subround_first_actor ?? null,
+      round_first_actor: room.round_first_actor ?? null,
+      match_winner: room.match_winner ?? null,
+      reveal: room.reveal,
+      reveal_deadline: room.reveal_deadline ?? null,
+    };
+    if (room.phase === 'battle') {
+      out.is_my_lead_turn = room.battle_step === 'lead' && room.subround_first_actor === userId;
+      const lp = room.lead_pending;
+      out.is_my_respond_turn = room.battle_step === 'respond' && lp != null && lp.uid !== userId;
+      if (room.battle_step === 'respond' && lp && lp.uid !== userId) {
+        const snapLead = room.squad_snapshots?.[lp.uid];
+        const pos = ovoSlotPositionFromSnapshot(snapLead, lp.slot);
+        out.opponent_action_hint = { mode: lp.mode, position: pos };
+      } else {
+        out.opponent_action_hint = null;
+      }
+      out.waiting_opponent_lead = room.battle_step === 'lead' && room.subround_first_actor !== userId;
+      out.waiting_opponent_respond = room.battle_step === 'respond' && lp != null && lp.uid === userId;
+    }
+    res.json(out);
+  } finally {
+    client.release();
+  }
+}
+
+app.post('/cards/one-v-one/rooms', oneVOneCreateHandler);
+app.post('/api/cards/one-v-one/rooms', oneVOneCreateHandler);
+app.post('/cards/one-v-one/rooms/:code/join', oneVOneJoinHandler);
+app.post('/api/cards/one-v-one/rooms/:code/join', oneVOneJoinHandler);
+app.get('/cards/one-v-one/rooms/:code', oneVOneStateHandler);
+app.get('/api/cards/one-v-one/rooms/:code', oneVOneStateHandler);
+app.post('/cards/one-v-one/rooms/:code/leave', oneVOneLeaveHandler);
+app.post('/api/cards/one-v-one/rooms/:code/leave', oneVOneLeaveHandler);
+app.post('/cards/one-v-one/rooms/:code/squad-pick', oneVOneSquadPickHandler);
+app.post('/api/cards/one-v-one/rooms/:code/squad-pick', oneVOneSquadPickHandler);
+app.post('/cards/one-v-one/rooms/:code/lead', oneVOneLeadHandler);
+app.post('/api/cards/one-v-one/rooms/:code/lead', oneVOneLeadHandler);
+app.post('/cards/one-v-one/rooms/:code/respond', oneVOneRespondHandler);
+app.post('/api/cards/one-v-one/rooms/:code/respond', oneVOneRespondHandler);
+
 /** --- Public court reservation (no owner credentials exposed) --- */
 
 async function listPublicCourtsHandler(req, res) {
@@ -2320,6 +2777,8 @@ function buildCardsSquadPayload(row, summaryMap) {
       cardId: id,
       player_id: s?.player_id ?? null,
       playerId: s?.player_id ?? null,
+      attack: s?.attack ?? null,
+      defend: s?.defend ?? null,
       overall: s?.overall ?? null,
       position: s?.position ?? '?',
       first_name: s?.first_name ?? '',
@@ -2727,4 +3186,5 @@ app.listen(port, '0.0.0.0', () => {
   console.log('  POST /public/reservations { user_id, availability_id }');
   console.log('  GET /games  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore');
   console.log('  GET/POST/PATCH /cards/squad …user_id=… (1v1 lineups; POST creates, PATCH updates)');
+  console.log('  1v1 friend: POST/GET /cards/one-v-one/rooms … squad-pick, lead, respond');
 });

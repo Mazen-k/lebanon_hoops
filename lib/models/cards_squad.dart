@@ -6,6 +6,8 @@ class CardsSquadSlotCard {
     required this.firstName,
     required this.lastName,
     this.overall,
+    this.attack,
+    this.defend,
     this.teamName,
     this.cardImage,
   });
@@ -15,6 +17,8 @@ class CardsSquadSlotCard {
   final String firstName;
   final String lastName;
   final int? overall;
+  final int? attack;
+  final int? defend;
   final String? teamName;
   final String? cardImage;
 
@@ -55,6 +59,8 @@ class CardsSquadSlotCard {
       firstName: (json['first_name'] ?? json['firstName'] ?? '').toString(),
       lastName: (json['last_name'] ?? json['lastName'] ?? '').toString(),
       overall: opt('overall'),
+      attack: opt('attack'),
+      defend: opt('defend'),
       teamName: json['team_name']?.toString() ?? json['teamName']?.toString(),
       cardImage: img?.toString(),
     );

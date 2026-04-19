@@ -419,6 +419,8 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
       firstName: c.firstName,
       lastName: c.lastName,
       overall: c.overall,
+      attack: c.attack,
+      defend: c.defend,
       teamName: c.teamName,
       cardImage: c.cardImage,
     );
