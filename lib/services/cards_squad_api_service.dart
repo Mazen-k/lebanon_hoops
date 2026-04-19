@@ -14,13 +14,15 @@ class CardsSquadApiException implements Exception {
 }
 
 class CardsSquadLoadResult {
-  const CardsSquadLoadResult.ok(CardsSquadPayload this.squad)
-      : needInstances = false,
+  const CardsSquadLoadResult.ok(
+    CardsSquadPayload this.squad, {
+    this.reservedCardIdsInOtherSquads = const [],
+  })  : needInstances = false,
         have = 0,
         need = 5,
         exists = true;
 
-  const CardsSquadLoadResult.noSquad()
+  const CardsSquadLoadResult.noSquad({this.reservedCardIdsInOtherSquads = const []})
       : squad = null,
         needInstances = false,
         have = 0,
@@ -30,13 +32,27 @@ class CardsSquadLoadResult {
   const CardsSquadLoadResult.needMoreInstances({required this.have, required this.need})
       : squad = null,
         needInstances = true,
-        exists = false;
+        exists = false,
+        reservedCardIdsInOtherSquads = const [];
 
   final CardsSquadPayload? squad;
   final bool exists;
   final bool needInstances;
   final int have;
   final int need;
+  /// Card ids already used on squads 1–3 excluding the squad being edited (from `GET /cards/squad`).
+  final List<int> reservedCardIdsInOtherSquads;
+}
+
+List<int> _parseCardIdsInOtherSquads(Map<String, dynamic> decoded) {
+  final raw = decoded['card_ids_in_other_squads'] ?? decoded['cardIdsInOtherSquads'];
+  if (raw is! List) return const [];
+  final out = <int>[];
+  for (final e in raw) {
+    final id = int.tryParse(e.toString());
+    if (id != null && id > 0) out.add(id);
+  }
+  return out;
 }
 
 class CardsSquadApiService {
@@ -96,7 +112,7 @@ class CardsSquadApiService {
         return CardsSquadLoadResult.needMoreInstances(have: have, need: need);
       }
       if (decoded['exists'] == false) {
-        return const CardsSquadLoadResult.noSquad();
+        return CardsSquadLoadResult.noSquad(reservedCardIdsInOtherSquads: _parseCardIdsInOtherSquads(decoded));
       }
       final raw = decoded['squad'];
       if (raw == null) {
@@ -105,7 +121,10 @@ class CardsSquadApiService {
       if (raw is! Map<String, dynamic>) {
         throw CardsSquadApiException('Invalid squad object');
       }
-      return CardsSquadLoadResult.ok(CardsSquadPayload.fromJson(raw));
+      return CardsSquadLoadResult.ok(
+        CardsSquadPayload.fromJson(raw),
+        reservedCardIdsInOtherSquads: _parseCardIdsInOtherSquads(decoded),
+      );
     } finally {
       if (_client == null) {
         own.close();

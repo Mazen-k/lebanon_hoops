@@ -61,6 +61,8 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
   bool _saving = false;
   bool _persisted = false;
   bool _dirty = false;
+  /// Card ids already assigned on this user's other squads (from GET); hide from picker.
+  List<int> _reservedInOtherSquads = const [];
 
   @override
   void initState() {
@@ -85,6 +87,7 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
       if (r.needInstances) {
         setState(() {
           _squad = null;
+          _reservedInOtherSquads = const [];
           _loading = false;
           _error = 'Squad data is unavailable. Update the app or try again.';
         });
@@ -93,6 +96,7 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
       if (!r.exists) {
         setState(() {
           _squad = CardsSquadPayload.draft(widget.squadNumber);
+          _reservedInOtherSquads = r.reservedCardIdsInOtherSquads;
           _persisted = false;
           _dirty = false;
           _loading = false;
@@ -101,6 +105,7 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
       }
       setState(() {
         _squad = r.squad;
+        _reservedInOtherSquads = r.reservedCardIdsInOtherSquads;
         _persisted = true;
         _dirty = false;
         _loading = false;
@@ -216,8 +221,8 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
       return;
     }
     final role = _squadRoleForSlotKey(slotKey);
-    final eligible = cards.where((c) => _collectionCardFitsSquadSlot(c, slotKey)).toList();
-    if (eligible.isEmpty) {
+    final byPosition = cards.where((c) => _collectionCardFitsSquadSlot(c, slotKey)).toList();
+    if (byPosition.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -231,7 +236,26 @@ class _SquadEditorPageState extends State<SquadEditorPage> {
       );
       return;
     }
-    eligible.sort((a, b) => b.overall.compareTo(a.overall));
+    final eligible = byPosition.where((c) => !_reservedInOtherSquads.contains(c.cardId)).toList();
+    if (eligible.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            role == null
+                ? 'No cards available (all matching cards are on another squad).'
+                : 'No available $role cards — each is already assigned to another squad.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    eligible.sort((a, b) {
+      final byOvr = b.overall.compareTo(a.overall);
+      if (byOvr != 0) return byOvr;
+      return a.cardId.compareTo(b.cardId);
+    });
     final hasCard = !squad.slots[slotKey]!.isEmpty;
     final picked = await showModalBottomSheet<Object?>(
       context: context,

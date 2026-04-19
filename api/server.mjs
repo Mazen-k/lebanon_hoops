@@ -2421,6 +2421,36 @@ async function validateSquadLineupPositions(client, slotPg, slotSg, slotSf, slot
   }
 }
 
+/** Distinct positive card_ids assigned in other squads (same user, excluding [excludeSquadNumber]). */
+async function fetchCardIdsUsedInOtherSquads(client, userId, excludeSquadNumber) {
+  const { rows } = await client.query(
+    `SELECT pg, sg, sf, pf, c FROM cards_squad WHERE user_id = $1::int AND squad_number <> $2::int`,
+    [userId, excludeSquadNumber],
+  );
+  const out = new Set();
+  for (const r of rows) {
+    for (const key of ['pg', 'sg', 'sf', 'pf', 'c']) {
+      const v = r[key];
+      if (v != null && Number.isInteger(Number(v)) && Number(v) > 0) out.add(Number(v));
+    }
+  }
+  return [...out];
+}
+
+async function validateCardsNotUsedInOtherSquads(client, userId, currentSquadNumber, slotPg, slotSg, slotSf, slotPf, slotC) {
+  const usedElsewhere = new Set(await fetchCardIdsUsedInOtherSquads(client, userId, currentSquadNumber));
+  const incoming = [slotPg, slotSg, slotSf, slotPf, slotC].filter((id) => id != null && Number.isInteger(id) && id > 0);
+  for (const id of incoming) {
+    if (usedElsewhere.has(id)) {
+      const err = new Error(
+        `Card ${id} is already on another squad. Remove it from that squad before using it here.`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+}
+
 /** GET /cards/squad?squad_number=1..3&user_id=… — returns { exists, squad? }; no row is created until POST. */
 async function getCardsSquadHandler(req, res) {
   const rawUser = req.query.user_id ?? req.query.userId;
@@ -2438,9 +2468,10 @@ async function getCardsSquadHandler(req, res) {
     const { rows: u } = await client.query(`SELECT 1 FROM users WHERE user_id = $1::int`, [userId]);
     if (u.length === 0) return res.status(404).json({ error: 'User not found.' });
 
+    const reservedElsewhere = await fetchCardIdsUsedInOtherSquads(client, userId, squadNumber);
     const row = await loadCardsSquadRow(client, userId, squadNumber);
     if (row == null) {
-      return res.json({ exists: false });
+      return res.json({ exists: false, card_ids_in_other_squads: reservedElsewhere });
     }
     const sm = await fetchPlayCardSummariesForSquad(client, [
       squadSlotFromRow(row, 'pg'),
@@ -2449,7 +2480,11 @@ async function getCardsSquadHandler(req, res) {
       squadSlotFromRow(row, 'pf'),
       squadSlotFromRow(row, 'c'),
     ].filter((id) => id > 0));
-    return res.json({ exists: true, squad: buildCardsSquadPayload(row, sm) });
+    return res.json({
+      exists: true,
+      squad: buildCardsSquadPayload(row, sm),
+      card_ids_in_other_squads: reservedElsewhere,
+    });
   } catch (err) {
     console.error('[GET /cards/squad]', err);
     const msg = err.message ?? String(err);
@@ -2515,6 +2550,7 @@ async function postCardsSquadHandler(req, res) {
     }
     await validateUserOwnsSquadMultiset(client, userId, slotPg, slotSg, slotSf, slotPf, slotC);
     await validateSquadLineupPositions(client, slotPg, slotSg, slotSf, slotPf, slotC);
+    await validateCardsNotUsedInOtherSquads(client, userId, squadNumber, slotPg, slotSg, slotSf, slotPf, slotC);
 
     const { rows: ins } = await client.query(
       `INSERT INTO cards_squad (user_id, squad_number, squad_name, pg, sg, sf, pf, c)
@@ -2614,6 +2650,7 @@ async function patchCardsSquadHandler(req, res) {
       if (ce !== undefined) slotC = ce === null ? -1 : ce;
       await validateUserOwnsSquadMultiset(client, userId, slotPg, slotSg, slotSf, slotPf, slotC);
       await validateSquadLineupPositions(client, slotPg, slotSg, slotSf, slotPf, slotC);
+      await validateCardsNotUsedInOtherSquads(client, userId, squadNumber, slotPg, slotSg, slotSf, slotPf, slotC);
     }
 
     await client.query(
