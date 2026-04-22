@@ -11,12 +11,7 @@
  */
 
 import cron from 'node-cron';
-import {
-  getSchedule,
-  getBoxscore,
-  getPlayByPlay,
-  getMatchBundle,
-} from './flbScraper.mjs';
+import { getSchedule, getBoxscore } from './flbScraper.mjs';
 
 const DEFAULT_COMPETITION_IDS = [42001, 39158, 39159, 48035];
 
@@ -33,7 +28,6 @@ function readCompetitionIds() {
 const COMPETITION_IDS = readCompetitionIds();
 
 // Polling intervals (milliseconds)
-const PBP_INTERVAL_MS   = 8_000;   // play-by-play while game is live
 const BOX_INTERVAL_MS   = 30_000;  // boxscore while game is live
 const LIVE_CHECK_CRON   = '* * * * *';  // every minute, check for games going live
 const DAILY_REFRESH_CRON = '7 3 * * *'; // 03:07 Asia/Beirut (off-peak)
@@ -44,9 +38,7 @@ const DAILY_REFRESH_CRON = '7 3 * * *'; // 03:07 Asia/Beirut (off-peak)
 
 /**
  * @typedef {object} Poller
- * @property {NodeJS.Timeout} pbpTimer
  * @property {NodeJS.Timeout} boxTimer
- * @property {boolean} pbpRunning
  * @property {boolean} boxRunning
  * @property {boolean} stopping
  */
@@ -186,6 +178,7 @@ async function upsertBoxscore(pool, matchId, boxscore) {
   }
 }
 
+/** Not used by FLB cron anymore — play-by-play is read from `game_events` only; keep for admin/import scripts. */
 async function upsertEvents(pool, matchId, playByPlay) {
   if (!playByPlay) return;
   for (const ev of playByPlay.events ?? []) {
@@ -238,7 +231,6 @@ function stopPolling(matchId) {
   const p = activePollers.get(matchId);
   if (!p) return;
   p.stopping = true;
-  clearInterval(p.pbpTimer);
   clearInterval(p.boxTimer);
   activePollers.delete(matchId);
   console.log(`[flbSync] stopped polling matchId=${matchId}`);
@@ -251,39 +243,10 @@ function startPolling(pool, competitionId, matchId) {
 
   /** @type {Poller} */
   const poller = {
-    pbpTimer:   null,
     boxTimer:   null,
-    pbpRunning: false,
     boxRunning: false,
     stopping:   false,
   };
-
-  async function pbpTick() {
-    if (poller.pbpRunning || poller.stopping) return;
-    poller.pbpRunning = true;
-    try {
-      const pbp = await getPlayByPlay(competitionId, matchId);
-      await upsertEvents(pool, matchId, pbp);
-
-      if (pbp.header?.status === 'final') {
-        console.log(`[flbSync] matchId=${matchId} reached final — running final boxscore sync`);
-        try {
-          const box = await getBoxscore(competitionId, matchId);
-          await upsertBoxscore(pool, matchId, box);
-        } catch (e) {
-          console.error(
-            `[flbSync] final boxscore error matchId=${matchId}:`,
-            e?.message ?? e,
-          );
-        }
-        stopPolling(matchId);
-      }
-    } catch (err) {
-      console.error(`[flbSync] pbp tick error matchId=${matchId}:`, err?.message ?? err);
-    } finally {
-      poller.pbpRunning = false;
-    }
-  }
 
   async function boxTick() {
     if (poller.boxRunning || poller.stopping) return;
@@ -291,6 +254,10 @@ function startPolling(pool, competitionId, matchId) {
     try {
       const box = await getBoxscore(competitionId, matchId);
       await upsertBoxscore(pool, matchId, box);
+      if (box.header?.status === 'final') {
+        console.log(`[flbSync] matchId=${matchId} boxscore shows final — stopping live poll`);
+        stopPolling(matchId);
+      }
     } catch (err) {
       console.error(`[flbSync] box tick error matchId=${matchId}:`, err?.message ?? err);
     } finally {
@@ -298,10 +265,8 @@ function startPolling(pool, competitionId, matchId) {
     }
   }
 
-  // Kick off immediately (in background), then on interval
-  pbpTick();
+  // Kick off immediately (in background), then on interval — boxscore only; `game_events` are not scraped here.
   boxTick();
-  poller.pbpTimer = setInterval(pbpTick, PBP_INTERVAL_MS);
   poller.boxTimer = setInterval(boxTick, BOX_INTERVAL_MS);
   activePollers.set(matchId, poller);
 }
@@ -371,37 +336,11 @@ async function runScheduleRefresh(pool) {
       const matchId = Number(row.match_id);
       const compId = Number(row.competition_id);
       try {
-        const bundle = await getMatchBundle(compId, matchId);
-        if (bundle.boxscore) await upsertBoxscore(pool, matchId, bundle.boxscore);
-        if (bundle.playByPlay) await upsertEvents(pool, matchId, bundle.playByPlay);
-        console.log(
-          `[flbSync] backfilled matchId=${matchId} box=${Boolean(bundle.boxscore)} pbp=${Boolean(bundle.playByPlay)}`,
-        );
+        const box = await getBoxscore(compId, matchId);
+        await upsertBoxscore(pool, matchId, box);
+        console.log(`[flbSync] backfilled boxscore matchId=${matchId}`);
       } catch (err) {
-        console.warn(`[flbSync] backfill bundle failed matchId=${matchId}:`, err?.message ?? err);
-      }
-    }
-
-    // Older syncs only wrote boxscores; heal finals that have stats but zero PBP rows
-    const { rows: finalsMissingPbp } = await pool.query(`
-      SELECT DISTINCT g.match_id, g.competition_id
-      FROM games g
-      WHERE g.status = 'final'
-        AND EXISTS (SELECT 1 FROM player_boxscores pb WHERE pb.match_id = g.match_id LIMIT 1)
-        AND NOT EXISTS (SELECT 1 FROM game_events ge WHERE ge.match_id = g.match_id LIMIT 1)
-      ORDER BY g.match_id DESC
-      LIMIT 15
-    `);
-    console.log(`[flbSync] found ${finalsMissingPbp.length} final games with stats but no game_events`);
-    for (const row of finalsMissingPbp) {
-      const matchId = Number(row.match_id);
-      const compId = Number(row.competition_id);
-      try {
-        const pbp = await getPlayByPlay(compId, matchId);
-        await upsertEvents(pool, matchId, pbp);
-        console.log(`[flbSync] backfilled play-by-play only matchId=${matchId} events=${pbp?.events?.length ?? 0}`);
-      } catch (err) {
-        console.warn(`[flbSync] backfill PBP failed matchId=${matchId}:`, err?.message ?? err);
+        console.warn(`[flbSync] backfill boxscore failed matchId=${matchId}:`, err?.message ?? err);
       }
     }
   } finally {
@@ -459,14 +398,13 @@ async function runLiveCheck(pool) {
           if (g.status === 'live') {
             startPolling(pool, compId, g.matchId);
           } else if (g.status === 'final' && activePollers.has(g.matchId)) {
-            // Game finished between ticks — flush final boxscore + PBP, then stop
+            // Game finished between ticks — flush final boxscore, then stop (PBP stays DB-only)
             try {
-              const bundle = await getMatchBundle(compId, g.matchId);
-              if (bundle.boxscore) await upsertBoxscore(pool, g.matchId, bundle.boxscore);
-              if (bundle.playByPlay) await upsertEvents(pool, g.matchId, bundle.playByPlay);
+              const box = await getBoxscore(compId, g.matchId);
+              await upsertBoxscore(pool, g.matchId, box);
             } catch (e) {
               console.error(
-                `[flbSync] final flush bundle error matchId=${g.matchId}:`,
+                `[flbSync] final flush boxscore error matchId=${g.matchId}:`,
                 e?.message ?? e,
               );
             }
