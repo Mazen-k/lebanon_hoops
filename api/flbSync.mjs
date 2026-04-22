@@ -15,6 +15,7 @@ import {
   getSchedule,
   getBoxscore,
   getPlayByPlay,
+  getMatchBundle,
 } from './flbScraper.mjs';
 
 const DEFAULT_COMPETITION_IDS = [42001, 39158, 39159, 48035];
@@ -370,11 +371,37 @@ async function runScheduleRefresh(pool) {
       const matchId = Number(row.match_id);
       const compId = Number(row.competition_id);
       try {
-        const box = await getBoxscore(compId, matchId);
-        await upsertBoxscore(pool, matchId, box);
-        console.log(`[flbSync] backfilled boxscore matchId=${matchId}`);
+        const bundle = await getMatchBundle(compId, matchId);
+        if (bundle.boxscore) await upsertBoxscore(pool, matchId, bundle.boxscore);
+        if (bundle.playByPlay) await upsertEvents(pool, matchId, bundle.playByPlay);
+        console.log(
+          `[flbSync] backfilled matchId=${matchId} box=${Boolean(bundle.boxscore)} pbp=${Boolean(bundle.playByPlay)}`,
+        );
       } catch (err) {
-        console.warn(`[flbSync] backfill boxscore failed matchId=${matchId}:`, err?.message ?? err);
+        console.warn(`[flbSync] backfill bundle failed matchId=${matchId}:`, err?.message ?? err);
+      }
+    }
+
+    // Older syncs only wrote boxscores; heal finals that have stats but zero PBP rows
+    const { rows: finalsMissingPbp } = await pool.query(`
+      SELECT DISTINCT g.match_id, g.competition_id
+      FROM games g
+      WHERE g.status = 'final'
+        AND EXISTS (SELECT 1 FROM player_boxscores pb WHERE pb.match_id = g.match_id LIMIT 1)
+        AND NOT EXISTS (SELECT 1 FROM game_events ge WHERE ge.match_id = g.match_id LIMIT 1)
+      ORDER BY g.match_id DESC
+      LIMIT 15
+    `);
+    console.log(`[flbSync] found ${finalsMissingPbp.length} final games with stats but no game_events`);
+    for (const row of finalsMissingPbp) {
+      const matchId = Number(row.match_id);
+      const compId = Number(row.competition_id);
+      try {
+        const pbp = await getPlayByPlay(compId, matchId);
+        await upsertEvents(pool, matchId, pbp);
+        console.log(`[flbSync] backfilled play-by-play only matchId=${matchId} events=${pbp?.events?.length ?? 0}`);
+      } catch (err) {
+        console.warn(`[flbSync] backfill PBP failed matchId=${matchId}:`, err?.message ?? err);
       }
     }
   } finally {
@@ -432,13 +459,14 @@ async function runLiveCheck(pool) {
           if (g.status === 'live') {
             startPolling(pool, compId, g.matchId);
           } else if (g.status === 'final' && activePollers.has(g.matchId)) {
-            // Game finished between ticks — flush a final boxscore, then stop
+            // Game finished between ticks — flush final boxscore + PBP, then stop
             try {
-              const box = await getBoxscore(compId, g.matchId);
-              await upsertBoxscore(pool, g.matchId, box);
+              const bundle = await getMatchBundle(compId, g.matchId);
+              if (bundle.boxscore) await upsertBoxscore(pool, g.matchId, bundle.boxscore);
+              if (bundle.playByPlay) await upsertEvents(pool, g.matchId, bundle.playByPlay);
             } catch (e) {
               console.error(
-                `[flbSync] final flush boxscore error matchId=${g.matchId}:`,
+                `[flbSync] final flush bundle error matchId=${g.matchId}:`,
                 e?.message ?? e,
               );
             }
