@@ -2607,18 +2607,30 @@ app.post('/api/public/reservations', postPublicReservationHandler);
 // FLB Game routes
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** GET /games  — upcoming + live + recent finals ordered by date */
-async function listGamesHandler(_req, res) {
+/** GET /games  — optional ?competition_id=… (e.g. 42001). Upcoming + live + recent finals ordered by date */
+async function listGamesHandler(req, res) {
   try {
-    const { rows } = await pool.query(`
+    const rawComp = req.query.competition_id ?? req.query.competitionId;
+    const compId = rawComp != null && rawComp !== '' ? Number(rawComp) : null;
+    const params = [];
+    let compClause = '';
+    if (compId != null && !Number.isNaN(compId)) {
+      params.push(compId);
+      compClause = `AND competition_id = $${params.length}`;
+    }
+    const { rows } = await pool.query(
+      `
       SELECT *
       FROM games
       WHERE status IN ('live', 'scheduled', 'final')
+      ${compClause}
       ORDER BY
         CASE status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
         updated_at DESC
       LIMIT 200
-    `);
+    `,
+      params,
+    );
     res.json(rows);
   } catch (err) {
     console.error('[GET /games]', err);

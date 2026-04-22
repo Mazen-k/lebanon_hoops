@@ -110,7 +110,7 @@ class MainAppDrawer extends StatelessWidget {
                   ),
                   _DrawerTile(
                     icon: Icons.storefront_outlined,
-                    label: 'Shop / booking',
+                    label: 'Shop & shortcuts',
                     onTap: () => _closeDrawerThen(context, () {
                       Navigator.of(hostContext).push(
                         MaterialPageRoute<void>(builder: (_) => const ShopBookingPage()),

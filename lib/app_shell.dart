@@ -1,11 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'theme/colors.dart';
 import 'screens/home_screen.dart';
 import 'screens/teams_grid_screen.dart';
 import 'screens/standings_screen.dart';
 import 'screens/fan_shop_screen.dart';
-import 'screens/court_booking_screen.dart';
+import 'screens/fixtures_screen.dart';
 import 'screens/fantasy_screen.dart';
 
 class AppNavigationShell extends StatefulWidget {
@@ -27,7 +26,7 @@ class AppNavigationShellState extends State<AppNavigationShell> {
     'Home',
     'Standings',
     'Teams',
-    'Book',
+    'Fixtures',
     'Shop',
     'Fantasy',
   ];
@@ -36,7 +35,7 @@ class AppNavigationShellState extends State<AppNavigationShell> {
     const HomeScreen(),
     const StandingsScreen(),
     const TeamsGridScreen(),
-    const CourtBookingScreen(),
+    const FixturesScreen(),
     const FanShopScreen(),
     const FantasyScreen(),
   ];
@@ -51,7 +50,6 @@ class AppNavigationShellState extends State<AppNavigationShell> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isHome = _currentIndex == 0;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -113,7 +111,7 @@ class AppNavigationShellState extends State<AppNavigationShell> {
                     _buildNavItem(0, Icons.home, 'Home'),
                     _buildNavItem(1, Icons.leaderboard, 'Standings'),
                     _buildNavItem(2, Icons.group, 'Teams'),
-                    _buildNavItem(3, Icons.sports_basketball, 'Book'),
+                    _buildNavItem(3, Icons.event_note_rounded, 'Fixtures'),
                     _buildNavItem(4, Icons.shopping_bag, 'Shop'),
                     _buildNavItem(5, Icons.person, 'Profile'),
                   ],
