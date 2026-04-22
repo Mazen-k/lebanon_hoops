@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS games (
   boxscore_url     TEXT,
   playbyplay_url   TEXT,
   shotchart_url    TEXT,
+  week             INT,           -- league round / week number (fixtures swipe UI)
   updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -77,3 +78,7 @@ CREATE TABLE IF NOT EXISTS player_boxscores (
 );
 
 CREATE INDEX IF NOT EXISTS idx_player_boxscores_match ON player_boxscores (match_id);
+
+-- Older databases: add `week` if the table predates that column
+ALTER TABLE games ADD COLUMN IF NOT EXISTS week INT;
+CREATE INDEX IF NOT EXISTS idx_games_comp_week ON games (competition_id, week);

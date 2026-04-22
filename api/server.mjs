@@ -2607,16 +2607,23 @@ app.post('/api/public/reservations', postPublicReservationHandler);
 // FLB Game routes
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** GET /games  — optional ?competition_id=… (e.g. 42001). Upcoming + live + recent finals ordered by date */
+/** GET /games  — optional ?competition_id=… & ?week=… (integer). Upcoming + live + recent finals ordered by date */
 async function listGamesHandler(req, res) {
   try {
     const rawComp = req.query.competition_id ?? req.query.competitionId;
     const compId = rawComp != null && rawComp !== '' ? Number(rawComp) : null;
+    const rawWeek = req.query.week;
+    const weekNum = rawWeek != null && rawWeek !== '' ? Number(rawWeek) : null;
     const params = [];
     let compClause = '';
     if (compId != null && !Number.isNaN(compId)) {
       params.push(compId);
       compClause = `AND competition_id = $${params.length}`;
+    }
+    let weekClause = '';
+    if (weekNum != null && !Number.isNaN(weekNum)) {
+      params.push(weekNum);
+      weekClause = `AND week = $${params.length}`;
     }
     const { rows } = await pool.query(
       `
@@ -2624,6 +2631,7 @@ async function listGamesHandler(req, res) {
       FROM games
       WHERE status IN ('live', 'scheduled', 'final')
       ${compClause}
+      ${weekClause}
       ORDER BY
         CASE status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
         updated_at DESC
@@ -2638,8 +2646,39 @@ async function listGamesHandler(req, res) {
   }
 }
 
+/** GET /games/weeks?competition_id=… — distinct `games.week` values for swipe UI */
+async function listGameWeeksHandler(req, res) {
+  try {
+    const rawComp = req.query.competition_id ?? req.query.competitionId;
+    const compId = rawComp != null && rawComp !== '' ? Number(rawComp) : null;
+    if (compId == null || Number.isNaN(compId)) {
+      return res.status(400).json({ error: 'competition_id is required' });
+    }
+    const { rows } = await pool.query(
+      `
+      SELECT DISTINCT week
+      FROM games
+      WHERE competition_id = $1
+        AND week IS NOT NULL
+        AND status IN ('live', 'scheduled', 'final')
+      ORDER BY week ASC
+    `,
+      [compId],
+    );
+    const weeks = rows
+      .map((r) => Number(r.week))
+      .filter((n) => Number.isFinite(n));
+    res.json({ weeks });
+  } catch (err) {
+    console.error('[GET /games/weeks]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
 app.get('/games', listGamesHandler);
 app.get('/api/games', listGamesHandler);
+app.get('/games/weeks', listGameWeeksHandler);
+app.get('/api/games/weeks', listGameWeeksHandler);
 
 /** GET /games/:matchId — single game row */
 async function getGameHandler(req, res) {
@@ -3272,7 +3311,9 @@ app.listen(port, '0.0.0.0', () => {
   console.log('  GET /cards/catalog  PUT/PATCH /wishlist  trade: /trade/rooms …');
   console.log('  GET /public/courts  GET /public/courts/:id/playgrounds  GET /public/playgrounds/:id/availability?date=…');
   console.log('  POST /public/reservations { user_id, availability_id }');
-  console.log('  GET /games  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore');
+  console.log(
+    '  GET /games  GET /games/weeks  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore',
+  );
   console.log('  GET/POST/PATCH /cards/squad …user_id=… (1v1 lineups; POST creates, PATCH updates)');
   console.log('  1v1 friend: POST/GET /cards/one-v-one/rooms … squad-pick, lead, respond');
 });

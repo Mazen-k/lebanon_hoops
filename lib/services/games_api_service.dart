@@ -30,10 +30,43 @@ class GamesApiService {
     return [prefix, 'api/$prefix'];
   }
 
-  /// Games for a competition (e.g. Lebanese league `42001`).
-  Future<List<Map<String, dynamic>>> fetchGames({int? competitionId}) async {
+  /// Distinct `games.week` values for a competition (ascending). Empty if none set.
+  Future<List<int>> fetchGameWeeks({required int competitionId}) async {
+    final q = <String, String>{'competition_id': '$competitionId'};
+    final paths = _pair('games/weeks');
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .get(_rootUri(p, q), headers: const {'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 25));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          throw GamesApiException('Game weeks failed (${res.statusCode})');
+        }
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is! Map) return [];
+        final raw = d['weeks'];
+        if (raw is! List) return [];
+        final out = <int>[];
+        for (final e in raw) {
+          final n = e is int ? e : int.tryParse(e.toString());
+          if (n != null) out.add(n);
+        }
+        out.sort();
+        return out;
+      }
+      throw GamesApiException('Game weeks route not found');
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
+
+  /// Games for a competition (e.g. Lebanese league `42001`). Optional [week] filters `games.week`.
+  Future<List<Map<String, dynamic>>> fetchGames({int? competitionId, int? week}) async {
     final q = <String, String>{};
     if (competitionId != null) q['competition_id'] = '$competitionId';
+    if (week != null) q['week'] = '$week';
     final paths = _pair('games');
     final own = _client ?? http.Client();
     try {

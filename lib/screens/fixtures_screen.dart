@@ -5,7 +5,7 @@ import '../services/games_api_service.dart';
 import 'game_boxscore_screen.dart';
 import '../widgets/league_fixture_card.dart';
 
-/// Read-only league schedule from `games` (competition filter on API).
+/// League schedule from `games`, optionally split by `games.week` (horizontal swipe).
 class FixturesScreen extends StatefulWidget {
   const FixturesScreen({super.key, this.competitionId = 42001});
 
@@ -19,44 +19,197 @@ class FixturesScreen extends StatefulWidget {
 
 class _FixturesScreenState extends State<FixturesScreen> {
   final _api = GamesApiService();
-  List<GameFixtureView> _fixtures = const [];
-  bool _loading = true;
-  String? _error;
+  PageController? _pageController;
+  List<int> _weeks = const [];
+  final Map<int, List<GameFixtureView>> _fixturesByWeek = {};
+  final Set<int> _weekLoadInFlight = {};
+  bool _loadingBootstrap = true;
+  String? _errorBootstrap;
+  bool _legacySingleList = false;
+  List<GameFixtureView> _legacyFixtures = const [];
+  int _pageIndex = 0;
+
+  @override
+  void dispose() {
+    _pageController?.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _bootstrap();
   }
 
-  Future<void> _load() async {
+  Future<void> _bootstrap() async {
     setState(() {
-      _loading = true;
-      _error = null;
+      _loadingBootstrap = true;
+      _errorBootstrap = null;
     });
     try {
-      final rows = await _api.fetchGames(competitionId: widget.competitionId);
+      List<int> weeks = [];
+      try {
+        weeks = await _api.fetchGameWeeks(competitionId: widget.competitionId);
+      } on GamesApiException {
+        weeks = [];
+      }
       if (!mounted) return;
-      final list = rows.map(GameFixtureView.fromGamesApiRow).where((f) => f.matchId > 0).toList();
+
+      if (weeks.isEmpty) {
+        final rows = await _api.fetchGames(competitionId: widget.competitionId);
+        if (!mounted) return;
+        final list = rows.map(GameFixtureView.fromGamesApiRow).where((f) => f.matchId > 0).toList();
+        setState(() {
+          _legacySingleList = true;
+          _weeks = const [];
+          _legacyFixtures = list;
+          _loadingBootstrap = false;
+        });
+        return;
+      }
+
+      final initialPage = weeks.length - 1;
+      _pageController?.dispose();
+      _pageController = PageController(initialPage: initialPage);
+
       setState(() {
-        _fixtures = list;
-        _loading = false;
+        _legacySingleList = false;
+        _weeks = weeks;
+        _pageIndex = initialPage;
+        _fixturesByWeek.clear();
+        _weekLoadInFlight.clear();
+        _loadingBootstrap = false;
       });
+
+      await _loadWeek(weeks[initialPage], force: true);
     } on GamesApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message;
-          _loading = false;
+          _errorBootstrap = e.message;
+          _loadingBootstrap = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = '$e';
-          _loading = false;
+          _errorBootstrap = '$e';
+          _loadingBootstrap = false;
         });
       }
     }
+  }
+
+  Future<void> _loadWeek(int week, {bool force = false}) async {
+    if (!force && _fixturesByWeek.containsKey(week)) return;
+    if (_weekLoadInFlight.contains(week)) return;
+    setState(() => _weekLoadInFlight.add(week));
+    try {
+      final rows = await _api.fetchGames(competitionId: widget.competitionId, week: week);
+      if (!mounted) return;
+      final list = rows.map(GameFixtureView.fromGamesApiRow).where((f) => f.matchId > 0).toList();
+      setState(() {
+        _fixturesByWeek[week] = list;
+        _weekLoadInFlight.remove(week);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _weekLoadInFlight.remove(week);
+        _fixturesByWeek[week] = [];
+      });
+    }
+  }
+
+  Future<void> _refreshVisible() async {
+    if (_legacySingleList) {
+      setState(() => _loadingBootstrap = true);
+      try {
+        final rows = await _api.fetchGames(competitionId: widget.competitionId);
+        if (!mounted) return;
+        final list = rows.map(GameFixtureView.fromGamesApiRow).where((f) => f.matchId > 0).toList();
+        setState(() {
+          _legacyFixtures = list;
+          _loadingBootstrap = false;
+        });
+      } catch (_) {
+        if (mounted) setState(() => _loadingBootstrap = false);
+      }
+      return;
+    }
+    if (_weeks.isEmpty) return;
+    final w = _weeks[_pageIndex];
+    await _loadWeek(w, force: true);
+  }
+
+  void _onPageChanged(int index) {
+    setState(() => _pageIndex = index);
+    if (_weeks.isEmpty) return;
+    final w = _weeks[index];
+    _loadWeek(w);
+    if (index + 1 < _weeks.length) _loadWeek(_weeks[index + 1]);
+    if (index > 0) _loadWeek(_weeks[index - 1]);
+  }
+
+  Widget _buildFixtureList(ColorScheme colorScheme, List<GameFixtureView> fixtures) {
+    final upcoming = fixtures.where((f) => !f.isPast).toList();
+    final past = fixtures.where((f) => f.isPast).toList();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        Text(
+          'Lebanese league fixtures — tap a game for team box score.',
+          style: TextStyle(
+            fontSize: 12.5,
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
+            height: 1.4,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (upcoming.isNotEmpty) ...[
+          _SectionLabel('Upcoming', colorScheme),
+          const SizedBox(height: 10),
+          ...upcoming.map(
+            (f) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: LeagueFixtureCard(
+                fixture: f,
+                onCardTap: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(builder: (_) => GameBoxscoreScreen(matchId: f.matchId)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (past.isNotEmpty) ...[
+          _SectionLabel('Results', colorScheme),
+          const SizedBox(height: 10),
+          ...past.map(
+            (f) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: LeagueFixtureCard(
+                fixture: f,
+                onCardTap: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(builder: (_) => GameBoxscoreScreen(matchId: f.matchId)),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (upcoming.isEmpty && past.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 40),
+            child: Text(
+              'No games for this week.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -68,13 +221,13 @@ class _FixturesScreenState extends State<FixturesScreen> {
       0.55,
     )!;
 
-    if (_loading) {
+    if (_loadingBootstrap) {
       return ColoredBox(
         color: listBg,
         child: const Center(child: CircularProgressIndicator()),
       );
     }
-    if (_error != null) {
+    if (_errorBootstrap != null) {
       return ColoredBox(
         color: listBg,
         child: Center(
@@ -83,9 +236,9 @@ class _FixturesScreenState extends State<FixturesScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(_error!, textAlign: TextAlign.center),
+                Text(_errorBootstrap!, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
-                FilledButton(onPressed: _load, child: const Text('Retry')),
+                FilledButton(onPressed: _bootstrap, child: const Text('Retry')),
               ],
             ),
           ),
@@ -93,70 +246,96 @@ class _FixturesScreenState extends State<FixturesScreen> {
       );
     }
 
-    final upcoming = _fixtures.where((f) => !f.isPast).toList();
-    final past = _fixtures.where((f) => f.isPast).toList();
+    if (_legacySingleList) {
+      return ColoredBox(
+        color: listBg,
+        child: RefreshIndicator(
+          color: colorScheme.primary,
+          onRefresh: _refreshVisible,
+          child: _buildFixtureList(colorScheme, _legacyFixtures),
+        ),
+      );
+    }
+
+    final pc = _pageController;
+    if (pc == null || _weeks.isEmpty) {
+      return ColoredBox(
+        color: listBg,
+        child: Center(
+          child: Text('No week data for this competition.', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+        ),
+      );
+    }
 
     return ColoredBox(
       color: listBg,
-      child: RefreshIndicator(
-        color: colorScheme.primary,
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            Text(
-              'Lebanese league fixtures — tap a game for team box score.',
-              style: TextStyle(
-                fontSize: 12.5,
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
-                height: 1.4,
-                fontWeight: FontWeight.w500,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            color: listBg,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+              child: Row(
+                children: [
+                  Text(
+                    'Week ${_weeks[_pageIndex]}',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${_pageIndex + 1} / ${_weeks.length}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 14),
-            if (upcoming.isNotEmpty) ...[
-              _SectionLabel('Upcoming', colorScheme),
-              const SizedBox(height: 10),
-              ...upcoming.map(
-                (f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: LeagueFixtureCard(
-                    fixture: f,
-                    onCardTap: () => Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(builder: (_) => GameBoxscoreScreen(matchId: f.matchId)),
+          ),
+          Text(
+            'Swipe left or right to change week',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11.5,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.85),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: PageView.builder(
+              controller: pc,
+              itemCount: _weeks.length,
+              onPageChanged: _onPageChanged,
+              itemBuilder: (context, index) {
+                final week = _weeks[index];
+                final fixtures = _fixturesByWeek[week];
+                final inFlight = _weekLoadInFlight.contains(week) && fixtures == null;
+
+                if (inFlight || fixtures == null) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (past.isNotEmpty) ...[
-              _SectionLabel('Results', colorScheme),
-              const SizedBox(height: 10),
-              ...past.map(
-                (f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: LeagueFixtureCard(
-                    fixture: f,
-                    onCardTap: () => Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(builder: (_) => GameBoxscoreScreen(matchId: f.matchId)),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            if (upcoming.isEmpty && past.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 40),
-                child: Text(
-                  'No games loaded yet for this competition.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colorScheme.onSurfaceVariant),
-                ),
-              ),
-          ],
-        ),
+                  );
+                }
+
+                return RefreshIndicator(
+                  color: colorScheme.primary,
+                  onRefresh: () => _loadWeek(week, force: true),
+                  child: _buildFixtureList(colorScheme, fixtures),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
