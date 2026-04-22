@@ -272,25 +272,34 @@ class _FixturesScreenState extends State<FixturesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Material(
-            color: listBg,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.65),
+              border: Border(
+                bottom: BorderSide(color: colorScheme.outline.withValues(alpha: 0.12)),
+              ),
+            ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Week ${_weeks[_pageIndex]}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.2,
+                    'This is week ${_weeks[_pageIndex]}',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.6,
+                          height: 1.05,
+                          color: colorScheme.onSurface,
                         ),
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 6),
                   Text(
-                    '${_pageIndex + 1} / ${_weeks.length}',
+                    '${_pageIndex + 1} of ${_weeks.length} weeks · swipe sideways to change week',
                     style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      height: 1.3,
+                      fontWeight: FontWeight.w500,
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
@@ -298,16 +307,6 @@ class _FixturesScreenState extends State<FixturesScreen> {
               ),
             ),
           ),
-          Text(
-            'Swipe left or right to change week',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 11.5,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.85),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 4),
           Expanded(
             child: PageView.builder(
               controller: pc,
