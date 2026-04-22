@@ -1,99 +1,63 @@
 /**
  * flbSync.mjs
- * Orchestrates daily schedule refresh and live-game polling for Lebanese basketball.
- * Call startFlbJobs(pool) once from server.mjs after the pool is ready.
+ * Orchestrates daily schedule refresh and live-game polling for Lebanese
+ * basketball games. Call startFlbJobs(pool) once from server.mjs after the
+ * PG pool is ready.
+ *
+ * Environment variables:
+ *   FLB_DISABLE_SYNC=1           Skip scheduling all cron jobs (CI / local dev).
+ *   FLB_COMPETITION_IDS=a,b,c    Override the list of competitions to scrape.
+ *   FLB_CHROMIUM_SINGLE_PROCESS=1  Pass --single-process to Chromium (Linux containers only).
  */
 
 import cron from 'node-cron';
-import { getSchedule, getBoxscore, getPlayByPlay } from './flbScraper.mjs';
+import {
+  getSchedule,
+  getBoxscore,
+  getPlayByPlay,
+} from './flbScraper.mjs';
 
-// Competition IDs for the Lebanese leagues
-const COMPETITION_IDS = [42001, 39158, 39159, 48035];
+const DEFAULT_COMPETITION_IDS = [42001, 39158, 39159, 48035];
+
+function readCompetitionIds() {
+  const raw = process.env.FLB_COMPETITION_IDS;
+  if (!raw) return DEFAULT_COMPETITION_IDS;
+  const ids = raw
+    .split(',')
+    .map((s) => Number(String(s).trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return ids.length > 0 ? ids : DEFAULT_COMPETITION_IDS;
+}
+
+const COMPETITION_IDS = readCompetitionIds();
 
 // Polling intervals (milliseconds)
-const PBP_INTERVAL_MS   = 8_000;
-const BOX_INTERVAL_MS   = 30_000;
-const CHECK_INTERVAL_MS = 60_000; // fallback safety net
-
-// How far ahead of game start we begin checking (minutes)
-const PRE_GAME_WINDOW_MIN = 30;
-
-/** Active polling handles keyed by matchId */
-const activePollers = new Map(); // matchId → { pbp: NodeJS.Timeout, box: NodeJS.Timeout }
+const PBP_INTERVAL_MS   = 8_000;   // play-by-play while game is live
+const BOX_INTERVAL_MS   = 30_000;  // boxscore while game is live
+const LIVE_CHECK_CRON   = '* * * * *';  // every minute, check for games going live
+const DAILY_REFRESH_CRON = '7 3 * * *'; // 03:07 Asia/Beirut (off-peak)
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DB bootstrap — create tables if they don't exist
+// Active pollers registry (per matchId)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function ensureTables(pool) {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS games (
-      match_id         BIGINT PRIMARY KEY,
-      competition_id   BIGINT NOT NULL,
-      status           TEXT,
-      raw_status       TEXT,
-      date_time_text   TEXT,
-      venue            TEXT,
-      venue_id         BIGINT,
-      home_team_id     BIGINT,
-      home_team_name   TEXT,
-      home_team_logo   TEXT,
-      away_team_id     BIGINT,
-      away_team_name   TEXT,
-      away_team_logo   TEXT,
-      home_score       INT,
-      away_score       INT,
-      summary_url      TEXT,
-      boxscore_url     TEXT,
-      playbyplay_url   TEXT,
-      shotchart_url    TEXT,
-      updated_at       TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+/**
+ * @typedef {object} Poller
+ * @property {NodeJS.Timeout} pbpTimer
+ * @property {NodeJS.Timeout} boxTimer
+ * @property {boolean} pbpRunning
+ * @property {boolean} boxRunning
+ * @property {boolean} stopping
+ */
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS game_events (
-      event_id        TEXT PRIMARY KEY,
-      match_id        BIGINT NOT NULL,
-      period          TEXT,
-      clock           TEXT,
-      score           TEXT,
-      team_side       TEXT,
-      team_name       TEXT,
-      player          TEXT,
-      player_number   TEXT,
-      action_text     TEXT,
-      event_type      TEXT,
-      is_scoring_event BOOLEAN DEFAULT FALSE,
-      created_at      TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+/** @type {Map<number, Poller>} */
+const activePollers = new Map();
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS team_boxscores (
-      match_id   BIGINT NOT NULL,
-      side       TEXT   NOT NULL,
-      team_id    BIGINT,
-      team_name  TEXT,
-      totals     JSONB  NOT NULL,
-      updated_at TIMESTAMPTZ DEFAULT NOW(),
-      PRIMARY KEY (match_id, side)
-    )
-  `);
+/** Flag to guard the once-per-minute live-check cron from overlapping runs. */
+let liveCheckRunning = false;
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS player_boxscores (
-      match_id      BIGINT NOT NULL,
-      side          TEXT   NOT NULL,
-      player_id     BIGINT,
-      player_name   TEXT   NOT NULL,
-      player_number TEXT,
-      stats         JSONB  NOT NULL,
-      updated_at    TIMESTAMPTZ DEFAULT NOW(),
-      PRIMARY KEY (match_id, side, player_name)
-    )
-  `);
-}
+/** Flag to guard the daily refresh from overlapping runs. */
+let dailyRefreshRunning = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Upsert helpers
@@ -135,50 +99,58 @@ async function upsertGame(pool, game) {
       game.matchId,
       game.competitionId,
       game.status,
-      game.rawStatus,
-      game.dateTimeText,
-      game.venue,
-      game.venueId,
-      game.homeTeam?.id,
-      game.homeTeam?.name,
-      game.homeTeam?.logoUrl,
-      game.awayTeam?.id,
-      game.awayTeam?.name,
-      game.awayTeam?.logoUrl,
-      game.homeScore ?? null,
-      game.awayScore ?? null,
-      game.summaryUrl,
-      game.boxScoreUrl,
-      game.playByPlayUrl,
-      game.shotChartUrl,
+      game.rawStatus ?? null,
+      game.dateTimeText ?? null,
+      game.venue ?? null,
+      game.venueId ?? null,
+      game.homeTeam?.id ?? null,
+      game.homeTeam?.name ?? null,
+      game.homeTeam?.logoUrl ?? null,
+      game.awayTeam?.id ?? null,
+      game.awayTeam?.name ?? null,
+      game.awayTeam?.logoUrl ?? null,
+      game.homeTeam?.score ?? null,
+      game.awayTeam?.score ?? null,
+      game.summaryUrl ?? null,
+      game.boxScoreUrl ?? null,
+      game.playByPlayUrl ?? null,
+      game.shotChartUrl ?? null,
     ],
   );
 }
 
 async function upsertBoxscore(pool, matchId, boxscore) {
+  if (!boxscore) return;
+
   for (const team of boxscore.teams ?? []) {
-    // team_boxscores
+    if (!team?.side) continue;
+
     await pool.query(
       `INSERT INTO team_boxscores (match_id, side, team_id, team_name, totals, updated_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
        ON CONFLICT (match_id, side) DO UPDATE SET
-         team_id   = EXCLUDED.team_id,
-         team_name = EXCLUDED.team_name,
+         team_id   = COALESCE(EXCLUDED.team_id, team_boxscores.team_id),
+         team_name = COALESCE(EXCLUDED.team_name, team_boxscores.team_name),
          totals    = EXCLUDED.totals,
          updated_at = NOW()`,
-      [matchId, team.side, team.teamId, team.teamName, JSON.stringify(team.totals ?? {})],
+      [
+        matchId,
+        team.side,
+        team.teamId ?? null,
+        team.teamName ?? null,
+        JSON.stringify(team.totals ?? {}),
+      ],
     );
 
-    // player_boxscores
     for (const player of team.players ?? []) {
-      if (!player.playerName) continue;
+      if (!player?.playerName) continue;
       await pool.query(
         `INSERT INTO player_boxscores
            (match_id, side, player_id, player_name, player_number, stats, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, NOW())
          ON CONFLICT (match_id, side, player_name) DO UPDATE SET
            player_id     = COALESCE(EXCLUDED.player_id, player_boxscores.player_id),
-           player_number = EXCLUDED.player_number,
+           player_number = COALESCE(EXCLUDED.player_number, player_boxscores.player_number),
            stats         = EXCLUDED.stats,
            updated_at    = NOW()`,
         [
@@ -193,7 +165,7 @@ async function upsertBoxscore(pool, matchId, boxscore) {
     }
   }
 
-  // Also update score in games table from header
+  // Also update header-level fields on the games row (score + status)
   const hdr = boxscore.header;
   if (hdr) {
     await pool.query(
@@ -214,32 +186,40 @@ async function upsertBoxscore(pool, matchId, boxscore) {
 }
 
 async function upsertEvents(pool, matchId, playByPlay) {
+  if (!playByPlay) return;
   for (const ev of playByPlay.events ?? []) {
-    if (!ev.eventId) continue;
-    await pool.query(
-      `INSERT INTO game_events
-         (event_id, match_id, period, clock, score, team_side, team_name,
-          player, player_number, action_text, event_type, is_scoring_event)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-       ON CONFLICT (event_id) DO NOTHING`,
-      [
-        ev.eventId,
-        matchId,
-        ev.period ?? null,
-        ev.clock ?? null,
-        ev.score ?? null,
-        ev.teamSide ?? null,
-        ev.teamName ?? null,
-        ev.player ?? null,
-        ev.playerNumber ?? null,
-        ev.actionText ?? null,
-        ev.eventType ?? null,
-        ev.isScoringEvent ?? false,
-      ],
-    );
+    if (!ev?.eventId) continue;
+    try {
+      await pool.query(
+        `INSERT INTO game_events
+           (event_id, match_id, period, clock, score, team_side, team_name,
+            player, player_number, action_text, event_type, is_scoring_event)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         ON CONFLICT (event_id) DO NOTHING`,
+        [
+          ev.eventId,
+          matchId,
+          ev.period ?? null,
+          ev.clock ?? null,
+          ev.score ?? null,
+          ev.teamSide ?? null,
+          ev.teamName ?? null,
+          ev.player ?? null,
+          ev.playerNumber ?? null,
+          ev.actionText ?? null,
+          ev.eventType ?? null,
+          ev.isScoringEvent ?? false,
+        ],
+      );
+    } catch (err) {
+      console.error(
+        `[flbSync] insert event failed matchId=${matchId} id=${ev.eventId}:`,
+        err?.message ?? err,
+      );
+    }
   }
 
-  // Update status from header
+  // Mirror status from header, if present
   const hdr = playByPlay.header;
   if (hdr?.status) {
     await pool.query(
@@ -250,67 +230,79 @@ async function upsertEvents(pool, matchId, playByPlay) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Live polling
+// Per-match polling
 // ─────────────────────────────────────────────────────────────────────────────
 
 function stopPolling(matchId) {
-  const handles = activePollers.get(matchId);
-  if (!handles) return;
-  clearInterval(handles.pbp);
-  clearInterval(handles.box);
+  const p = activePollers.get(matchId);
+  if (!p) return;
+  p.stopping = true;
+  clearInterval(p.pbpTimer);
+  clearInterval(p.boxTimer);
   activePollers.delete(matchId);
   console.log(`[flbSync] stopped polling matchId=${matchId}`);
 }
 
-/**
- * Start live polling for a match.
- * @param {import('pg').Pool} pool
- * @param {number} competitionId
- * @param {number} matchId
- */
 function startPolling(pool, competitionId, matchId) {
-  if (activePollers.has(matchId)) return; // already polling
+  if (activePollers.has(matchId)) return;
 
-  console.log(`[flbSync] starting live polling matchId=${matchId} compId=${competitionId}`);
+  console.log(`[flbSync] starting live poll matchId=${matchId} compId=${competitionId}`);
 
-  async function pollPbp() {
+  /** @type {Poller} */
+  const poller = {
+    pbpTimer:   null,
+    boxTimer:   null,
+    pbpRunning: false,
+    boxRunning: false,
+    stopping:   false,
+  };
+
+  async function pbpTick() {
+    if (poller.pbpRunning || poller.stopping) return;
+    poller.pbpRunning = true;
     try {
       const pbp = await getPlayByPlay(competitionId, matchId);
       await upsertEvents(pool, matchId, pbp);
-      // If game is final, do final boxscore sync then stop
+
       if (pbp.header?.status === 'final') {
-        console.log(`[flbSync] matchId=${matchId} is final — running final boxscore sync`);
+        console.log(`[flbSync] matchId=${matchId} reached final — running final boxscore sync`);
         try {
           const box = await getBoxscore(competitionId, matchId);
           await upsertBoxscore(pool, matchId, box);
         } catch (e) {
-          console.error(`[flbSync] final boxscore error matchId=${matchId}:`, e.message ?? e);
+          console.error(
+            `[flbSync] final boxscore error matchId=${matchId}:`,
+            e?.message ?? e,
+          );
         }
         stopPolling(matchId);
       }
     } catch (err) {
-      console.error(`[flbSync] PBP poll error matchId=${matchId}:`, err.message ?? err);
+      console.error(`[flbSync] pbp tick error matchId=${matchId}:`, err?.message ?? err);
+    } finally {
+      poller.pbpRunning = false;
     }
   }
 
-  async function pollBox() {
-    if (!activePollers.has(matchId)) return;
+  async function boxTick() {
+    if (poller.boxRunning || poller.stopping) return;
+    poller.boxRunning = true;
     try {
       const box = await getBoxscore(competitionId, matchId);
       await upsertBoxscore(pool, matchId, box);
     } catch (err) {
-      console.error(`[flbSync] boxscore poll error matchId=${matchId}:`, err.message ?? err);
+      console.error(`[flbSync] box tick error matchId=${matchId}:`, err?.message ?? err);
+    } finally {
+      poller.boxRunning = false;
     }
   }
 
-  // Kick off immediately, then on interval
-  pollPbp();
-  pollBox();
-
-  const pbpTimer = setInterval(pollPbp, PBP_INTERVAL_MS);
-  const boxTimer = setInterval(pollBox, BOX_INTERVAL_MS);
-
-  activePollers.set(matchId, { pbp: pbpTimer, box: boxTimer });
+  // Kick off immediately (in background), then on interval
+  pbpTick();
+  boxTick();
+  poller.pbpTimer = setInterval(pbpTick, PBP_INTERVAL_MS);
+  poller.boxTimer = setInterval(boxTick, BOX_INTERVAL_MS);
+  activePollers.set(matchId, poller);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -318,81 +310,152 @@ function startPolling(pool, competitionId, matchId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function runScheduleRefresh(pool) {
-  console.log('[flbSync] running daily schedule refresh');
-  for (const competitionId of COMPETITION_IDS) {
-    try {
-      const games = await getSchedule(competitionId);
-      for (const game of games) {
-        try {
-          await upsertGame(pool, game);
-        } catch (err) {
-          console.error(
-            `[flbSync] upsertGame error matchId=${game.matchId}:`,
-            err.message ?? err,
-          );
+  if (dailyRefreshRunning) {
+    console.log('[flbSync] schedule refresh already in progress — skipping');
+    return;
+  }
+  dailyRefreshRunning = true;
+  const t0 = Date.now();
+  let totalGames = 0;
+  let okComps = 0;
+
+  try {
+    console.log('[flbSync] schedule refresh starting');
+    for (const competitionId of COMPETITION_IDS) {
+      try {
+        const games = await getSchedule(competitionId);
+        let inserted = 0;
+        for (const game of games) {
+          try {
+            await upsertGame(pool, game);
+            inserted += 1;
+          } catch (err) {
+            console.error(
+              `[flbSync] upsertGame failed matchId=${game.matchId}:`,
+              err?.message ?? err,
+            );
+          }
         }
+        totalGames += inserted;
+        okComps += 1;
+        console.log(
+          `[flbSync] schedule refresh compId=${competitionId}: ${inserted}/${games.length} upserted`,
+        );
+      } catch (err) {
+        console.error(
+          `[flbSync] schedule refresh failed compId=${competitionId}:`,
+          err?.message ?? err,
+        );
       }
-      console.log(
-        `[flbSync] schedule refresh done compId=${competitionId} — ${games.length} games`,
-      );
-    } catch (err) {
-      console.error(
-        `[flbSync] schedule refresh error compId=${competitionId}:`,
-        err.message ?? err,
-      );
     }
+    console.log(
+      `[flbSync] schedule refresh done: ${totalGames} rows across ${okComps}/${COMPETITION_IDS.length} comps in ${Date.now() - t0}ms`,
+    );
+
+    // After schedule refresh, backfill boxscores for final games that don't have them yet
+    console.log('[flbSync] backfilling boxscores for final games...');
+    const { rows: finalGamesWithoutBoxes } = await pool.query(`
+      SELECT DISTINCT g.match_id, g.competition_id, g.updated_at
+      FROM games g
+      WHERE g.status = 'final'
+        AND NOT EXISTS (
+          SELECT 1 FROM player_boxscores pb WHERE pb.match_id = g.match_id LIMIT 1
+        )
+      ORDER BY g.updated_at DESC
+      LIMIT 10
+    `);
+    console.log(`[flbSync] found ${finalGamesWithoutBoxes.length} final games needing boxscores`);
+
+    for (const row of finalGamesWithoutBoxes) {
+      const matchId = Number(row.match_id);
+      const compId = Number(row.competition_id);
+      try {
+        const box = await getBoxscore(compId, matchId);
+        await upsertBoxscore(pool, matchId, box);
+        console.log(`[flbSync] backfilled boxscore matchId=${matchId}`);
+      } catch (err) {
+        console.warn(`[flbSync] backfill boxscore failed matchId=${matchId}:`, err?.message ?? err);
+      }
+    }
+  } finally {
+    dailyRefreshRunning = false;
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Job 2 — Live game detector
+// Job 2 — Live-game detector
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Every minute: find games that may be live and make sure a poller is running
+ * for each. Kicks off a lightweight schedule re-scrape per competition to pick
+ * up status transitions (scheduled → live → final) without waiting for the
+ * next daily refresh. We only do this if there is at least one scheduled game
+ * today for that competition, to avoid hammering the site when nothing is on.
+ */
 async function runLiveCheck(pool) {
+  if (liveCheckRunning) return;
+  liveCheckRunning = true;
+
   try {
-    // Find games that are live, or about to start within the pre-game window, and not final
-    const { rows } = await pool.query(`
-      SELECT match_id, competition_id, status
-      FROM games
-      WHERE
-        status = 'live'
-        OR (
-          status NOT IN ('final', 'postponed')
-          AND date_time_text IS NOT NULL
-        )
-      ORDER BY match_id ASC
-    `);
+    // 1. Pollers for games already marked live in the DB
+    const { rows: liveRows } = await pool.query(
+      `SELECT match_id, competition_id FROM games WHERE status = 'live'`,
+    );
+    for (const row of liveRows) {
+      startPolling(pool, Number(row.competition_id), Number(row.match_id));
+    }
 
-    for (const row of rows) {
-      const matchId = Number(row.match_id);
-      const competitionId = Number(row.competition_id);
-      const status = row.status;
+    // 2. Ask each competition "is anything happening today?" by re-running the
+    //    schedule scraper. We only do this for competitions that have at least
+    //    one non-final / non-postponed game still in the DB — otherwise skip
+    //    to save load.
+    const { rows: activeComps } = await pool.query(
+      `SELECT DISTINCT competition_id
+       FROM games
+       WHERE status NOT IN ('final', 'postponed')`,
+    );
 
-      if (status === 'live') {
-        startPolling(pool, competitionId, matchId);
-        continue;
-      }
-
-      // For non-live games: quick-check the web to see if they've gone live
-      // We throttle to avoid hammering the site — only check if not already polling
-      if (!activePollers.has(matchId)) {
-        try {
-          const pbp = await getPlayByPlay(competitionId, matchId);
-          if (pbp.header?.status === 'live') {
-            // Update DB and start polling
-            await pool.query(
-              `UPDATE games SET status = 'live', updated_at = NOW() WHERE match_id = $1`,
-              [matchId],
+    for (const { competition_id } of activeComps) {
+      const compId = Number(competition_id);
+      try {
+        const games = await getSchedule(compId);
+        for (const g of games) {
+          try {
+            await upsertGame(pool, g);
+          } catch (err) {
+            console.error(
+              `[flbSync] live-check upsertGame failed matchId=${g.matchId}:`,
+              err?.message ?? err,
             );
-            startPolling(pool, competitionId, matchId);
           }
-        } catch (_) {
-          // silently ignore — we'll try again next minute
+          if (g.status === 'live') {
+            startPolling(pool, compId, g.matchId);
+          } else if (g.status === 'final' && activePollers.has(g.matchId)) {
+            // Game finished between ticks — flush a final boxscore, then stop
+            try {
+              const box = await getBoxscore(compId, g.matchId);
+              await upsertBoxscore(pool, g.matchId, box);
+            } catch (e) {
+              console.error(
+                `[flbSync] final flush boxscore error matchId=${g.matchId}:`,
+                e?.message ?? e,
+              );
+            }
+            stopPolling(g.matchId);
+          }
         }
+      } catch (err) {
+        console.error(
+          `[flbSync] live-check schedule failed compId=${compId}:`,
+          err?.message ?? err,
+        );
       }
     }
   } catch (err) {
-    console.error('[flbSync] live check error:', err.message ?? err);
+    console.error('[flbSync] live-check failed:', err?.message ?? err);
+  } finally {
+    liveCheckRunning = false;
   }
 }
 
@@ -402,28 +465,57 @@ async function runLiveCheck(pool) {
 
 /**
  * Bootstrap all FLB cron jobs.
- * Call once from server.mjs: `startFlbJobs(pool)`
+ * Call once from server.mjs:  startFlbJobs(pool)
+ * Set FLB_DISABLE_SYNC=1 to skip scheduling (e.g. CI / local dev).
+ *
  * @param {import('pg').Pool} pool
  */
-export async function startFlbJobs(pool) {
-  try {
-    await ensureTables(pool);
-    console.log('[flbSync] DB tables verified');
-  } catch (err) {
-    console.error('[flbSync] ensureTables error:', err.message ?? err);
-    // Non-fatal — server continues even if tables already exist or there's a minor issue.
+export function startFlbJobs(pool) {
+  if (process.env.FLB_DISABLE_SYNC === '1') {
+    console.log('[flbSync] FLB_DISABLE_SYNC=1 — not scheduling jobs');
+    return;
+  }
+  if (!pool) {
+    console.warn('[flbSync] startFlbJobs called without a pool — aborting');
+    return;
   }
 
-  // ── Job 1: daily refresh at midnight ───────────────────────────
-  cron.schedule('0 0 * * *', () => runScheduleRefresh(pool), { timezone: 'Asia/Beirut' });
-  console.log('[flbSync] scheduled daily refresh at 00:00 Asia/Beirut');
+  console.log(`[flbSync] competitions: ${COMPETITION_IDS.join(', ')}`);
 
-  // ── Job 2: live-game check every minute ────────────────────────
-  cron.schedule('* * * * *', () => runLiveCheck(pool));
-  console.log('[flbSync] scheduled live-game check every minute');
+  // Job 1 — daily schedule refresh
+  cron.schedule(
+    DAILY_REFRESH_CRON,
+    () => {
+      runScheduleRefresh(pool).catch((err) =>
+        console.error('[flbSync] daily refresh crashed:', err?.message ?? err),
+      );
+    },
+    { timezone: 'Asia/Beirut' },
+  );
+  console.log(`[flbSync] scheduled daily refresh at ${DAILY_REFRESH_CRON} Asia/Beirut`);
 
-  // Run an initial schedule refresh immediately on start so data is fresh
+  // Job 2 — live game check every minute
+  cron.schedule(LIVE_CHECK_CRON, () => {
+    runLiveCheck(pool).catch((err) =>
+      console.error('[flbSync] live check crashed:', err?.message ?? err),
+    );
+  });
+  console.log(`[flbSync] scheduled live-game check at ${LIVE_CHECK_CRON}`);
+
+  // Kick an initial refresh immediately so data is fresh on deploy
   runScheduleRefresh(pool).catch((err) =>
-    console.error('[flbSync] initial refresh failed:', err.message ?? err),
+    console.error('[flbSync] initial refresh failed:', err?.message ?? err),
   );
 }
+
+// Exposed for admin / debugging routes if ever needed
+export const _internals = {
+  runScheduleRefresh,
+  runLiveCheck,
+  startPolling,
+  stopPolling,
+  activePollers,
+  upsertGame,
+  upsertBoxscore,
+  upsertEvents,
+};

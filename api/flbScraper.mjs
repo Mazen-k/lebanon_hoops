@@ -1,228 +1,305 @@
 /**
  * flbScraper.mjs
- * Scrapes FLB (Genius Sports) pages for Lebanese basketball data.
+ * Scrapes the FLB Genius Sports portal (https://flb.web.geniussports.com) for
+ * Lebanese basketball games, boxscores and play-by-play.
  *
- * Schedule uses Playwright (headless Chromium) because the page is JS-rendered.
- * Boxscore / play-by-play use axios (lighter) — upgrade to Playwright if needed.
+ * All three pages are rendered by a single-page app, so the page HTML that
+ * arrives over axios is just the SPA shell with no data — everything is
+ * populated at runtime by JS. That is why this module drives a headless
+ * Chromium via Playwright for every fetch. A single browser instance is
+ * reused across calls; contexts + pages are short-lived.
  *
- * Exports: getSchedule, getBoxscore, getPlayByPlay, getMatchBundle
+ * Exports:
+ *   - getSchedule(competitionId)
+ *   - getBoxscore(competitionId, matchId)
+ *   - getPlayByPlay(competitionId, matchId)
+ *   - getMatchBundle(competitionId, matchId)
+ *   - shutdownBrowser()
  */
 
-import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { chromium } from 'playwright';
+import crypto from 'node:crypto';
 
 const BASE = 'https://flb.web.geniussports.com';
 
+const DEFAULT_NAV_TIMEOUT_MS   = 45_000;
+const DEFAULT_WAIT_TIMEOUT_MS  = 25_000;
+const DEFAULT_IDLE_TIMEOUT_MS  = 8_000;
+const DEFAULT_SETTLE_MS        = 1_200;
+const DEFAULT_MAX_ATTEMPTS     = 2;
+
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared browser instance (lazy-initialised, reused across calls)
+// Browser lifecycle (singleton, lazy, auto-heal)
 // ─────────────────────────────────────────────────────────────────────────────
 
-let _browser = null;
+let _browserPromise = null;
 
-async function getBrowser() {
-  if (_browser && _browser.isConnected()) return _browser;
-  console.log('[FLB] Launching headless Chromium browser...');
-  _browser = await chromium.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--single-process',          // important for Render / Docker environments
-    ],
+async function launchBrowser() {
+  // Default args are safe on Windows, macOS, and most Linux containers.
+  // `--single-process` is only useful in very constrained environments and
+  // crashes Chromium on Windows/macOS — opt-in via FLB_CHROMIUM_SINGLE_PROCESS=1.
+  const args = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+  ];
+  if (process.env.FLB_CHROMIUM_SINGLE_PROCESS === '1') args.push('--single-process');
+
+  console.log('[FLB] Launching headless Chromium…');
+  const browser = await chromium.launch({ headless: true, args });
+  browser.on('disconnected', () => {
+    console.warn('[FLB] Chromium disconnected — will relaunch on next request');
+    _browserPromise = null;
   });
-  console.log('[FLB] Browser launched');
-  return _browser;
+  console.log('[FLB] Chromium ready');
+  return browser;
 }
 
-/**
- * Open a URL in a new browser page, wait for JS to render, return the HTML.
- * Waits for .match-wrap to appear, or falls back to networkidle, then a hard timeout.
- * @param {string} url
- * @param {{ waitForSelector?: string, timeoutMs?: number }} [opts]
- * @returns {Promise<{ html: string, finalUrl: string }>}
- */
-async function fetchWithBrowser(url, opts = {}) {
-  const { waitForSelector = '.match-wrap', timeoutMs = 30_000 } = opts;
-  const browser = await getBrowser();
-  const context = await browser.newContext({
-    userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    extraHTTPHeaders: {
-      'Accept-Language': 'en-US,en;q=0.9',
-      Referer: `${BASE}/competitions/`,
-    },
-  });
-  const page = await context.newPage();
-
+async function getBrowser() {
+  if (!_browserPromise) _browserPromise = launchBrowser();
   try {
-    console.log(`[FLB] Browser navigating to: ${url}`);
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
-
-    // Try to wait for real content; fall back to networkidle if selector never appears
-    try {
-      await page.waitForSelector(waitForSelector, { timeout: 15_000 });
-      console.log(`[FLB] Selector "${waitForSelector}" found on page`);
-    } catch {
-      console.log(`[FLB] Selector "${waitForSelector}" not found — waiting for networkidle`);
-      try {
-        await page.waitForLoadState('networkidle', { timeout: 10_000 });
-      } catch {
-        console.log('[FLB] networkidle timeout — proceeding with current DOM');
-      }
+    const browser = await _browserPromise;
+    if (!browser.isConnected()) {
+      _browserPromise = null;
+      return getBrowser();
     }
+    return browser;
+  } catch (err) {
+    _browserPromise = null;
+    throw err;
+  }
+}
 
-    const finalUrl = page.url();
-    const html = await page.content();
-    console.log(`[FLB] Page loaded. Final URL: ${finalUrl} | html.length: ${html.length}`);
-    return { html, finalUrl };
-  } finally {
-    await page.close();
-    await context.close();
+/** Close the shared browser. Safe to call more than once. */
+export async function shutdownBrowser() {
+  const p = _browserPromise;
+  _browserPromise = null;
+  if (!p) return;
+  try {
+    const browser = await p;
+    await browser.close();
+    console.log('[FLB] Chromium closed');
+  } catch (err) {
+    console.warn('[FLB] shutdownBrowser:', err?.message ?? err);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Lightweight axios client (used for boxscore / play-by-play only)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const http = axios.create({
-  timeout: 20_000,
-  maxRedirects: 10,
-  headers: {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Cache-Control': 'no-cache',
-    Referer: `${BASE}/competitions/`,
-  },
-});
-
-async function fetchCheerio(url) {
-  const response = await http.get(url, { responseType: 'text' });
-  const html = String(response.data ?? '');
-  const finalUrl = response.request?.res?.responseUrl ?? response.config?.url ?? url;
-  const $ = cheerio.load(html);
-  return { $, html, finalUrl };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// URL builder
+// URL helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Build the correct FLB Genius Sports URL.
- * Always appends a trailing ? to the WHurl path before encoding.
+ * Build a Genius Sports wrapper URL. The site always expects a trailing `?`
+ * on the WHurl path before it is percent-encoded.
  */
 function gsUrl(path) {
   const withTrailing = path.endsWith('?') ? path : `${path}?`;
   return `${BASE}/competitions/?WHurl=${encodeURIComponent(withTrailing)}`;
 }
 
+function scheduleUrl(competitionId) {
+  return gsUrl(`/competition/${competitionId}/schedule`);
+}
+function summaryUrl(competitionId, matchId) {
+  return gsUrl(`/competition/${competitionId}/match/${matchId}/summary`);
+}
+function boxscoreUrl(competitionId, matchId) {
+  return gsUrl(`/competition/${competitionId}/match/${matchId}/boxscore`);
+}
+function playByPlayUrl(competitionId, matchId) {
+  return gsUrl(`/competition/${competitionId}/match/${matchId}/playbyplay`);
+}
+function shotChartUrl(competitionId, matchId) {
+  return gsUrl(`/competition/${competitionId}/match/${matchId}/shotchart`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rendered fetch — Playwright with retries
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Open a URL in a fresh context, wait for the given selector, return HTML.
+ * Falls back to networkidle if the selector never appears. Retries on error.
+ */
+async function fetchRendered(url, opts = {}) {
+  const {
+    waitForSelector,
+    navTimeout  = DEFAULT_NAV_TIMEOUT_MS,
+    waitTimeout = DEFAULT_WAIT_TIMEOUT_MS,
+    idleTimeout = DEFAULT_IDLE_TIMEOUT_MS,
+    settleMs    = DEFAULT_SETTLE_MS,
+    maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  } = opts;
+
+  let lastErr = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const browser = await getBrowser();
+    const context = await browser.newContext({
+      userAgent: USER_AGENT,
+      viewport:  { width: 1280, height: 900 },
+      extraHTTPHeaders: {
+        'Accept-Language': 'en-US,en;q=0.9',
+        Referer: `${BASE}/competitions/`,
+      },
+    });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: navTimeout });
+
+      if (waitForSelector) {
+        try {
+          await page.waitForSelector(waitForSelector, { timeout: waitTimeout, state: 'attached' });
+        } catch {
+          // selector may never appear (e.g. postponed match with no table) —
+          // fall through to networkidle so we at least capture the SPA DOM.
+        }
+      }
+
+      try {
+        await page.waitForLoadState('networkidle', { timeout: idleTimeout });
+      } catch { /* networkidle not required */ }
+
+      if (settleMs > 0) await page.waitForTimeout(settleMs);
+
+      const html = await page.content();
+      const finalUrl = page.url();
+      return { html, finalUrl };
+    } catch (err) {
+      lastErr = err;
+      console.warn(
+        `[FLB] fetchRendered attempt ${attempt}/${maxAttempts} failed (${url}): ${err?.message ?? err}`,
+      );
+    } finally {
+      await page.close().catch(() => {});
+      await context.close().catch(() => {});
+    }
+  }
+
+  throw lastErr ?? new Error(`fetchRendered failed: ${url}`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function normalizeStatus(raw) {
-  if (!raw) return 'scheduled';
-  const s = raw.trim().toLowerCase();
-  if (s === 'final' || s === 'finished' || s === 'ft') return 'final';
-  if (
-    s.includes('live') ||
-    s.includes('q1') || s.includes('q2') || s.includes('q3') || s.includes('q4') ||
-    s.includes('ot') || s.includes('halftime') || s.includes('half time') ||
-    /^\d+:\d+$/.test(s)
-  ) return 'live';
-  if (s.includes('postpone') || s.includes('cancel')) return 'postponed';
-  return 'scheduled';
+function cleanText(s) {
+  return (s ?? '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function extractId(href, segment) {
+function toAbsoluteUrl(src) {
+  if (!src) return null;
+  if (src.startsWith('http://') || src.startsWith('https://')) return src;
+  if (src.startsWith('//')) return `https:${src}`;
+  return `${BASE}${src.startsWith('/') ? '' : '/'}${src}`;
+}
+
+function extractIdFromPath(href, segment) {
   if (!href) return null;
-  const re = new RegExp(`/${segment}/(\\d+)`);
-  const m = href.match(re);
+  // Works on both raw links like /team/86486? and on wrapped Genius Sports URLs
+  // whose href is `...?WHurl=%2Fcompetition%2F42001%2Fteam%2F86486%3F`.
+  const re = new RegExp(`(?:/|%2F)${segment}(?:/|%2F)(\\d+)`, 'i');
+  const m  = href.match(re);
   return m ? Number(m[1]) : null;
 }
 
-function matchIdFromRowId(rowId) {
+function extractMatchIdFromRowId(rowId) {
   if (!rowId) return null;
   const m = rowId.match(/(\d{5,})/);
   return m ? Number(m[1]) : null;
 }
 
+function normalizeStatusFromClass(classAttr) {
+  const s = (classAttr ?? '').toUpperCase();
+  if (s.includes('STATUS_COMPLETE') || s.includes('STATUS_FINAL'))   return 'final';
+  if (s.includes('STATUS_LIVE') || s.includes('STATUS_INPROGRESS'))  return 'live';
+  if (s.includes('STATUS_POSTPONED') || s.includes('STATUS_CANCEL')) return 'postponed';
+  if (s.includes('STATUS_SCHEDULED') || s.includes('STATUS_FUTURE')) return 'scheduled';
+  return null;
+}
+
+function normalizeStatusFromText(raw) {
+  const s = (raw ?? '').trim().toLowerCase();
+  if (!s) return null;
+  if (/(^|\s)(final|finished|ft|complete|completed)(\s|$)/.test(s)) return 'final';
+  if (/live|q[1-4]|ot|half.?time|period/.test(s)) return 'live';
+  if (/postpone|cancel/.test(s)) return 'postponed';
+  return 'scheduled';
+}
+
+function parseIntOrNull(txt) {
+  const s = cleanText(txt);
+  if (!s || s === '-' || s === '&nbsp;') return null;
+  const n = Number(s.replace(/[^\d.-]/g, ''));
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. getSchedule  (Playwright)
+// 1) Schedule
 // ─────────────────────────────────────────────────────────────────────────────
 
-function parseScheduleRows($, competitionId) {
+function parseSchedule($, competitionId) {
   const games = [];
+  const seen = new Set();
 
-  const ROW_SELECTOR =
-    '.match-wrap, #schedule .match-wrap, table.schedule tbody tr, .match-row, [class*="game-row"], [class*="schedule-row"]';
-
-  $(ROW_SELECTOR).each((_i, el) => {
+  $('.match-wrap').each((_i, el) => {
     try {
-      const $el = $(el);
-      if (!$el.text().trim()) return;
+      const $el   = $(el);
+      const rowId = $el.attr('id') || '';
+      const cls   = $el.attr('class') || '';
 
-      // matchId from link href or row id attribute
-      const matchLink =
-        $el.find('a[href*="/match/"]').first().attr('href') ||
-        $el.find('a[href*="matchId="]').first().attr('href') || '';
-      let matchId = extractId(matchLink, 'match');
-      if (!matchId && matchLink) {
-        const m = matchLink.match(/matchId=(\d+)/);
-        if (m) matchId = Number(m[1]);
-      }
-      if (!matchId) matchId = matchIdFromRowId($el.attr('id') ?? '');
-      if (!matchId) return;
+      const matchId = extractMatchIdFromRowId(rowId);
+      if (!matchId || seen.has(matchId)) return;
+      seen.add(matchId);
 
-      const rawStatus =
-        $el.find('[class*="status"], .game-status, .match-status, .status-label, .match-state')
-          .first().text().trim() || '';
-      const status = normalizeStatus(rawStatus);
-      const isLive = status === 'live';
+      // Status — prefer the STATUS_* class, fall back to the visible text
+      const statusFromClass = normalizeStatusFromClass(cls);
+      const rawNotLive = cleanText($el.find('.notlive .matchStatus').first().text());
+      const rawLive    = cleanText($el.find('.livenow.livedetails .matchStatus').first().text());
+      const rawStatus  = rawNotLive || rawLive || '';
+      const status     = statusFromClass ?? normalizeStatusFromText(rawStatus) ?? 'scheduled';
+      const isLive     = status === 'live';
 
-      const dateTimeText =
-        $el.find('[class*="date"], [class*="time"], .match-date, .game-date, .match-time, .kickoff')
-          .first().text().trim() ||
-        $el.find('td').eq(0).text().trim() || '';
+      // Date / time / venue
+      const dateTimeText = cleanText($el.find('.match-time span').first().text());
+      const venueAnchor  = $el.find('.match-venue a.venuename, .match-venue a').first();
+      const venue        = cleanText(venueAnchor.text());
+      const venueId      = extractIdFromPath(venueAnchor.attr('href') || '', 'venue');
 
-      const venue =
-        $el.find('[class*="venue"], [class*="arena"], .venue, .location').first().text().trim() || '';
-      const venueLink = $el.find('a[href*="/venue/"]').first().attr('href') || '';
-      const venueId = extractId(venueLink, 'venue');
+      // Home team
+      const $home        = $el.find('.home-team').first();
+      const homeAnchor   = $home.find('a[href*="/team/"], a[href*="%2Fteam%2F"]').first();
+      const homeId       = extractIdFromPath(homeAnchor.attr('href') || '', 'team');
+      const homeName     = cleanText(
+        $home.find('.team-name-full').first().text()
+        || $home.find('.teamnames').first().text()
+        || $home.find('.team-name').first().text()
+        || homeAnchor.attr('title')
+        || homeAnchor.find('img').attr('alt'),
+      );
+      const homeLogo  = toAbsoluteUrl($home.find('img').first().attr('src'));
+      const homeScore = parseIntOrNull($home.find('.team-score .fake-cell').first().text());
 
-      const teamLinks = $el.find('a[href*="/team/"]');
-      const homeId = extractId(teamLinks.eq(0).attr('href') || '', 'team');
-      const awayId = extractId(teamLinks.eq(1).attr('href') || '', 'team');
-
-      const homeName =
-        $el.find('.home-team .teamnames').first().text().trim() ||
-        $el.find('.home-team .team-name').first().text().trim() ||
-        $el.find('.home-team a').first().text().trim() ||
-        $el.find('[class*="home"] [class*="name"]').first().text().trim() ||
-        teamLinks.eq(0).text().trim();
-
-      const awayName =
-        $el.find('.away-team .teamnames').first().text().trim() ||
-        $el.find('.away-team .team-name').first().text().trim() ||
-        $el.find('.away-team a').first().text().trim() ||
-        $el.find('[class*="away"] [class*="name"]').first().text().trim() ||
-        teamLinks.eq(1).text().trim();
-
-      const toAbsImg = (src) =>
-        src ? (src.startsWith('http') ? src : `${BASE}${src}`) : null;
-
-      const homeLogoImg =
-        $el.find('.home-team img').first().attr('src') ||
-        $el.find('[class*="home"] img').first().attr('src') || '';
-      const awayLogoImg =
-        $el.find('.away-team img').first().attr('src') ||
-        $el.find('[class*="away"] img').first().attr('src') || '';
+      // Away team
+      const $away        = $el.find('.away-team').first();
+      const awayAnchor   = $away.find('a[href*="/team/"], a[href*="%2Fteam%2F"]').first();
+      const awayId       = extractIdFromPath(awayAnchor.attr('href') || '', 'team');
+      const awayName     = cleanText(
+        $away.find('.team-name-full').first().text()
+        || $away.find('.teamnames').first().text()
+        || $away.find('.team-name').first().text()
+        || awayAnchor.attr('title')
+        || awayAnchor.find('img').attr('alt'),
+      );
+      const awayLogo  = toAbsoluteUrl($away.find('img').first().attr('src'));
+      const awayScore = parseIntOrNull($away.find('.team-score .fake-cell').first().text());
 
       games.push({
         competitionId: Number(competitionId),
@@ -233,15 +310,15 @@ function parseScheduleRows($, competitionId) {
         dateTimeText,
         venue,
         venueId,
-        homeTeam: { id: homeId, name: homeName, logoUrl: toAbsImg(homeLogoImg) },
-        awayTeam: { id: awayId, name: awayName, logoUrl: toAbsImg(awayLogoImg) },
-        summaryUrl:    gsUrl(`/competition/${competitionId}/match/${matchId}/summary`),
-        boxScoreUrl:   gsUrl(`/competition/${competitionId}/match/${matchId}/boxscore`),
-        playByPlayUrl: gsUrl(`/competition/${competitionId}/match/${matchId}/playbyplay`),
-        shotChartUrl:  gsUrl(`/competition/${competitionId}/match/${matchId}/shotchart`),
+        homeTeam: { id: homeId, name: homeName, logoUrl: homeLogo, score: homeScore },
+        awayTeam: { id: awayId, name: awayName, logoUrl: awayLogo, score: awayScore },
+        summaryUrl:    summaryUrl(competitionId, matchId),
+        boxScoreUrl:   boxscoreUrl(competitionId, matchId),
+        playByPlayUrl: playByPlayUrl(competitionId, matchId),
+        shotChartUrl:  shotChartUrl(competitionId, matchId),
       });
     } catch (err) {
-      console.error('[getSchedule] row parse error:', err.message ?? err);
+      console.error('[FLB][schedule] row parse error:', err?.message ?? err);
     }
   });
 
@@ -249,266 +326,367 @@ function parseScheduleRows($, competitionId) {
 }
 
 /**
- * Fetch the schedule for a competition using a headless browser.
  * @param {number|string} competitionId
  * @returns {Promise<Array>}
  */
 export async function getSchedule(competitionId) {
-  const url = gsUrl(`/competition/${competitionId}/schedule`);
-
-  let html = '';
-  let finalUrl = url;
-
-  try {
-    ({ html, finalUrl } = await fetchWithBrowser(url, { waitForSelector: '.match-wrap' }));
-  } catch (err) {
-    console.error(`[FLB] Browser fetch failed for compId=${competitionId}:`, err.message ?? err);
-    return [];
-  }
-
+  const url = scheduleUrl(competitionId);
+  const { html, finalUrl } = await fetchRendered(url, { waitForSelector: '.match-wrap' });
   const $ = cheerio.load(html);
 
-  const matchWrapCount = $('.match-wrap').length;
-  console.log(`[FLB] compId=${competitionId} | Final URL: ${finalUrl}`);
-  console.log(`[FLB] compId=${competitionId} | html.length: ${html.length}`);
-  console.log(`[FLB] compId=${competitionId} | .match-wrap count: ${matchWrapCount}`);
-  console.log(`[FLB] compId=${competitionId} | contains "extfix_": ${html.includes('extfix_')}`);
-  console.log(`[FLB] compId=${competitionId} | <title>: ${$('title').text().trim()}`);
-
-  if (matchWrapCount === 0 && !html.includes('extfix_')) {
-    // Nothing to parse — print a preview to help diagnose
-    console.warn(`[FLB] compId=${competitionId} | No schedule content found. HTML preview:\n${html.slice(0, 2000)}`);
+  const rows = $('.match-wrap').length;
+  console.log(
+    `[FLB][schedule] compId=${competitionId} rows=${rows} len=${html.length} final=${finalUrl}`,
+  );
+  if (rows === 0) {
+    console.warn(
+      `[FLB][schedule] compId=${competitionId} no .match-wrap rows — title="${cleanText($('title').text())}"`,
+    );
     return [];
   }
 
-  const games = parseScheduleRows($, competitionId);
-  console.log(`[FLB] Parsed ${games.length} games for competition ${competitionId}`);
+  const games = parseSchedule($, competitionId);
+  console.log(`[FLB][schedule] compId=${competitionId} parsed=${games.length}`);
   return games;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. getBoxscore  (axios)
+// 2) Boxscore
 // ─────────────────────────────────────────────────────────────────────────────
 
-function parseBoxscoreHeader($, competitionId, matchId) {
-  const rawStatus =
-    $('[class*="status"], .game-status, .match-status').first().text().trim() || '';
-  const status = normalizeStatus(rawStatus);
-  const dateTimeText = $('[class*="date"], .match-date').first().text().trim() || '';
+function parseMatchHeader($, competitionId, matchId) {
+  const $header    = $('.match-header').first();
+  const wrapClass  = $header.attr('class') || '';
 
-  const homeName =
-    $('[class*="home"] [class*="team-name"], .home-team .team-name').first().text().trim() ||
-    $('[class*="home-name"]').first().text().trim();
-  const awayName =
-    $('[class*="away"] [class*="team-name"], .away-team .team-name').first().text().trim() ||
-    $('[class*="away-name"]').first().text().trim();
+  const $home = $header.find('.home-wrapper').first();
+  const $away = $header.find('.away-wrapper').first();
 
-  const homeScoreText = $('[class*="home"] [class*="score"], .home-score').first().text().trim();
-  const awayScoreText = $('[class*="away"] [class*="score"], .away-score').first().text().trim();
+  const homeAnchor = $home.find('a[href*="/team/"], a[href*="%2Fteam%2F"]').first();
+  const awayAnchor = $away.find('a[href*="/team/"], a[href*="%2Fteam%2F"]').first();
 
-  const homeId = extractId(
-    $('[class*="home"] a[href*="/team/"]').first().attr('href') || '', 'team');
-  const awayId = extractId(
-    $('[class*="away"] a[href*="/team/"]').first().attr('href') || '', 'team');
+  const homeName = cleanText(
+    $home.find('.name a').first().text()
+    || $home.find('.name').first().text()
+    || homeAnchor.attr('title')
+    || homeAnchor.find('img').attr('alt'),
+  );
+  const awayName = cleanText(
+    $away.find('.name a').first().text()
+    || $away.find('.name').first().text()
+    || awayAnchor.attr('title')
+    || awayAnchor.find('img').attr('alt'),
+  );
+
+  const homeScore = parseIntOrNull($home.find('.score').first().text());
+  const awayScore = parseIntOrNull($away.find('.score').first().text());
+
+  const homeId = extractIdFromPath(homeAnchor.attr('href') || '', 'team');
+  const awayId = extractIdFromPath(awayAnchor.attr('href') || '', 'team');
+
+  const homeLogo = toAbsoluteUrl($home.find('img').first().attr('src'));
+  const awayLogo = toAbsoluteUrl($away.find('img').first().attr('src'));
+
+  const rawStatus = cleanText(
+    $header.find('.status.notlive').first().text()
+    || $header.find('.status.livenow .matchStatus').first().text(),
+  );
+  const status =
+    normalizeStatusFromClass(wrapClass) ??
+    normalizeStatusFromText(rawStatus) ??
+    'scheduled';
+
+  const dateTimeText = cleanText($header.find('.match-time span').first().text());
 
   return {
     competitionId: Number(competitionId),
     matchId: Number(matchId),
     status,
+    rawStatus,
     dateTimeText,
-    homeTeam: { id: homeId, name: homeName, score: homeScoreText !== '' ? Number(homeScoreText) : null },
-    awayTeam: { id: awayId, name: awayName, score: awayScoreText !== '' ? Number(awayScoreText) : null },
+    homeTeam: { id: homeId, name: homeName, logoUrl: homeLogo, score: homeScore },
+    awayTeam: { id: awayId, name: awayName, logoUrl: awayLogo, score: awayScore },
   };
 }
 
-function parseTeamTable($, tableEl, side) {
-  const $table = $(tableEl);
+function parseBoxscoreTable($, $h4, $table, side) {
+  const teamAnchor = $h4.closest('a');
+  const teamId   = extractIdFromPath(teamAnchor.attr('href') || '', 'team');
+  const teamName = cleanText($h4.text());
+
   const headers = [];
-  $table.find('thead tr th, thead tr td').each((_i, th) => {
-    headers.push($(th).text().trim());
-  });
+  $table.find('thead tr th').each((_i, th) => headers.push(cleanText($(th).text())));
 
   const players = [];
-  const totalsRow = { Pts: '0' };
+  $table.find('tbody tr').each((_i, tr) => {
+    const $tr    = $(tr);
+    const $cells = $tr.find('td');
+    if ($cells.length === 0) return;
 
-  const teamLink =
-    $table.closest('[class*="team-section"]').find('a[href*="/team/"]').first().attr('href') ||
-    $table.prev().find('a[href*="/team/"]').first().attr('href') || '';
-  const teamId = extractId(teamLink, 'team');
-  const teamName =
-    $table.closest('[class*="team-section"]').find('[class*="team-name"]').first().text().trim() ||
-    $table.prev().find('[class*="team-name"]').first().text().trim();
-
-  $table.find('tbody tr').each((_i, row) => {
-    const cells = [];
-    $(row).find('td').each((_j, td) => cells.push($(td).text().trim()));
-    if (cells.length === 0) return;
-
-    if (/^totals?$/i.test(cells[0]) || /^totals?$/i.test(cells[1] ?? '')) {
-      headers.forEach((h, idx) => {
-        if (h && cells[idx] !== undefined) totalsRow[h] = cells[idx];
-      });
-      return;
-    }
-
-    const playerNumber = cells[0] ?? '';
-    const playerName = cells[1] ?? '';
+    const playerNumber = cleanText($cells.eq(0).text());
+    const $nameCell    = $cells.eq(1);
+    const playerName   = cleanText($nameCell.find('a').first().text() || $nameCell.text());
     if (!playerName) return;
-
-    const playerLink = $(row).find('a[href*="/player/"]').first().attr('href') || '';
-    const playerId = extractId(playerLink, 'player');
+    const playerLink   = $nameCell.find('a').first().attr('href') || '';
+    const playerId     = extractIdFromPath(playerLink, 'person') ?? extractIdFromPath(playerLink, 'player');
 
     const stats = {};
     headers.forEach((h, idx) => {
-      if (h && idx >= 2 && cells[idx] !== undefined) stats[h] = cells[idx];
+      if (!h || idx < 2) return;
+      const raw = cleanText($cells.eq(idx).text());
+      if (raw === '') return;
+      stats[h] = raw;
     });
 
     players.push({ playerId, playerNumber, playerName, stats });
   });
 
-  return { side, teamId, teamName, totals: totalsRow, players };
-}
-
-/**
- * Fetch and parse a boxscore page.
- * @param {number|string} competitionId
- * @param {number|string} matchId
- */
-export async function getBoxscore(competitionId, matchId) {
-  const url = gsUrl(`/competition/${competitionId}/match/${matchId}/boxscore`);
-  const { $ } = await fetchCheerio(url);
-
-  const header = parseBoxscoreHeader($, competitionId, matchId);
-  const teams = [];
-  const tables = $('table.boxscore, table[class*="stats"], table').toArray();
-
-  if (tables.length >= 2) {
-    teams.push(parseTeamTable($, tables[0], 'home'));
-    teams.push(parseTeamTable($, tables[1], 'away'));
-  } else if (tables.length === 1) {
-    teams.push(parseTeamTable($, tables[0], 'home'));
-  } else {
-    $('[class*="home-stats"], [class*="team-stats"]:first-of-type').each((_i, el) => {
-      const innerTable = $(el).find('table').first();
-      if (innerTable.length) teams.push(parseTeamTable($, innerTable, 'home'));
-    });
-    $('[class*="away-stats"]').each((_i, el) => {
-      const innerTable = $(el).find('table').first();
-      if (innerTable.length) teams.push(parseTeamTable($, innerTable, 'away'));
+  const totals = {};
+  const $footCells = $table.find('tfoot tr').first().find('td');
+  if ($footCells.length > 0) {
+    // Layout observed: td[0]="Totals", td[1]="" (no-number cell),
+    // td[2..] correspond to headers[2..] — i.e. the same alignment as tbody rows.
+    headers.forEach((h, idx) => {
+      if (!h || idx < 2) return;
+      const raw = cleanText($footCells.eq(idx).text());
+      if (raw === '') return;
+      totals[h] = raw;
     });
   }
 
-  return { header, teams };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 3. getPlayByPlay  (axios)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function resolveSide(teamName, homeTeamName, awayTeamName) {
-  if (!teamName) return null;
-  const t = teamName.trim().toLowerCase();
-  if (homeTeamName && t === homeTeamName.trim().toLowerCase()) return 'home';
-  if (awayTeamName && t === awayTeamName.trim().toLowerCase()) return 'away';
-  return null;
-}
-
-function isScoringType(eventType) {
-  const t = (eventType ?? '').toLowerCase();
-  return (
-    t.includes('2pt') || t.includes('3pt') ||
-    t.includes('freethrow') || t.includes('free throw') || t.includes('ft')
-  );
+  return { side, teamId, teamName, totals, players };
 }
 
 /**
- * Fetch and parse a play-by-play page.
  * @param {number|string} competitionId
  * @param {number|string} matchId
+ * @returns {Promise<{ header: object, teams: Array, players: Array }>}
  */
-export async function getPlayByPlay(competitionId, matchId) {
-  const url = gsUrl(`/competition/${competitionId}/match/${matchId}/playbyplay`);
-  const { $ } = await fetchCheerio(url);
+export async function getBoxscore(competitionId, matchId) {
+  const url = boxscoreUrl(competitionId, matchId);
+  const { html } = await fetchRendered(url, { waitForSelector: '.boxscore table.tableClass tbody tr' });
+  const $ = cheerio.load(html);
 
-  const header = parseBoxscoreHeader($, competitionId, matchId);
-  const homeTeamName = header.homeTeam.name;
-  const awayTeamName = header.awayTeam.name;
-  const events = [];
+  const header = parseMatchHeader($, competitionId, matchId);
 
-  $('table.pbp tbody tr, [class*="play-row"], [class*="event-row"], [class*="pbp-row"]').each(
-    (_i, el) => {
-      try {
-        const $el = $(el);
-        if (!$el.text().trim()) return;
+  const teams = [];
+  // Each team section is: <a><h4>Team Name</h4></a><div class="table-wrap"><table class="tableClass">
+  const $h4s = $('.boxscore > a > h4, .boxscore h4').filter((_i, el) => {
+    const txt = cleanText($(el).text());
+    return txt && txt.toLowerCase() !== 'legend';
+  });
 
-        const cells = [];
-        $el.find('td').each((_j, td) => cells.push($(td).text().trim()));
+  $h4s.each((idx, el) => {
+    const $h4    = $(el);
+    const $table = $h4.closest('a').nextAll('.table-wrap').find('table.tableClass').first();
+    if ($table.length === 0) return;
+    const side   = idx === 0 ? 'home' : 'away';
+    teams.push(parseBoxscoreTable($, $h4, $table, side));
+  });
 
-        const period =
-          $el.find('[class*="period"], [class*="quarter"]').first().text().trim() || cells[0] || '';
-        const clock =
-          $el.find('[class*="clock"], [class*="time"]').first().text().trim() || cells[1] || '';
-        const score =
-          $el.find('[class*="score"]').first().text().trim() || cells[2] || '';
-        const teamName =
-          $el.find('[class*="team"]').first().text().trim() || cells[3] || '';
-        const player =
-          $el.find('[class*="player"]').first().text().trim() || cells[4] || '';
-        const playerNumber =
-          $el.find('[class*="number"], [class*="jersey"]').first().text().trim() || '';
-        const actionText =
-          $el.find('[class*="action"], [class*="desc"]').first().text().trim() ||
-          cells[5] || cells[4] || '';
-
-        let eventType = 'event';
-        const rowClass = ($el.attr('class') ?? '').toLowerCase();
-        if (rowClass.includes('2pt') || /\b2pt\b/i.test(actionText)) eventType = '2pt';
-        else if (rowClass.includes('3pt') || /\b3pt\b/i.test(actionText)) eventType = '3pt';
-        else if (rowClass.includes('freethrow') || rowClass.includes('free-throw') ||
-          /free.?throw/i.test(actionText)) eventType = 'freethrow';
-        else if (rowClass.includes('rebound') || /rebound/i.test(actionText)) eventType = 'rebound';
-        else if (rowClass.includes('turnover') || /turnover/i.test(actionText)) eventType = 'turnover';
-        else if (rowClass.includes('foul') || /foul/i.test(actionText)) eventType = 'foul';
-        else if (rowClass.includes('assist') || /assist/i.test(actionText)) eventType = 'assist';
-        else if (rowClass.includes('block') || /block/i.test(actionText)) eventType = 'block';
-        else if (rowClass.includes('steal') || /steal/i.test(actionText)) eventType = 'steal';
-        else if (rowClass.includes('sub') || /substitution/i.test(actionText)) eventType = 'substitution';
-        else if (/quarter|period|start|end/i.test(actionText)) eventType = 'period_marker';
-
-        const isScoringEvent = isScoringType(eventType) && /made|scored/i.test(actionText);
-        const teamSide = resolveSide(teamName, homeTeamName, awayTeamName);
-
-        const safeP = (period || 'P').replace(/\s+/g, '');
-        const safeClock = (clock || '00:00').replace(/\s+/g, '');
-        const eventId =
-          `${matchId}_${safeP}_${safeClock}_${eventType}_${score}`.replace(/\s/g, '');
-
-        events.push({
-          eventId, period, clock, score, teamSide, teamName,
-          player, playerNumber, actionText, eventType, isScoringEvent,
-        });
-      } catch (err) {
-        console.error('[getPlayByPlay] row parse error:', err.message ?? err);
-      }
-    },
+  // Flatten players for convenience
+  const players = teams.flatMap((t) =>
+    (t.players ?? []).map((p) => ({
+      side:          t.side,
+      teamId:        t.teamId,
+      teamName:      t.teamName,
+      playerId:      p.playerId,
+      playerNumber:  p.playerNumber,
+      playerName:    p.playerName,
+      stats:         p.stats,
+    })),
   );
+
+  console.log(
+    `[FLB][boxscore] matchId=${matchId} status=${header.status} teams=${teams.length} players=${players.length}`,
+  );
+
+  return { header, teams, players };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3) Play-by-play
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PBPTY_TO_EVENT_TYPE = {
+  '2pt':                '2pt',
+  '3pt':                '3pt',
+  freethrow:            'freethrow',
+  rebound:              'rebound',
+  assist:               'assist',
+  steal:                'steal',
+  block:                'block',
+  turnover:             'turnover',
+  foul:                 'foul',
+  foulon:               'foul_drawn',
+  substitution:         'substitution',
+  jumpball:             'jumpball',
+  timeout:              'timeout',
+  period:               'period_marker',
+  game:                 'game_marker',
+  headcoachchallenge:   'challenge',
+};
+
+function classifyEvent(classes) {
+  const tokens = (classes ?? '').split(/\s+/);
+  for (const t of tokens) {
+    const m = t.match(/^pbpty(.+)$/);
+    if (m) return PBPTY_TO_EVENT_TYPE[m[1]] ?? m[1];
+  }
+  return 'event';
+}
+
+function extractPeriodNumber(classes) {
+  const m = (classes ?? '').match(/\bper_(\d+)\b/);
+  return m ? Number(m[1]) : null;
+}
+
+function isOvertime(classes) {
+  return /\bper_ot\b/.test(classes ?? '');
+}
+
+function teamSideFromClass(classes) {
+  if (/\bpbpt1\b/.test(classes ?? '')) return 'home';
+  if (/\bpbpt2\b/.test(classes ?? '')) return 'away';
+  return null;
+}
+
+function parsePlayerFromAction(actionText) {
+  if (!actionText) return { playerNumber: null, player: null, action: cleanText(actionText) };
+  // Pattern: "<NUMBER>, <Player Name>, rest of action"
+  const m = actionText.match(/^\s*(\d+)\s*,\s*([^,]+?)\s*,\s*(.+?)\s*$/);
+  if (m) {
+    return {
+      playerNumber: m[1],
+      player:       cleanText(m[2]),
+      action:       cleanText(m[3]),
+    };
+  }
+  // Pattern: "<NUMBER>, <Player Name>" (no further action) — e.g. substitutions
+  const m2 = actionText.match(/^\s*(\d+)\s*,\s*([^,]+?)\s*$/);
+  if (m2) {
+    return {
+      playerNumber: m2[1],
+      player:       cleanText(m2[2]),
+      action:       '',
+    };
+  }
+  return { playerNumber: null, player: null, action: cleanText(actionText) };
+}
+
+function stableEventId(matchId, period, clock, teamSide, eventType, actionText) {
+  const key = [matchId, period ?? '', clock ?? '', teamSide ?? '', eventType ?? '', actionText ?? ''].join('|');
+  const hash = crypto.createHash('sha1').update(key).digest('hex').slice(0, 16);
+  return `${matchId}_${hash}`;
+}
+
+function parsePlayByPlay($, competitionId, matchId) {
+  const header = parseMatchHeader($, competitionId, matchId);
+  const homeName = header.homeTeam.name;
+  const awayName = header.awayTeam.name;
+
+  const events = [];
+  const seen = new Set();
+
+  $('div.pbpa').each((_i, el) => {
+    try {
+      const $el     = $(el);
+      const classes = $el.attr('class') || '';
+
+      const eventType = classifyEvent(classes);
+      const teamSide  = teamSideFromClass(classes);
+      const periodNum = extractPeriodNumber(classes);
+      const ot        = isOvertime(classes);
+      const period    = ot ? (periodNum ? `OT${periodNum}` : 'OT') : (periodNum ? `P${periodNum}` : '');
+
+      // Prefer the inline pbp-period label when present
+      const periodLabel = cleanText($el.find('.pbp-period').first().text()) || period;
+
+      // Clock is the text of .pbp-time minus the period span and the score span
+      const $time = $el.find('.pbp-time').first();
+      let clock = '';
+      if ($time.length) {
+        const clone = $time.clone();
+        clone.find('.pbp-period, .pbpsc').remove();
+        clock = cleanText(clone.text());
+      }
+
+      const score      = cleanText($el.find('.pbpsc').first().text());
+      const actionRaw  = cleanText($el.find('.pbp-action').first().text());
+      const { playerNumber, player, action } = parsePlayerFromAction(actionRaw);
+
+      const teamName =
+        teamSide === 'home' ? homeName :
+        teamSide === 'away' ? awayName : null;
+
+      const isScoringEvent =
+        /\bscaction\b/.test(classes) ||
+        (['2pt', '3pt', 'freethrow'].includes(eventType) && /\bmade\b/i.test(actionRaw));
+
+      const eventId = stableEventId(matchId, periodLabel, clock, teamSide, eventType, actionRaw);
+      if (seen.has(eventId)) return;
+      seen.add(eventId);
+
+      events.push({
+        eventId,
+        period:         periodLabel,
+        clock,
+        score:          score || null,
+        teamSide,
+        teamName,
+        player,
+        playerNumber,
+        actionText:     action || actionRaw,
+        eventType,
+        isScoringEvent,
+      });
+    } catch (err) {
+      console.error('[FLB][pbp] row parse error:', err?.message ?? err);
+    }
+  });
 
   return { header, events };
 }
 
+/**
+ * @param {number|string} competitionId
+ * @param {number|string} matchId
+ * @returns {Promise<{ header: object, events: Array }>}
+ */
+export async function getPlayByPlay(competitionId, matchId) {
+  const url = playByPlayUrl(competitionId, matchId);
+  const { html } = await fetchRendered(url, { waitForSelector: '.play-by-play, .match-header' });
+  const $ = cheerio.load(html);
+
+  const result = parsePlayByPlay($, competitionId, matchId);
+  console.log(
+    `[FLB][pbp] matchId=${matchId} status=${result.header.status} events=${result.events.length}`,
+  );
+  return result;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. getMatchBundle
+// 4) Match bundle
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Convenience wrapper: fetch boxscore and play-by-play in parallel.
- * @param {number|string} competitionId
- * @param {number|string} matchId
+ * Fetch boxscore + play-by-play in parallel.
+ * Any one failure is captured but doesn't block the other.
  */
 export async function getMatchBundle(competitionId, matchId) {
-  const [boxscore, playByPlay] = await Promise.all([
+  const [box, pbp] = await Promise.allSettled([
     getBoxscore(competitionId, matchId),
     getPlayByPlay(competitionId, matchId),
   ]);
-  return { boxscore, playByPlay };
+
+  if (box.status === 'rejected') {
+    console.warn(`[FLB][bundle] boxscore failed matchId=${matchId}:`, box.reason?.message ?? box.reason);
+  }
+  if (pbp.status === 'rejected') {
+    console.warn(`[FLB][bundle] pbp failed matchId=${matchId}:`, pbp.reason?.message ?? pbp.reason);
+  }
+
+  return {
+    boxscore:   box.status === 'fulfilled' ? box.value : null,
+    playByPlay: pbp.status === 'fulfilled' ? pbp.value : null,
+  };
 }
