@@ -47,3 +47,4 @@ app.*.map.json
 # Node REST API (co-located in this repo)
 api/node_modules/
 api/.env
+CLAUDE.md
