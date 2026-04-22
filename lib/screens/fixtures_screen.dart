@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/game_fixture_view.dart';
 import '../services/games_api_service.dart';
+import 'game_boxscore_screen.dart';
 import '../widgets/league_fixture_card.dart';
 
 /// Read-only league schedule from `games` (competition filter on API).
@@ -105,7 +106,7 @@ class _FixturesScreenState extends State<FixturesScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             Text(
-              'Lebanese league fixtures (preview — tap disabled).',
+              'Lebanese league fixtures — tap a game for team box score.',
               style: TextStyle(
                 fontSize: 12.5,
                 color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
@@ -120,7 +121,12 @@ class _FixturesScreenState extends State<FixturesScreen> {
               ...upcoming.map(
                 (f) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: LeagueFixtureCard(fixture: f, onCardTap: null),
+                  child: LeagueFixtureCard(
+                    fixture: f,
+                    onCardTap: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(builder: (_) => GameBoxscoreScreen(matchId: f.matchId)),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -131,7 +137,12 @@ class _FixturesScreenState extends State<FixturesScreen> {
               ...past.map(
                 (f) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: LeagueFixtureCard(fixture: f, onCardTap: null),
+                  child: LeagueFixtureCard(
+                    fixture: f,
+                    onCardTap: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(builder: (_) => GameBoxscoreScreen(matchId: f.matchId)),
+                    ),
+                  ),
                 ),
               ),
             ],

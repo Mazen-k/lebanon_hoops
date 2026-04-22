@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/game_fixture_view.dart';
 
-/// League-style match row (same look as team profile fixtures). Non-interactive when [onCardTap] is null.
+/// League-style match row (same look as team profile fixtures). When [onCardTap] is set, the whole card is tappable.
 class LeagueFixtureCard extends StatelessWidget {
   const LeagueFixtureCard({
     super.key,
@@ -176,7 +176,7 @@ class LeagueFixtureCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: isFuture ? onCardTap : null,
+        onTap: onCardTap,
         borderRadius: BorderRadius.circular(16),
         child: content,
       ),

@@ -2677,16 +2677,21 @@ async function getGameEventsHandler(req, res) {
 app.get('/games/:matchId/events', getGameEventsHandler);
 app.get('/api/games/:matchId/events', getGameEventsHandler);
 
-/** GET /games/:matchId/boxscore — full boxscore payload for stats tab */
+/** GET /games/:matchId/boxscore — full boxscore payload for stats tab + play-by-play */
 async function getGameBoxscoreHandler(req, res) {
   const matchId = Number(req.params.matchId);
   if (Number.isNaN(matchId)) return res.status(400).json({ error: 'matchId must be an integer' });
   try {
-    const [gameRes, teamsRes, playersRes] = await Promise.all([
+    const [gameRes, teamsRes, playersRes, eventsRes] = await Promise.all([
       pool.query('SELECT * FROM games WHERE match_id = $1', [matchId]),
       pool.query('SELECT * FROM team_boxscores WHERE match_id = $1 ORDER BY side', [matchId]),
       pool.query(
         'SELECT * FROM player_boxscores WHERE match_id = $1 ORDER BY side, player_name',
+        [matchId],
+      ),
+      pool.query(
+        `SELECT * FROM game_events WHERE match_id = $1
+         ORDER BY created_at ASC NULLS LAST, event_id ASC`,
         [matchId],
       ),
     ]);
@@ -2695,6 +2700,7 @@ async function getGameBoxscoreHandler(req, res) {
       game: gameRes.rows[0],
       teams: teamsRes.rows,
       players: playersRes.rows,
+      events: eventsRes.rows,
     });
   } catch (err) {
     console.error('[GET /games/:matchId/boxscore]', err);

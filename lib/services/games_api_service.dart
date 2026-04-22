@@ -54,4 +54,33 @@ class GamesApiService {
       if (_client == null) own.close();
     }
   }
+
+  /// Full box score: `games` + `team_boxscores` + `player_boxscores` + `game_events` (play-by-play).
+  Future<Map<String, dynamic>> fetchBoxscore({required int matchId}) async {
+    final paths = _pair('games/$matchId/boxscore');
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .get(_rootUri(p), headers: const {'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 25));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          var msg = 'Box score failed (${res.statusCode})';
+          try {
+            final m = jsonDecode(utf8.decode(res.bodyBytes));
+            if (m is Map && m['error'] != null) msg = m['error'].toString();
+          } catch (_) {}
+          throw GamesApiException(msg);
+        }
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is Map<String, dynamic>) return d;
+        if (d is Map) return Map<String, dynamic>.from(d);
+        throw GamesApiException('Invalid box score JSON');
+      }
+      throw GamesApiException('Box score route not found');
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
 }
