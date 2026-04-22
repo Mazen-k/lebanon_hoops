@@ -2685,7 +2685,7 @@ async function getGameHandler(req, res) {
   const matchId = Number(req.params.matchId);
   if (Number.isNaN(matchId)) return res.status(400).json({ error: 'matchId must be an integer' });
   try {
-    const { rows } = await pool.query('SELECT * FROM games WHERE match_id = $1', [matchId]);
+    const { rows } = await pool.query('SELECT * FROM games WHERE match_id = $1::bigint', [matchId]);
     if (rows.length === 0) return res.status(404).json({ error: 'Game not found' });
     res.json(rows[0]);
   } catch (err) {
@@ -2703,7 +2703,11 @@ async function getGameEventsHandler(req, res) {
   if (Number.isNaN(matchId)) return res.status(400).json({ error: 'matchId must be an integer' });
   try {
     const { rows } = await pool.query(
-      `SELECT * FROM game_events WHERE match_id = $1 ORDER BY created_at DESC, event_id DESC`,
+      `SELECT event_id, match_id, period, clock, score, team_side, team_name,
+              player, player_number, action_text, event_type, is_scoring_event, created_at
+       FROM game_events
+       WHERE match_id = $1::bigint
+       ORDER BY created_at DESC NULLS LAST, event_id DESC`,
       [matchId],
     );
     res.json(rows);
@@ -2722,14 +2726,17 @@ async function getGameBoxscoreHandler(req, res) {
   if (Number.isNaN(matchId)) return res.status(400).json({ error: 'matchId must be an integer' });
   try {
     const [gameRes, teamsRes, playersRes, eventsRes] = await Promise.all([
-      pool.query('SELECT * FROM games WHERE match_id = $1', [matchId]),
-      pool.query('SELECT * FROM team_boxscores WHERE match_id = $1 ORDER BY side', [matchId]),
+      pool.query('SELECT * FROM games WHERE match_id = $1::bigint', [matchId]),
+      pool.query('SELECT * FROM team_boxscores WHERE match_id = $1::bigint ORDER BY side', [matchId]),
       pool.query(
-        'SELECT * FROM player_boxscores WHERE match_id = $1 ORDER BY side, player_name',
+        'SELECT * FROM player_boxscores WHERE match_id = $1::bigint ORDER BY side, player_name',
         [matchId],
       ),
       pool.query(
-        `SELECT * FROM game_events WHERE match_id = $1
+        `SELECT event_id, match_id, period, clock, score, team_side, team_name,
+                player, player_number, action_text, event_type, is_scoring_event, created_at
+         FROM game_events
+         WHERE match_id = $1::bigint
          ORDER BY created_at ASC NULLS LAST, event_id ASC`,
         [matchId],
       ),

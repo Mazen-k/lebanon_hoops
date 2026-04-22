@@ -129,12 +129,47 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
     final out = <Map<String, dynamic>>[];
     for (final e in raw) {
       if (e is Map<String, dynamic>) {
-        out.add(e);
+        out.add(_coercePbpRow(e));
       } else if (e is Map) {
-        out.add(Map<String, dynamic>.from(e));
+        out.add(_coercePbpRow(Map<String, dynamic>.from(e)));
       }
     }
     return out;
+  }
+
+  /// Maps API/DB rows to the snake_case keys the UI expects (handles camelCase too).
+  static Map<String, dynamic> _coercePbpRow(Map<String, dynamic> m) {
+    dynamic pickDyn(List<String> keys) {
+      for (final k in keys) {
+        if (m.containsKey(k) && m[k] != null) return m[k];
+      }
+      for (final e in m.entries) {
+        final el = e.key.toString().toLowerCase();
+        for (final k in keys) {
+          if (el == k.toLowerCase()) return e.value;
+        }
+      }
+      return null;
+    }
+
+    String pickStr(List<String> keys) {
+      final v = pickDyn(keys);
+      if (v == null) return '';
+      return v.toString().trim();
+    }
+
+    return {
+      'period': pickStr(['period', 'Period']),
+      'clock': pickStr(['clock', 'Clock']),
+      'score': pickStr(['score', 'Score']),
+      'team_side': pickStr(['team_side', 'teamSide', 'TeamSide']),
+      'team_name': pickStr(['team_name', 'teamName', 'TeamName']),
+      'player': pickStr(['player', 'Player']),
+      'player_number': pickStr(['player_number', 'playerNumber', 'PlayerNumber']),
+      'action_text': pickStr(['action_text', 'actionText', 'ActionText']),
+      'event_type': pickStr(['event_type', 'eventType', 'EventType']),
+      'is_scoring_event': pickDyn(['is_scoring_event', 'isScoringEvent', 'IsScoringEvent']),
+    };
   }
 
   List<Map<String, dynamic>> _playersForSide(List<dynamic>? players, String sideNorm) {
@@ -661,7 +696,7 @@ class _PlayByPlayTab extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         children: [
           Text(
-            'Play-by-play is not available yet. Events appear after the game feed is synced.',
+            'No play-by-play for this match yet. The API returns rows from game_events where match_id equals this game — add those rows in your database, or run the server sync that fills them.',
             textAlign: TextAlign.center,
             style: TextStyle(color: scheme.onSurfaceVariant, height: 1.45),
           ),
