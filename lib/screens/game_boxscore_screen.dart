@@ -4,6 +4,26 @@ import 'package:flutter/material.dart';
 
 import '../services/games_api_service.dart';
 
+// ---------------------------------------------------------------------------
+// PBP list item types — period header or event row
+// ---------------------------------------------------------------------------
+
+sealed class _PbpListItem {}
+
+class _PbpPeriodHeader extends _PbpListItem {
+  _PbpPeriodHeader(this.label);
+  final String label;
+}
+
+class _PbpEventRow extends _PbpListItem {
+  _PbpEventRow(this.row);
+  final Map<String, dynamic> row;
+}
+
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
+
 /// Team totals, player lines, and play-by-play (`game_events`) — swipe between tabs.
 class GameBoxscoreScreen extends StatefulWidget {
   const GameBoxscoreScreen({super.key, required this.matchId});
@@ -45,10 +65,7 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
     'DEF',
   ];
 
-  static const _playerStatOrder = [
-    'Mins',
-    ..._statOrder,
-  ];
+  static const _playerStatOrder = ['Mins', ..._statOrder];
 
   @override
   void initState() {
@@ -191,12 +208,16 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: AppBar(
-        title: const Text('Box score'),
-        backgroundColor: scheme.surface,
-        foregroundColor: scheme.onSurface,
+        backgroundColor: scheme.inverseSurface,
+        foregroundColor: scheme.onInverseSurface,
         surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: scheme.onInverseSurface),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _loading ? null : _load),
+          IconButton(
+            icon: Icon(Icons.refresh_rounded, color: scheme.onInverseSurface),
+            onPressed: _loading ? null : _load,
+          ),
         ],
       ),
       body: _loading
@@ -241,39 +262,25 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
     final titleHome = homeName.isNotEmpty ? homeName : (gameMap?['home_team_name']?.toString() ?? 'Home');
     final titleAway = awayName.isNotEmpty ? awayName : (gameMap?['away_team_name']?.toString() ?? 'Away');
     final hs = gameMap?['home_score'];
-    final as = gameMap?['away_score'];
-    final scoreLine = (hs != null && as != null) ? '$hs — $as' : '';
+    final as_ = gameMap?['away_score'];
+    final status = (gameMap?['status'] ?? '').toString();
+    final isLive = status.toLowerCase() == 'live';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Column(
-            children: [
-              Text(
-                '$titleHome  vs  $titleAway',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              if (scoreLine.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  scoreLine,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w900, fontSize: 18),
-                ),
-              ],
-              if (gameMap?['date_time_text'] != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  gameMap!['date_time_text'].toString(),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
-                ),
-              ],
-            ],
-          ),
+        // Editorial game header — dark inverse-surface banner (Stitch Live Score Card style)
+        _GameHeader(
+          scheme: scheme,
+          titleHome: titleHome,
+          titleAway: titleAway,
+          homeScore: hs?.toString(),
+          awayScore: as_?.toString(),
+          dateText: gameMap?['date_time_text']?.toString(),
+          status: status,
+          isLive: isLive,
+          homeLogo: gameMap?['home_team_logo']?.toString(),
+          awayLogo: gameMap?['away_team_logo']?.toString(),
         ),
         TabBar(
           controller: _tabController,
@@ -281,7 +288,20 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
           labelColor: scheme.primary,
           unselectedLabelColor: scheme.onSurfaceVariant,
           indicatorColor: scheme.primary,
+          indicatorWeight: 3,
           tabAlignment: TabAlignment.start,
+          labelStyle: const TextStyle(
+            fontFamily: 'Lexend',
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+            letterSpacing: 0.6,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontFamily: 'Lexend',
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+            letterSpacing: 0.6,
+          ),
           tabs: const [
             Tab(text: 'TEAM TOTALS'),
             Tab(text: 'PLAYERS'),
@@ -320,6 +340,241 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
   }
 }
 
+// ---------------------------------------------------------------------------
+// Game Header — editorial dark banner (Stitch inverse-surface Live Score Card)
+// ---------------------------------------------------------------------------
+
+class _GameHeader extends StatelessWidget {
+  const _GameHeader({
+    required this.scheme,
+    required this.titleHome,
+    required this.titleAway,
+    this.homeScore,
+    this.awayScore,
+    this.dateText,
+    required this.status,
+    required this.isLive,
+    this.homeLogo,
+    this.awayLogo,
+  });
+
+  final ColorScheme scheme;
+  final String titleHome;
+  final String titleAway;
+  final String? homeScore;
+  final String? awayScore;
+  final String? dateText;
+  final String status;
+  final bool isLive;
+  final String? homeLogo;
+  final String? awayLogo;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasScore = homeScore != null && awayScore != null;
+
+    return Container(
+      color: scheme.inverseSurface,
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Status row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (dateText != null && dateText!.isNotEmpty)
+                Flexible(
+                  child: Text(
+                    dateText!,
+                    style: TextStyle(
+                      color: scheme.onInverseSurface.withValues(alpha: 0.6),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Inter',
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                )
+              else
+                const SizedBox.shrink(),
+              if (isLive)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: scheme.onPrimary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'LIVE',
+                        style: TextStyle(
+                          color: scheme.onPrimary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                          fontFamily: 'Lexend',
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (status.isNotEmpty)
+                Text(
+                  status.toUpperCase(),
+                  style: TextStyle(
+                    color: scheme.onInverseSurface.withValues(alpha: 0.45),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    fontFamily: 'Lexend',
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          // Teams and score
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: _TeamColumn(
+                  scheme: scheme,
+                  name: titleHome,
+                  logoUrl: homeLogo,
+                  align: CrossAxisAlignment.start,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: hasScore
+                    ? Text(
+                        '$homeScore — $awayScore',
+                        style: TextStyle(
+                          color: scheme.onInverseSurface,
+                          fontSize: 30,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1,
+                          fontFamily: 'Lexend',
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      )
+                    : Text(
+                        'vs',
+                        style: TextStyle(
+                          color: scheme.onInverseSurface.withValues(alpha: 0.4),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Lexend',
+                        ),
+                      ),
+              ),
+              Expanded(
+                child: _TeamColumn(
+                  scheme: scheme,
+                  name: titleAway,
+                  logoUrl: awayLogo,
+                  align: CrossAxisAlignment.end,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamColumn extends StatelessWidget {
+  const _TeamColumn({
+    required this.scheme,
+    required this.name,
+    this.logoUrl,
+    required this.align,
+  });
+
+  final ColorScheme scheme;
+  final String name;
+  final String? logoUrl;
+  final CrossAxisAlignment align;
+
+  static Widget _initials(String name, ColorScheme scheme) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    final label = parts.length >= 2
+        ? '${parts.first[0]}${parts.last[0]}'.toUpperCase()
+        : name.isNotEmpty
+            ? name.substring(0, name.length.clamp(0, 2)).toUpperCase()
+            : '?';
+    return Center(
+      child: Text(
+        label,
+        style: TextStyle(
+          color: scheme.onInverseSurface.withValues(alpha: 0.7),
+          fontWeight: FontWeight.w800,
+          fontSize: 13,
+          fontFamily: 'Lexend',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLogo = logoUrl != null && logoUrl!.isNotEmpty;
+    return Column(
+      crossAxisAlignment: align,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: hasLogo ? Colors.white : Colors.white24,
+            shape: BoxShape.circle,
+          ),
+          padding: hasLogo ? const EdgeInsets.all(4) : EdgeInsets.zero,
+          child: hasLogo
+              ? Image.network(
+                  logoUrl!,
+                  fit: BoxFit.contain,
+                  errorBuilder: (ctx, err, st) => _initials(name, scheme),
+                )
+              : _initials(name, scheme),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          name,
+          textAlign: align == CrossAxisAlignment.start ? TextAlign.start : TextAlign.end,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: scheme.onInverseSurface,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
+            fontFamily: 'Lexend',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Team Totals Tab
+// ---------------------------------------------------------------------------
+
 class _TeamTotalsTab extends StatelessWidget {
   const _TeamTotalsTab({
     required this.scheme,
@@ -350,71 +605,64 @@ class _TeamTotalsTab extends StatelessWidget {
       );
     }
 
-    final keys = _TeamTotalsTab._orderedStatKeysStatic(homeTotals, awayTotals);
+    final keys = _orderedStatKeys(homeTotals, awayTotals);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        Text(
-          'Team totals',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 13,
-            color: scheme.onSurfaceVariant,
-            letterSpacing: 0.6,
-          ),
-        ),
+        _SectionHeading('Team totals', scheme),
         const SizedBox(height: 10),
+        // Ghost border per Stitch design (outlineVariant at low opacity)
         DecoratedBox(
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerLowest,
+            color: scheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: scheme.outline.withValues(alpha: 0.2)),
           ),
-          child: Table(
-            columnWidths: const {
-              0: FlexColumnWidth(1.1),
-              1: FlexColumnWidth(1),
-              2: FlexColumnWidth(1),
-            },
-            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-            children: [
-              TableRow(
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                ),
-                children: [
-                  _cellHeader('Stat', scheme, align: TextAlign.left),
-                  _cellHeader(titleHome.toUpperCase(), scheme, align: TextAlign.right),
-                  _cellHeader(titleAway.toUpperCase(), scheme, align: TextAlign.right),
-                ],
-              ),
-              for (var i = 0; i < keys.length; i++)
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Table(
+              columnWidths: const {
+                0: FlexColumnWidth(1.1),
+                1: FlexColumnWidth(1),
+                2: FlexColumnWidth(1),
+              },
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              children: [
                 TableRow(
                   decoration: BoxDecoration(
-                    color: i.isOdd ? scheme.surface.withValues(alpha: 0.4) : null,
+                    color: scheme.surfaceContainerHighest,
                   ),
                   children: [
-                    _cellStat(keys[i], scheme),
-                    _cellVal(homeTotals[keys[i]] ?? '—', scheme),
-                    _cellVal(awayTotals[keys[i]] ?? '—', scheme),
+                    _cellHeader('Stat', scheme, align: TextAlign.left),
+                    _cellHeader(titleHome.toUpperCase(), scheme, align: TextAlign.right),
+                    _cellHeader(titleAway.toUpperCase(), scheme, align: TextAlign.right),
                   ],
                 ),
-            ],
+                for (var i = 0; i < keys.length; i++)
+                  TableRow(
+                    decoration: BoxDecoration(
+                      color: i.isOdd ? scheme.surfaceContainer.withValues(alpha: 0.5) : null,
+                    ),
+                    children: [
+                      _cellStat(keys[i], scheme),
+                      _cellVal(homeTotals[keys[i]] ?? '—', scheme),
+                      _cellVal(awayTotals[keys[i]] ?? '—', scheme),
+                    ],
+                  ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  static List<String> _orderedStatKeysStatic(Map<String, String> homeT, Map<String, String> awayT) {
+  static List<String> _orderedStatKeys(Map<String, String> homeT, Map<String, String> awayT) {
     final all = {...homeT.keys, ...awayT.keys}.where((k) => k != 'side').toList();
     int rank(String k) {
       final i = _GameBoxscoreScreenState._statOrder.indexWhere((p) => p.toLowerCase() == k.toLowerCase());
       return i >= 0 ? i : 999;
     }
-
     all.sort((a, b) {
       final ra = rank(a);
       final rb = rank(b);
@@ -426,11 +674,12 @@ class _TeamTotalsTab extends StatelessWidget {
 
   Widget _cellHeader(String text, ColorScheme scheme, {required TextAlign align}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Text(
         text,
         textAlign: align,
         style: TextStyle(
+          fontFamily: 'Lexend',
           fontWeight: FontWeight.w800,
           fontSize: 11,
           letterSpacing: 0.4,
@@ -442,25 +691,40 @@ class _TeamTotalsTab extends StatelessWidget {
 
   Widget _cellStat(String text, ColorScheme scheme) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Text(
         text,
-        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: scheme.onSurface),
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+          color: scheme.onSurface,
+        ),
       ),
     );
   }
 
   Widget _cellVal(String text, ColorScheme scheme) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Text(
         text,
         textAlign: TextAlign.right,
-        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: scheme.onSurface),
+        style: TextStyle(
+          fontFamily: 'Lexend',
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+          color: scheme.onSurface,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Players Tab
+// ---------------------------------------------------------------------------
 
 class _PlayersTab extends StatelessWidget {
   const _PlayersTab({
@@ -493,28 +757,16 @@ class _PlayersTab extends StatelessWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        _sectionTitle(titleHome.toUpperCase(), scheme),
+        _SectionHeading(titleHome.toUpperCase(), scheme),
         const SizedBox(height: 10),
         _TeamPlayerTable(scheme: scheme, players: homePlayers),
-        const SizedBox(height: 24),
-        _sectionTitle(titleAway.toUpperCase(), scheme),
+        const SizedBox(height: 28),
+        _SectionHeading(titleAway.toUpperCase(), scheme),
         const SizedBox(height: 10),
         _TeamPlayerTable(scheme: scheme, players: awayPlayers),
       ],
-    );
-  }
-
-  Widget _sectionTitle(String text, ColorScheme scheme) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 1.2,
-        color: scheme.onSurfaceVariant,
-      ),
     );
   }
 }
@@ -551,9 +803,8 @@ class _TeamPlayerTable extends StatelessWidget {
     if (players.isEmpty) {
       return DecoratedBox(
         decoration: BoxDecoration(
-          color: scheme.surfaceContainerLowest,
+          color: scheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: scheme.outline.withValues(alpha: 0.2)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -573,6 +824,7 @@ class _TeamPlayerTable extends StatelessWidget {
     }
 
     final headerStyle = TextStyle(
+      fontFamily: 'Lexend',
       fontWeight: FontWeight.w800,
       fontSize: 10,
       letterSpacing: 0.2,
@@ -580,15 +832,18 @@ class _TeamPlayerTable extends StatelessWidget {
       color: scheme.onSurfaceVariant,
     );
     final playerStyle = TextStyle(
+      fontFamily: 'Lexend',
       fontWeight: FontWeight.w700,
       fontSize: 12,
       height: 1.2,
       color: scheme.onSurface,
     );
     final statStyle = TextStyle(
+      fontFamily: 'Lexend',
       fontWeight: FontWeight.w700,
       fontSize: 11,
       color: scheme.onSurface,
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
 
     final table = Table(
@@ -597,8 +852,7 @@ class _TeamPlayerTable extends StatelessWidget {
       children: [
         TableRow(
           decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+            color: scheme.surfaceContainerHighest,
           ),
           children: [
             Padding(
@@ -621,7 +875,7 @@ class _TeamPlayerTable extends StatelessWidget {
         for (var r = 0; r < players.length; r++)
           TableRow(
             decoration: BoxDecoration(
-              color: r.isOdd ? scheme.surface.withValues(alpha: 0.38) : null,
+              color: r.isOdd ? scheme.surfaceContainer.withValues(alpha: 0.5) : null,
             ),
             children: [
               Padding(
@@ -653,12 +907,11 @@ class _TeamPlayerTable extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
+        color: scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.2)),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(12),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final maxW = constraints.maxWidth;
@@ -676,6 +929,10 @@ class _TeamPlayerTable extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Play-by-Play Tab — grouped by period, no borders, tonal surface hierarchy
+// ---------------------------------------------------------------------------
+
 class _PlayByPlayTab extends StatelessWidget {
   const _PlayByPlayTab({
     required this.scheme,
@@ -689,38 +946,160 @@ class _PlayByPlayTab extends StatelessWidget {
   final String titleHome;
   final String titleAway;
 
+  static String _expandPeriod(String raw) {
+    if (raw.isEmpty) return '—';
+    final lower = raw.toLowerCase();
+    // OT1, OT2, OT3 (numbered overtimes)
+    final otm = RegExp(r'^ot\s*(\d+)$', caseSensitive: false).firstMatch(raw);
+    if (otm != null) return 'Overtime ${otm.group(1)}';
+    if (lower.contains('overtime') || lower == 'ot') return 'Overtime';
+    // P1–P4 format used by FLB / Genius Sports scraper
+    final pm = RegExp(r'^p\s*(\d+)$', caseSensitive: false).firstMatch(raw);
+    if (pm != null) return 'Quarter ${pm.group(1)}';
+    // Q1–Q4 generic format
+    final qm = RegExp(r'q\s*(\d+)', caseSensitive: false).firstMatch(raw);
+    if (qm != null) return 'Quarter ${qm.group(1)}';
+    if (lower.contains('1st')) return '1st Quarter';
+    if (lower.contains('2nd')) return '2nd Quarter';
+    if (lower.contains('3rd')) return '3rd Quarter';
+    if (lower.contains('4th')) return '4th Quarter';
+    return raw;
+  }
+
+  List<_PbpListItem> _buildListItems() {
+    final items = <_PbpListItem>[];
+    String? lastPeriod;
+    for (final row in events) {
+      final raw = (row['period'] ?? '').toString().trim();
+      final label = _expandPeriod(raw);
+      if (label != lastPeriod) {
+        items.add(_PbpPeriodHeader(label));
+        lastPeriod = label;
+      }
+      items.add(_PbpEventRow(row));
+    }
+    return items;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (events.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Text(
-            'No play-by-play for this match yet. The API returns rows from game_events where match_id equals this game — add those rows in your database, or run the server sync that fills them.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: scheme.onSurfaceVariant, height: 1.45),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.sports_basketball_outlined,
+                size: 52,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.35),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'No play-by-play events yet',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  letterSpacing: -0.3,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Play-by-play appears here during and after live games.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  height: 1.45,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
-      itemCount: events.length,
-      separatorBuilder: (_, _) => Padding(
-        padding: const EdgeInsets.only(left: 58),
-        child: Divider(height: 1, thickness: 1, color: scheme.outline.withValues(alpha: 0.08)),
-      ),
-      itemBuilder: (context, i) => _PbpEventTile(
-        scheme: scheme,
-        row: events[i],
-        titleHome: titleHome,
-        titleAway: titleAway,
+    final items = _buildListItems();
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      itemCount: items.length,
+      itemBuilder: (context, i) {
+        final item = items[i];
+        if (item is _PbpPeriodHeader) {
+          return _PeriodHeaderWidget(
+            label: item.label,
+            scheme: scheme,
+            isFirst: i == 0,
+          );
+        } else if (item is _PbpEventRow) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _PbpEventTile(
+              scheme: scheme,
+              row: item.row,
+              titleHome: titleHome,
+              titleAway: titleAway,
+            ),
+          );
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+}
+
+/// Editorial period section header — left red accent bar + Lexend uppercase.
+class _PeriodHeaderWidget extends StatelessWidget {
+  const _PeriodHeaderWidget({
+    required this.label,
+    required this.scheme,
+    required this.isFirst,
+  });
+
+  final String label;
+  final ColorScheme scheme;
+  final bool isFirst;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(top: isFirst ? 8 : 28, bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 22,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w900,
+              fontSize: 14,
+              letterSpacing: -0.2,
+              color: scheme.onSurface,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
+/// Single play-by-play event tile.
+/// Tonal background (no border) differentiates scoring vs non-scoring.
+/// Left accent bar colors home (primary red) vs away (secondary navy).
 class _PbpEventTile extends StatelessWidget {
   const _PbpEventTile({
     required this.scheme,
@@ -733,6 +1112,14 @@ class _PbpEventTile extends StatelessWidget {
   final Map<String, dynamic> row;
   final String titleHome;
   final String titleAway;
+
+  /// FLB stores clock as "MM:SS:00" (centiseconds always zero). Strip the trailing ":00".
+  static String _formatClock(String raw) {
+    if (raw.isEmpty) return '';
+    final parts = raw.split(':');
+    if (parts.length == 3 && parts[2] == '00') return '${parts[0]}:${parts[1]}';
+    return raw;
+  }
 
   static bool _asScoring(dynamic v) {
     if (v == true) return true;
@@ -759,34 +1146,19 @@ class _PbpEventTile extends StatelessWidget {
         .join(' ');
   }
 
-  static String _compactPeriod(String raw) {
-    if (raw.isEmpty) return '—';
-    final lower = raw.toLowerCase();
-    if (lower.contains('overtime') || lower == 'ot') return 'OT';
-    final qm = RegExp(r'q\s*(\d+)', caseSensitive: false).firstMatch(raw);
-    if (qm != null) return 'Q${qm.group(1)}';
-    if (lower.contains('1st')) return 'Q1';
-    if (lower.contains('2nd')) return 'Q2';
-    if (lower.contains('3rd')) return 'Q3';
-    if (lower.contains('4th')) return 'Q4';
-    if (raw.length <= 8) return raw;
-    return '${raw.substring(0, 7)}…';
-  }
-
   Color _sideAccent() {
     final side = _str(row['team_side']).toLowerCase();
     if (side == 'home') return scheme.primary;
-    if (side == 'away') return scheme.tertiary;
+    if (side == 'away') return scheme.secondary;
     final team = _str(row['team_name']).toLowerCase();
     if (team.isNotEmpty && team == titleHome.toLowerCase()) return scheme.primary;
-    if (team.isNotEmpty && team == titleAway.toLowerCase()) return scheme.tertiary;
-    return scheme.outline;
+    if (team.isNotEmpty && team == titleAway.toLowerCase()) return scheme.secondary;
+    return scheme.onSurfaceVariant;
   }
 
   @override
   Widget build(BuildContext context) {
-    final period = _str(row['period']);
-    final clock = _str(row['clock']);
+    final clock = _formatClock(_str(row['clock']));
     final score = _str(row['score']);
     final teamName = _str(row['team_name']);
     final player = _str(row['player']);
@@ -796,8 +1168,6 @@ class _PbpEventTile extends StatelessWidget {
     final scoring = _asScoring(row['is_scoring_event']);
     final accent = _sideAccent();
 
-    final periodLabel = _compactPeriod(period);
-
     String headline() {
       final buf = StringBuffer();
       if (playerNum.isNotEmpty && player.isNotEmpty) {
@@ -806,8 +1176,7 @@ class _PbpEventTile extends StatelessWidget {
         buf.write(player);
       }
       if (buf.isNotEmpty && teamName.isNotEmpty) {
-        buf.write(' · ');
-        buf.write(teamName);
+        buf.write(' · $teamName');
       } else if (buf.isEmpty && teamName.isNotEmpty) {
         buf.write(teamName);
       } else if (buf.isEmpty && action.isNotEmpty) {
@@ -819,145 +1188,113 @@ class _PbpEventTile extends StatelessWidget {
     final head = headline();
     final showActionLine = action.isNotEmpty && head != action;
 
+    // Tonal backgrounds per Stitch surface hierarchy — no borders
+    // Scoring: faint primary tint (level 2+) | Non-scoring: surfaceContainer (level 2)
+    final tileBg = scoring
+        ? scheme.primary.withValues(alpha: 0.09)
+        : scheme.surfaceContainer;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Clock column
         SizedBox(
-          width: 52,
+          width: 50,
           child: Padding(
-            padding: const EdgeInsets.only(top: 14, right: 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  periodLabel,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-                if (clock.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    clock,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                      color: scheme.onSurface.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ],
-              ],
+            padding: const EdgeInsets.only(top: 14, right: 8),
+            child: Text(
+              clock.isNotEmpty ? clock : '—',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Lexend',
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ),
         ),
+        // Event card — left accent via border, no stretch Row
         Expanded(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: scoring
-                  ? scheme.primary.withValues(alpha: 0.06)
-                  : scheme.surfaceContainerLowest.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: scheme.outline.withValues(alpha: scoring ? 0.22 : 0.14),
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(11),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: tileBg,
+                border: Border(
+                  left: BorderSide(
+                    color: accent.withValues(alpha: scoring ? 1.0 : 0.55),
                     width: 3,
-                    color: accent.withValues(alpha: scoring ? 1 : 0.45),
                   ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  head.isEmpty ? '—' : head,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 13.5,
-                                    height: 1.25,
-                                    color: scheme.onSurface,
-                                  ),
-                                ),
-                              ),
-                              if (score.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: scheme.surfaceContainerHighest.withValues(alpha: 0.65),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    child: Text(
-                                      score,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 12,
-                                        fontFeatures: const [FontFeature.tabularFigures()],
-                                        color: scheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Player/team headline + score badge
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          head.isEmpty ? '—' : head,
+                          style: TextStyle(
+                            fontFamily: 'Lexend',
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13.5,
+                            height: 1.2,
+                            letterSpacing: -0.2,
+                            color: scheme.onSurface,
                           ),
-                          if (showActionLine) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              action,
-                              style: TextStyle(
-                                fontSize: 13,
-                                height: 1.35,
-                                fontWeight: FontWeight.w500,
-                                color: scheme.onSurfaceVariant,
-                              ),
+                        ),
+                      ),
+                      if (score.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        // Score badge — surfaceContainerHighest (Level 3), no border
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            score,
+                            style: TextStyle(
+                              fontFamily: 'Lexend',
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                              color: scheme.onSurface,
                             ),
-                          ],
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              if (eventType.isNotEmpty)
-                                _PbpMetaChip(
-                                  label: eventType,
-                                  foreground: scheme.onSurfaceVariant,
-                                  border: scheme.outline.withValues(alpha: 0.35),
-                                  background: scheme.surface.withValues(alpha: 0.5),
-                                ),
-                              _PbpMetaChip(
-                                label: scoring ? 'Scoring' : 'Non-scoring',
-                                foreground: scoring ? scheme.primary : scheme.onSurfaceVariant,
-                                border: scoring
-                                    ? scheme.primary.withValues(alpha: 0.35)
-                                    : scheme.outline.withValues(alpha: 0.25),
-                                background: scoring ? scheme.primary.withValues(alpha: 0.1) : Colors.transparent,
-                              ),
-                            ],
                           ),
-                        ],
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (showActionLine) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      action,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        height: 1.35,
+                        fontWeight: FontWeight.w500,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
-                  ),
+                  ],
+                  if (eventType.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _EventTypeChip(
+                      label: eventType,
+                      scheme: scheme,
+                      scoring: scoring,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -968,40 +1305,62 @@ class _PbpEventTile extends StatelessWidget {
   }
 }
 
-class _PbpMetaChip extends StatelessWidget {
-  const _PbpMetaChip({
+/// Event type badge — no border, tonal background.
+class _EventTypeChip extends StatelessWidget {
+  const _EventTypeChip({
     required this.label,
-    required this.foreground,
-    required this.border,
-    required this.background,
+    required this.scheme,
+    required this.scoring,
   });
 
   final String label;
-  final Color foreground;
-  final Color border;
-  final Color background;
+  final ColorScheme scheme;
+  final bool scoring;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border),
+        color: scoring
+            ? scheme.primary.withValues(alpha: 0.15)
+            : scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            color: foreground,
-          ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+          color: scoring ? scheme.primary : scheme.onSurfaceVariant,
         ),
       ),
     );
   }
 }
 
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading(this.text, this.scheme);
+  final String text;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontFamily: 'Lexend',
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 1.2,
+        color: scheme.onSurfaceVariant,
+      ),
+    );
+  }
+}

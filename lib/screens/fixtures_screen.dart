@@ -274,10 +274,7 @@ class _FixturesScreenState extends State<FixturesScreen> {
         children: [
           DecoratedBox(
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.65),
-              border: Border(
-                bottom: BorderSide(color: colorScheme.outline.withValues(alpha: 0.12)),
-              ),
+              color: colorScheme.surfaceContainerHigh,
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
