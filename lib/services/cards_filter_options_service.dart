@@ -29,13 +29,47 @@ class CardsFilterOptionsService {
 
   final http.Client? _client;
 
-  Uri _uri(String path) {
+  /// Same path joining as [TeamRepository] (supports `apiBaseUrl` with a path prefix).
+  Uri _resolvedUri(String relativePath) {
     final base = BackendConfig.apiBaseUrl.trim();
     final normalized = base.endsWith('/')
         ? base.substring(0, base.length - 1)
         : base;
-    final p = path.replaceAll(RegExp(r'^/+'), '');
-    return Uri.parse('$normalized/$p');
+    final baseUri = Uri.parse(normalized);
+    final extra = relativePath
+        .replaceAll(RegExp(r'^/+'), '')
+        .split('/')
+        .where((s) => s.isNotEmpty);
+    final segments = [
+      ...baseUri.pathSegments.where((s) => s.isNotEmpty),
+      ...extra,
+    ];
+    return baseUri.replace(pathSegments: segments);
+  }
+
+  Team? _parseTeamRow(Map<String, dynamic> m) {
+    try {
+      return Team.fromJson(m);
+    } catch (_) {
+      final id = m['team_id'] ?? m['teamId'];
+      final name = (m['team_name'] ?? m['teamName'] ?? 'Club')
+          .toString()
+          .trim();
+      if (id == null) {
+        return null;
+      }
+      final parsed = id is int ? id : int.tryParse(id.toString());
+      if (parsed == null) {
+        return null;
+      }
+      final rawLogo = m['team_logo'] ?? m['teamLogo'] ?? m['team_logo_url'];
+      final logo = rawLogo?.toString().trim();
+      return Team(
+        teamId: parsed,
+        teamName: name.isEmpty ? 'Club #$parsed' : name,
+        logoUrl: logo != null && logo.isNotEmpty ? logo : null,
+      );
+    }
   }
 
   List<String> _pairPaths() => const [
@@ -48,7 +82,10 @@ class CardsFilterOptionsService {
     try {
       for (final path in _pairPaths()) {
         final res = await own
-            .get(_uri(path), headers: const {'Accept': 'application/json'})
+            .get(
+              _resolvedUri(path),
+              headers: const {'Accept': 'application/json'},
+            )
             .timeout(const Duration(seconds: 25));
         if (res.statusCode == 404) continue;
         if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -66,10 +103,10 @@ class CardsFilterOptionsService {
         if (teamsRaw is List) {
           for (final e in teamsRaw) {
             if (e is! Map) continue;
-            try {
-              teams.add(Team.fromJson(Map<String, dynamic>.from(e)));
-            } catch (_) {
-              continue;
+            final row = Map<String, dynamic>.from(e);
+            final t = _parseTeamRow(row);
+            if (t != null) {
+              teams.add(t);
             }
           }
         }

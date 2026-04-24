@@ -1093,30 +1093,54 @@ app.get('/api/cards/catalog', catalogCardsHandler);
 /** GET /cards/filter-options — men's division-1 clubs + distinct player nationalities (Lebanon variants first). */
 async function cardCatalogFilterOptionsHandler(_req, res) {
   try {
-    const [teamsRes, natRes] = await Promise.all([
-      pool.query(
+    let teamsRows = [];
+    try {
+      const strict = await pool.query(
         `SELECT team_id, team_name, team_logo
          FROM teams
          WHERE UPPER(TRIM(COALESCE(gender, ''))) = 'M'
            AND COALESCE(division, 1) = 1
          ORDER BY team_name ASC`,
-      ),
-      pool.query(
-        `SELECT DISTINCT TRIM(nationality) AS nationality
-         FROM players
-         WHERE TRIM(COALESCE(nationality, '')) <> ''
+      );
+      teamsRows = strict.rows ?? [];
+    } catch (e) {
+      console.warn('[GET /cards/filter-options] strict teams query:', e.message ?? e);
+      teamsRows = [];
+    }
+    if (!teamsRows.length) {
+      const fb = await pool.query(
+        `SELECT team_id, team_name, team_logo
+         FROM teams
+         ORDER BY team_name ASC
+         LIMIT 400`,
+      );
+      teamsRows = fb.rows ?? [];
+    }
+
+    let nationalities = [];
+    try {
+      const natRes = await pool.query(
+        `SELECT nationality
+         FROM (
+           SELECT DISTINCT TRIM(nationality) AS nationality
+           FROM players
+           WHERE TRIM(COALESCE(nationality, '')) <> ''
+         ) sub
          ORDER BY
            CASE
-             WHEN UPPER(TRIM(nationality)) IN ('LB','LEB','LEBANON','LBN') THEN 0
+             WHEN UPPER(nationality) IN ('LB','LEB','LEBANON','LBN') THEN 0
              ELSE 1
            END,
-           TRIM(nationality) ASC`,
-      ),
-    ]);
-    res.json({
-      teams: teamsRes.rows,
-      nationalities: natRes.rows.map((r) => r.nationality).filter((s) => s != null && String(s).trim() !== ''),
-    });
+           nationality ASC`,
+      );
+      nationalities = natRes.rows
+        .map((r) => r.nationality)
+        .filter((s) => s != null && String(s).trim() !== '');
+    } catch (e) {
+      console.warn('[GET /cards/filter-options] nationalities query:', e.message ?? e);
+    }
+
+    res.json({ teams: teamsRows, nationalities });
   } catch (err) {
     console.error('[GET /cards/filter-options]', err);
     res.status(500).json({ error: err.message ?? String(err) });

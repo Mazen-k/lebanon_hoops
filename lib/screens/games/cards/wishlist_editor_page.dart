@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../config/backend_config.dart';
+import '../../../data/team_repository.dart';
 import '../../../models/catalog_card.dart';
 import '../../../models/team.dart';
 import '../../../services/cards_filter_options_service.dart';
 import '../../../services/catalog_api_service.dart';
+import 'card_filter_options_merge.dart';
 import '../../../services/session_store.dart';
 import '../../../services/wishlist_api_service.dart';
 import '../../../util/card_image_url.dart' show BundledPlayCardImage;
@@ -24,6 +26,7 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
   final _catalogApi = CatalogApiService();
   final _wishlistApi = WishlistApiService();
   final _filterOpts = CardsFilterOptionsService();
+  final _teamsRepo = const TeamRepository();
 
   List<CatalogCard> _cards = [];
   List<Team> _teams = [];
@@ -87,13 +90,26 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
         cardType: _cardTypeFilter,
         onlyMissing: _onlyMissing,
       );
+      if (teams.isEmpty) {
+        try {
+          teams = await _teamsRepo.fetchTeams();
+        } on TeamRepositoryException {
+          teams = [];
+        } catch (_) {
+          teams = [];
+        }
+      }
+      final mergedNat = mergeNationalityFilterOptions(
+        nationalities,
+        cards.map((c) => c.nationality),
+      );
       final resolvedWish =
           wishIds ??
           cards.where((c) => c.onWishlist).map((c) => c.cardId).toList();
       if (!mounted) return;
       setState(() {
         _teams = teams;
-        _nationalityOptions = nationalities;
+        _nationalityOptions = mergedNat;
         _cards = cards;
         _wishlistIds
           ..clear()

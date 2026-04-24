@@ -460,6 +460,9 @@ Future<void> _showNationalityBoxPicker(
     context: context,
     title: 'Nation',
     entries: entries,
+    emptyMessage: nationalityOptions.isEmpty
+        ? 'No nationalities loaded yet. After deploying the API, open this screen again. Values also appear from your cards once the catalog loads.'
+        : null,
     clearLabel: 'All nations',
     onClear: () => onPick(null),
     isSelected: (v) => v == current,
@@ -489,6 +492,9 @@ Future<void> _showClubBoxPicker(
     context: context,
     title: 'Club',
     entries: entries,
+    emptyMessage: teams.isEmpty
+        ? 'No clubs loaded yet. Check your network and that GET /cards/filter-options is deployed. Teams also fall back from GET /teams after a refresh.'
+        : null,
     clearLabel: 'All clubs',
     onClear: () => onPick(null),
     isSelected: (v) => v == currentTeamId,
@@ -520,6 +526,9 @@ Future<void> _showFilterBoxDialog<T>({
   required BuildContext context,
   required String title,
   required List<_FilterBoxEntry<T>> entries,
+
+  /// Shown instead of an empty grid when [entries] has no items.
+  String? emptyMessage,
   required String clearLabel,
   required VoidCallback onClear,
   required bool Function(T value) isSelected,
@@ -584,30 +593,43 @@ Future<void> _showFilterBoxDialog<T>({
                 constraints: BoxConstraints(
                   maxHeight: (maxH - 150).clamp(160.0, 520.0),
                 ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: entries.map((e) {
-                      final sel = isSelected(e.value);
-                      return _FilterOptionBox(
-                        label: e.label,
-                        flagEmoji: e.flagEmoji,
-                        imageAsset: e.imageAsset,
-                        networkImageUrl: e.networkImageUrl,
-                        imageSize: e.imageSize,
-                        semanticsLabel: e.semanticsLabel,
-                        selected: sel,
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          onSelect(e.value);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ),
+                child: entries.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                        child: Text(
+                          emptyMessage ?? 'Nothing to show here yet.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: CardGameUiTheme.onDark.withAlpha(170),
+                            fontSize: 14,
+                            height: 1.4,
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: entries.map((e) {
+                            final sel = isSelected(e.value);
+                            return _FilterOptionBox(
+                              label: e.label,
+                              flagEmoji: e.flagEmoji,
+                              imageAsset: e.imageAsset,
+                              networkImageUrl: e.networkImageUrl,
+                              imageSize: e.imageSize,
+                              semanticsLabel: e.semanticsLabel,
+                              selected: sel,
+                              onTap: () {
+                                Navigator.of(ctx).pop();
+                                onSelect(e.value);
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),

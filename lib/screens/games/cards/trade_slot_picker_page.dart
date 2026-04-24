@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../config/backend_config.dart';
+import '../../../data/team_repository.dart';
 import '../../../models/collection_card.dart';
 import '../../../models/team.dart';
 import '../../../models/tradeable_instance.dart';
 import '../../../services/cards_filter_options_service.dart';
 import '../../../services/collection_api_service.dart';
+import 'card_filter_options_merge.dart';
 import '../../../services/session_store.dart';
 import '../../../services/trade_api_service.dart'
     show TradeApiException, TradeApiService;
@@ -41,6 +43,7 @@ class _TradeSlotPickerPageState extends State<TradeSlotPickerPage> {
   final _collectionApi = CollectionApiService();
   final _tradeApi = TradeApiService();
   final _filterOpts = CardsFilterOptionsService();
+  final _teamsRepo = const TeamRepository();
 
   List<CollectionCard> _cards = [];
   List<TradeableInstance> _tradeable = [];
@@ -87,12 +90,25 @@ class _TradeSlotPickerPageState extends State<TradeSlotPickerPage> {
         teams = [];
         nationalities = const [];
       }
+      if (teams.isEmpty) {
+        try {
+          teams = await _teamsRepo.fetchTeams();
+        } on TeamRepositoryException {
+          teams = [];
+        } catch (_) {
+          teams = [];
+        }
+      }
+      final mergedNat = mergeNationalityFilterOptions(
+        nationalities,
+        cards.map((c) => c.nationality),
+      );
       if (!mounted) return;
       setState(() {
         _cards = cards;
         _tradeable = trade;
         _teams = teams;
-        _nationalityOptions = nationalities;
+        _nationalityOptions = mergedNat;
         _loading = false;
       });
     } on CollectionApiException catch (e) {
