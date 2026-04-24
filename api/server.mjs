@@ -20,11 +20,27 @@ const pool = new pg.Pool({
 // Start FLB basketball data sync jobs (schedule refresh + live polling)
 startFlbJobs(pool);
 
-async function listTeams(_req, res) {
+async function listTeams(req, res) {
   try {
-    const { rows } = await pool.query(
-      'SELECT team_id, team_name, team_logo FROM teams ORDER BY team_name ASC',
-    );
+    const rawCid = req.query.competition_id ?? req.query.competitionId;
+    const competitionId =
+      rawCid == null || rawCid === '' ? null : Number(rawCid);
+    if (competitionId != null && Number.isNaN(competitionId)) {
+      return res.status(400).json({ error: 'competition_id must be an integer.' });
+    }
+
+    const { rows } = competitionId == null
+      ? await pool.query(
+          'SELECT t.team_id, t.team_name, t.team_logo FROM teams t ORDER BY t.team_name ASC',
+        )
+      : await pool.query(
+          `SELECT t.team_id, t.team_name, t.team_logo
+           FROM teams t
+           INNER JOIN competition_teams ct ON ct.team_id = t.team_id
+           WHERE ct.competition_id = $1::int
+           ORDER BY t.team_name ASC`,
+          [competitionId],
+        );
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -36,6 +52,24 @@ async function listTeams(_req, res) {
 app.get('/teams', listTeams);
 // Common alternate layout
 app.get('/api/teams', listTeams);
+
+/** Full list of competitions (seasons + gender) from the `competitions` table. */
+async function listCompetitions(_req, res) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT competition_id, competition_name, gender, start_year, end_year
+       FROM competitions
+       ORDER BY start_year DESC, end_year DESC, gender ASC, competition_id ASC`,
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/competitions', listCompetitions);
+app.get('/api/competitions', listCompetitions);
 
 async function getTeamDetails(req, res) {
   const teamId = Number(req.params.id);
