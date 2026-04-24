@@ -39,8 +39,10 @@ class GameFixtureView {
 
     final matchId = optInt(json['match_id'] ?? json['matchId']) ?? 0;
     final week = optInt(json['week']);
-    final status = (json['status'] ?? json['raw_status'] ?? '').toString().toLowerCase();
-    final isPast = status == 'final';
+    final statusNorm = (json['status'] ?? '').toString().toLowerCase();
+    final rawNorm = (json['raw_status'] ?? '').toString().toLowerCase();
+    // DB sometimes keeps `status` as scheduled while `raw_status` is Final.
+    final isPast = statusNorm == 'final' || rawNorm == 'final';
     final dateText = (json['date_time_text'] ?? json['dateTimeText'] ?? '').toString().trim();
     final venue = (json['venue'] ?? '').toString().trim();
     final metaLine = dateText.isNotEmpty ? dateText : (venue.isNotEmpty ? venue : 'Match #$matchId');
@@ -55,7 +57,7 @@ class GameFixtureView {
 
     String? center;
     if (!isPast) {
-      if (status == 'live') {
+      if (statusNorm == 'live') {
         center = 'LIVE';
       } else {
         center = dateText.isNotEmpty ? dateText : 'TBC';

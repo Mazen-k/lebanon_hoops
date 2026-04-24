@@ -63,10 +63,16 @@ class GamesApiService {
   }
 
   /// Games for a competition (e.g. Lebanese league `42001`). Optional [week] filters `games.week`.
-  Future<List<Map<String, dynamic>>> fetchGames({int? competitionId, int? week}) async {
+  /// Optional [teamId] returns only games where that team is home or away (`?team_id=`).
+  Future<List<Map<String, dynamic>>> fetchGames({
+    int? competitionId,
+    int? week,
+    int? teamId,
+  }) async {
     final q = <String, String>{};
     if (competitionId != null) q['competition_id'] = '$competitionId';
     if (week != null) q['week'] = '$week';
+    if (teamId != null) q['team_id'] = '$teamId';
     final paths = _pair('games');
     final own = _client ?? http.Client();
     try {

@@ -1,37 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../data/team_repository.dart';
+import '../models/game_fixture_view.dart';
 import '../models/player.dart';
 import '../models/team.dart';
 import '../models/team_staff.dart';
 import '../models/team_stadium.dart';
 import '../models/team_trophy.dart';
+import '../services/games_api_service.dart';
 import '../services/players_api_service.dart';
+import '../state/competition_filter.dart';
+import '../widgets/league_fixture_card.dart';
+import 'game_boxscore_screen.dart';
 import 'ticket_selection_screen.dart';
-
-/// Demo schedule until games are wired to the API (reference-style match cards).
-class _DemoFixture {
-  const _DemoFixture({
-    required this.metaLine,
-    required this.leagueLabel,
-    required this.homeName,
-    required this.awayName,
-    this.homeScore,
-    this.awayScore,
-    required this.isPast,
-    this.centerLabel,
-  });
-
-  final String metaLine;
-  final String leagueLabel;
-  final String homeName;
-  final String awayName;
-  final int? homeScore;
-  final int? awayScore;
-  final bool isPast;
-
-  /// Shown in the center for upcoming games (e.g. time).
-  final String? centerLabel;
-}
 
 class TeamProfileScreen extends StatefulWidget {
   const TeamProfileScreen({super.key, required this.teamId});
@@ -44,16 +25,110 @@ class TeamProfileScreen extends StatefulWidget {
 
 class _TeamProfileScreenState extends State<TeamProfileScreen> {
   final _service = PlayersApiService();
+  final GamesApiService _gamesApi = GamesApiService();
+  final TeamRepository _teamsRepo = const TeamRepository();
+  final AppCompetitionFilter _filter = AppCompetitionFilter.instance;
+
   TeamWithPlayers? _data;
   bool _loading = true;
   String? _error;
+
+  List<GameFixtureView> _fixtures = const [];
+  bool _fixturesLoading = true;
+  String? _fixturesError;
+  int _fixtureLoadSeq = 0;
 
   static const _tabLabels = ['Overview', 'Fixtures', 'Roster', 'Trophies'];
 
   @override
   void initState() {
     super.initState();
+    _filter.addListener(_onCompetitionFilterChanged);
     _load();
+    _loadFixtures();
+  }
+
+  @override
+  void dispose() {
+    _filter.removeListener(_onCompetitionFilterChanged);
+    super.dispose();
+  }
+
+  void _onCompetitionFilterChanged() {
+    _loadFixtures();
+  }
+
+  String? _trimUrl(String? raw) {
+    if (raw == null) return null;
+    final t = raw.trim();
+    return t.isEmpty ? null : t;
+  }
+
+  void _sortTeamFixtures(List<GameFixtureView> list) {
+    int weekOf(GameFixtureView f) => f.week ?? 0;
+    bool upcoming(GameFixtureView f) => !f.isPast;
+    list.sort((a, b) {
+      final ua = upcoming(a);
+      final ub = upcoming(b);
+      if (ua != ub) return ua ? -1 : 1;
+      if (ua) {
+        final w = weekOf(a).compareTo(weekOf(b));
+        if (w != 0) return w;
+        return a.matchId.compareTo(b.matchId);
+      }
+      final w = weekOf(b).compareTo(weekOf(a));
+      if (w != 0) return w;
+      return b.matchId.compareTo(a.matchId);
+    });
+  }
+
+  Future<void> _loadFixtures() async {
+    final seq = ++_fixtureLoadSeq;
+    if (mounted) {
+      setState(() {
+        _fixturesLoading = true;
+        _fixturesError = null;
+      });
+    }
+    try {
+      await _filter.ensureLoaded();
+      if (!mounted || seq != _fixtureLoadSeq) return;
+      final cid = _filter.selected.competitionId;
+      final rows = await _gamesApi.fetchGames(
+        competitionId: cid,
+        teamId: widget.teamId,
+      );
+      if (!mounted || seq != _fixtureLoadSeq) return;
+      final teams = await _teamsRepo.fetchTeams(competitionId: cid);
+      if (!mounted || seq != _fixtureLoadSeq) return;
+      final logoById = <String, String?>{
+        for (final t in teams) '${t.teamId}': t.logoUrl,
+      };
+      final merged = <GameFixtureView>[];
+      for (final e in rows) {
+        final row = Map<String, dynamic>.from(e);
+        final hid = row['home_team_id']?.toString();
+        final aid = row['away_team_id']?.toString();
+        final hl = _trimUrl(logoById[hid]);
+        final al = _trimUrl(logoById[aid]);
+        if (hl != null) row['home_team_logo'] = hl;
+        if (al != null) row['away_team_logo'] = al;
+        merged.add(GameFixtureView.fromGamesApiRow(row));
+      }
+      merged.removeWhere((f) => f.matchId <= 0);
+      _sortTeamFixtures(merged);
+      if (!mounted || seq != _fixtureLoadSeq) return;
+      setState(() {
+        _fixtures = merged;
+        _fixturesLoading = false;
+      });
+    } catch (e) {
+      if (!mounted || seq != _fixtureLoadSeq) return;
+      setState(() {
+        _fixturesError = e.toString();
+        _fixturesLoading = false;
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -69,54 +144,6 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  List<_DemoFixture> _demoFixtures(String clubName) {
-    return [
-      _DemoFixture(
-        metaLine: 'MON, OCT 20, 25 — RD 1',
-        leagueLabel: 'LBL',
-        homeName: clubName,
-        awayName: 'Tadamon Hrajel',
-        homeScore: 118,
-        awayScore: 83,
-        isPast: true,
-      ),
-      _DemoFixture(
-        metaLine: 'SAT, OCT 25, 25 — RD 2',
-        leagueLabel: 'LBL',
-        homeName: 'Sagesse',
-        awayName: clubName,
-        homeScore: 76,
-        awayScore: 91,
-        isPast: true,
-      ),
-      _DemoFixture(
-        metaLine: 'WED, NOV 5, 25 — RD 4',
-        leagueLabel: 'LBL',
-        homeName: clubName,
-        awayName: 'Champville',
-        homeScore: 102,
-        awayScore: 97,
-        isPast: true,
-      ),
-      _DemoFixture(
-        metaLine: 'FRI, APR 18, 26 — RD 12',
-        leagueLabel: 'LBL',
-        homeName: clubName,
-        awayName: 'Hoops United',
-        isPast: false,
-        centerLabel: '8:30 PM',
-      ),
-      _DemoFixture(
-        metaLine: 'WED, APR 23, 26 — RD 13',
-        leagueLabel: 'LBL',
-        homeName: 'Beirut Club',
-        awayName: clubName,
-        isPast: false,
-        centerLabel: '7:00 PM',
-      ),
-    ];
   }
 
   @override
@@ -162,9 +189,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     }
 
     final data = _data!;
-    final demoFx = _demoFixtures(data.team.teamName);
-    _DemoFixture? firstUpcoming;
-    for (final f in demoFx) {
+    GameFixtureView? firstUpcoming;
+    for (final f in _fixtures) {
       if (!f.isPast) {
         firstUpcoming = f;
         break;
@@ -208,18 +234,22 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                           ),
                         );
                       },
-                    ),
-                    _FixturesTab(
-                      teamName: data.team.teamName,
-                      fixtures: demoFx,
-                      onGetTickets: () {
+                      onOpenGame: (matchId) {
                         Navigator.push(
                           context,
                           MaterialPageRoute<void>(
-                            builder: (_) => const TicketSelectionScreen(),
+                            builder: (_) =>
+                                GameBoxscoreScreen(matchId: matchId),
                           ),
                         );
                       },
+                    ),
+                    _FixturesTab(
+                      teamName: data.team.teamName,
+                      fixtures: _fixtures,
+                      loading: _fixturesLoading,
+                      error: _fixturesError,
+                      onRetry: _loadFixtures,
                     ),
                     _RosterTab(players: data.players),
                     _TrophiesTab(trophies: data.trophies),
@@ -455,14 +485,16 @@ class _OverviewTab extends StatelessWidget {
     required this.staff,
     required this.upcoming,
     required this.onOpenTickets,
+    required this.onOpenGame,
   });
 
   final Team team;
   final List<TeamTrophySummary> trophies;
   final TeamStadium? stadium;
   final List<TeamStaffMember> staff;
-  final _DemoFixture? upcoming;
+  final GameFixtureView? upcoming;
   final VoidCallback onOpenTickets;
+  final void Function(int matchId) onOpenGame;
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +523,11 @@ class _OverviewTab extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         if (upcoming != null)
-          _OverviewUpcomingMatchCard(fixture: upcoming!, onTap: onOpenTickets)
+          _OverviewNextGameCard(
+            fixture: upcoming!,
+            onTapTickets: onOpenTickets,
+            onOpenGame: onOpenGame,
+          )
         else
           _OverviewCard(
             child: Row(
@@ -644,136 +680,20 @@ class _OverviewTab extends StatelessWidget {
   }
 }
 
-class _OverviewUpcomingMatchCard extends StatelessWidget {
-  const _OverviewUpcomingMatchCard({
+class _OverviewNextGameCard extends StatelessWidget {
+  const _OverviewNextGameCard({
     required this.fixture,
-    required this.onTap,
+    required this.onTapTickets,
+    required this.onOpenGame,
   });
 
-  final _DemoFixture fixture;
-  final VoidCallback onTap;
+  final GameFixtureView fixture;
+  final VoidCallback onTapTickets;
+  final void Function(int matchId) onOpenGame;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
-    final cardBody = Ink(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    fixture.metaLine.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.4,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'UPCOMING',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                _TeamCrestBadge(teamName: fixture.homeName, size: 36),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    fixture.homeName.toUpperCase(),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                      letterSpacing: -0.3,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Text(
-                    'VS',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      letterSpacing: -0.5,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    fixture.awayName.toUpperCase(),
-                    textAlign: TextAlign.right,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                      letterSpacing: -0.3,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                _TeamCrestBadge(teamName: fixture.awayName, size: 36),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: FilledButton(
-                onPressed: onTap,
-                style: FilledButton.styleFrom(
-                  backgroundColor: cs.primaryContainer,
-                  foregroundColor: cs.onPrimaryContainer,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'GET TICKETS',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2.0,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
     return DecoratedBox(
       decoration: const BoxDecoration(
         borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -786,13 +706,37 @@ class _OverviewUpcomingMatchCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: cardBody,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LeagueFixtureCard(
+            fixture: fixture,
+            onCardTap: () => onOpenGame(fixture.matchId),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 44,
+            child: FilledButton(
+              onPressed: onTapTickets,
+              style: FilledButton.styleFrom(
+                backgroundColor: cs.primaryContainer,
+                foregroundColor: cs.onPrimaryContainer,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'GET TICKETS',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2.0,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1095,53 +1039,63 @@ class _FixturesTab extends StatelessWidget {
   const _FixturesTab({
     required this.teamName,
     required this.fixtures,
-    required this.onGetTickets,
+    required this.loading,
+    this.error,
+    required this.onRetry,
   });
 
   final String teamName;
-  final List<_DemoFixture> fixtures;
-  final VoidCallback onGetTickets;
+  final List<GameFixtureView> fixtures;
+  final bool loading;
+  final String? error;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final upcoming = fixtures.where((f) => !f.isPast).toList();
-    final past = fixtures.where((f) => f.isPast).toList();
     final listBg = Color.lerp(
       colorScheme.surface,
       colorScheme.surfaceContainerHighest,
       0.55,
     )!;
 
-    void openFixtureMenu() {
-      showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  Icons.info_outline_rounded,
-                  color: colorScheme.primary,
+    if (loading && fixtures.isEmpty) {
+      return ColoredBox(
+        color: listBg,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (error != null && fixtures.isEmpty) {
+      return ColoredBox(
+        color: listBg,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  error!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: colorScheme.onSurfaceVariant),
                 ),
-                title: const Text('Match details'),
-                onTap: () => Navigator.pop(ctx),
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.notifications_active_outlined,
-                  color: colorScheme.primary,
-                ),
-                title: const Text('Remind me'),
-                onTap: () => Navigator.pop(ctx),
-              ),
-            ],
+                const SizedBox(height: 16),
+                FilledButton(onPressed: onRetry, child: const Text('Retry')),
+              ],
+            ),
           ),
+        ),
+      );
+    }
+
+    final upcoming = fixtures.where((f) => !f.isPast).toList();
+    final past = fixtures.where((f) => f.isPast).toList();
+
+    void openGame(int matchId) {
+      Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => GameBoxscoreScreen(matchId: matchId),
         ),
       );
     }
@@ -1152,7 +1106,7 @@ class _FixturesTab extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
         children: [
           Text(
-            'Schedule preview for $teamName',
+            'Games for $teamName in the competition selected on Home (gender & season).',
             style: TextStyle(
               fontSize: 12.5,
               color: colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
@@ -1161,16 +1115,25 @@ class _FixturesTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
+          if (fixtures.isEmpty) ...[
+            Text(
+              'No games found for this club in the current competition.',
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+          ],
           if (upcoming.isNotEmpty) ...[
             _FixtureSectionLabel('Upcoming', colorScheme),
             const SizedBox(height: 10),
             ...upcoming.map(
               (f) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _LeagueFixtureCard(
+                child: LeagueFixtureCard(
                   fixture: f,
-                  onMenu: openFixtureMenu,
-                  onCardTap: onGetTickets,
+                  onCardTap: () => openGame(f.matchId),
                 ),
               ),
             ),
@@ -1182,10 +1145,9 @@ class _FixturesTab extends StatelessWidget {
             ...past.map(
               (f) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _LeagueFixtureCard(
+                child: LeagueFixtureCard(
                   fixture: f,
-                  onMenu: openFixtureMenu,
-                  onCardTap: null,
+                  onCardTap: () => openGame(f.matchId),
                 ),
               ),
             ),
@@ -1211,292 +1173,6 @@ class _FixtureSectionLabel extends StatelessWidget {
         fontWeight: FontWeight.w800,
         letterSpacing: 1.2,
         color: colorScheme.onSurfaceVariant,
-      ),
-    );
-  }
-}
-
-/// Reference UI: green spine, meta + league pill, home — score — away.
-class _LeagueFixtureCard extends StatelessWidget {
-  const _LeagueFixtureCard({
-    required this.fixture,
-    required this.onMenu,
-    this.onCardTap,
-  });
-
-  final _DemoFixture fixture;
-  final VoidCallback onMenu;
-  final VoidCallback? onCardTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isFuture = !fixture.isPast;
-
-    final cardBody = Ink(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Meta + status ───────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    fixture.metaLine.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.4,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  isFuture ? 'UPCOMING' : 'FT',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            // ── Body ────────────────────────────────────────────
-            if (isFuture)
-              // Upcoming: home logo | home name | VS | away name | away logo
-              Row(
-                children: [
-                  _TeamCrestBadge(teamName: fixture.homeName, size: 36),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      fixture.homeName.toUpperCase(),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'Lexend',
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                        letterSpacing: -0.3,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Text(
-                      'VS',
-                      style: TextStyle(
-                        fontFamily: 'Lexend',
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                        letterSpacing: -0.5,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      fixture.awayName.toUpperCase(),
-                      textAlign: TextAlign.right,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'Lexend',
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                        letterSpacing: -0.3,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  _TeamCrestBadge(teamName: fixture.awayName, size: 36),
-                ],
-              )
-            else
-              // Past: two stacked rows  logo | name | score
-              Column(
-                children: [
-                  Row(
-                    children: [
-                      _TeamCrestBadge(teamName: fixture.homeName, size: 36),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          fixture.homeName.toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'Lexend',
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13,
-                            letterSpacing: -0.3,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        fixture.homeScore != null
-                            ? '${fixture.homeScore}'
-                            : '—',
-                        style: TextStyle(
-                          fontFamily: 'Lexend',
-                          fontWeight: FontWeight.w900,
-                          fontSize: 22,
-                          letterSpacing: -1.0,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      _TeamCrestBadge(teamName: fixture.awayName, size: 36),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          fixture.awayName.toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'Lexend',
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13,
-                            letterSpacing: -0.3,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        fixture.awayScore != null
-                            ? '${fixture.awayScore}'
-                            : '—',
-                        style: TextStyle(
-                          fontFamily: 'Lexend',
-                          fontWeight: FontWeight.w900,
-                          fontSize: 22,
-                          letterSpacing: -1.0,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-
-    const kShadow = BoxDecoration(
-      borderRadius: BorderRadius.all(Radius.circular(12)),
-      boxShadow: [
-        BoxShadow(
-          color: Color(0x18000000),
-          blurRadius: 10,
-          spreadRadius: 0,
-          offset: Offset(0, 3),
-        ),
-      ],
-    );
-
-    if (onCardTap == null) {
-      return DecoratedBox(
-        decoration: kShadow,
-        child: Material(color: Colors.transparent, child: cardBody),
-      );
-    }
-
-    return DecoratedBox(
-      decoration: kShadow,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onCardTap,
-          borderRadius: BorderRadius.circular(12),
-          child: cardBody,
-        ),
-      ),
-    );
-  }
-}
-
-
-class _TeamCrestBadge extends StatelessWidget {
-  const _TeamCrestBadge({required this.teamName, this.size = 40});
-
-  final String teamName;
-  final double size;
-
-  static String _initials(String name) {
-    final parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((s) => s.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) {
-      final s = parts.first;
-      return s.length >= 2 ? s.substring(0, 2).toUpperCase() : s.toUpperCase();
-    }
-    return (parts.first[0] + parts.last[0]).toUpperCase();
-  }
-
-  Color _tint(ColorScheme scheme) {
-    var h = 0.0;
-    for (final c in teamName.codeUnits) {
-      h = (h + c) * 1.618 % 360;
-    }
-    return HSLColor.fromAHSL(1, h, 0.42, 0.48).toColor();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final tint = _tint(scheme);
-    final initials = _initials(teamName);
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [tint, Color.lerp(tint, scheme.surface, 0.35)!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.35),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: TextStyle(
-          fontSize: size * 0.28,
-          fontWeight: FontWeight.w900,
-          color: scheme.onPrimary,
-        ),
       ),
     );
   }

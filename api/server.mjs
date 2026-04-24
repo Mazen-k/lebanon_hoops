@@ -2672,13 +2672,15 @@ const GAME_ROW_FROM_WITH_TEAM_LOGOS = `
   LEFT JOIN teams ta ON ta.team_id = g.away_team_id
 `;
 
-/** GET /games  — optional ?competition_id=… & ?week=… (integer). Upcoming + live + recent finals ordered by date */
+/** GET /games  — optional ?competition_id=… & ?week=… & ?team_id=… (integer). Upcoming + live + recent finals ordered by date */
 async function listGamesHandler(req, res) {
   try {
     const rawComp = req.query.competition_id ?? req.query.competitionId;
     const compId = rawComp != null && rawComp !== '' ? Number(rawComp) : null;
     const rawWeek = req.query.week;
     const weekNum = rawWeek != null && rawWeek !== '' ? Number(rawWeek) : null;
+    const rawTeam = req.query.team_id ?? req.query.teamId;
+    const teamId = rawTeam != null && rawTeam !== '' ? Number(rawTeam) : null;
     const params = [];
     let compClause = '';
     if (compId != null && !Number.isNaN(compId)) {
@@ -2690,6 +2692,12 @@ async function listGamesHandler(req, res) {
       params.push(weekNum);
       weekClause = `AND g.week = $${params.length}`;
     }
+    let teamClause = '';
+    if (teamId != null && !Number.isNaN(teamId)) {
+      params.push(teamId);
+      const i = params.length;
+      teamClause = `AND (g.home_team_id = $${i}::bigint OR g.away_team_id = $${i}::bigint)`;
+    }
     const { rows } = await pool.query(
       `
       SELECT ${GAME_ROW_SELECT_WITH_TEAM_LOGOS}
@@ -2697,6 +2705,7 @@ async function listGamesHandler(req, res) {
       WHERE g.status IN ('live', 'scheduled', 'final')
       ${compClause}
       ${weekClause}
+      ${teamClause}
       ORDER BY
         CASE g.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
         g.updated_at DESC
