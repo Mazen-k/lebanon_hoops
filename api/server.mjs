@@ -1030,12 +1030,11 @@ async function catalogCardsHandler(req, res) {
     params.push(teamId);
     cond.push(`t.team_id = $${params.length}`);
   }
-  if (nationality === 'Lebanon') {
+  if (nationality != null && nationality !== '') {
+    params.push(nationality);
     cond.push(
-      `UPPER(TRIM(COALESCE(p.nationality, ''))) IN ('LB','LEB','LEBANON','LBN')`,
+      `LOWER(TRIM(COALESCE(p.nationality, ''))) = LOWER(TRIM($${params.length}::text))`,
     );
-  } else if (nationality === 'USA') {
-    cond.push(`UPPER(TRIM(COALESCE(p.nationality, ''))) IN ('US','USA','UNITED STATES')`);
   }
   if (cardType != null) {
     params.push(cardType);
@@ -1090,6 +1089,42 @@ async function catalogCardsHandler(req, res) {
 
 app.get('/cards/catalog', catalogCardsHandler);
 app.get('/api/cards/catalog', catalogCardsHandler);
+
+/** GET /cards/filter-options — men's division-1 clubs + distinct player nationalities (Lebanon variants first). */
+async function cardCatalogFilterOptionsHandler(_req, res) {
+  try {
+    const [teamsRes, natRes] = await Promise.all([
+      pool.query(
+        `SELECT team_id, team_name, team_logo
+         FROM teams
+         WHERE UPPER(TRIM(COALESCE(gender, ''))) = 'M'
+           AND COALESCE(division, 1) = 1
+         ORDER BY team_name ASC`,
+      ),
+      pool.query(
+        `SELECT DISTINCT TRIM(nationality) AS nationality
+         FROM players
+         WHERE TRIM(COALESCE(nationality, '')) <> ''
+         ORDER BY
+           CASE
+             WHEN UPPER(TRIM(nationality)) IN ('LB','LEB','LEBANON','LBN') THEN 0
+             ELSE 1
+           END,
+           TRIM(nationality) ASC`,
+      ),
+    ]);
+    res.json({
+      teams: teamsRes.rows,
+      nationalities: natRes.rows.map((r) => r.nationality).filter((s) => s != null && String(s).trim() !== ''),
+    });
+  } catch (err) {
+    console.error('[GET /cards/filter-options]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/cards/filter-options', cardCatalogFilterOptionsHandler);
+app.get('/api/cards/filter-options', cardCatalogFilterOptionsHandler);
 
 // --- Wishlist ---
 async function ensureWishlistRow(client, userId) {

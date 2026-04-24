@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../config/backend_config.dart';
-import '../../../data/team_repository.dart';
 import '../../../models/collection_card.dart';
 import '../../../models/team.dart';
+import '../../../services/cards_filter_options_service.dart';
 import '../../../services/collection_api_service.dart';
 import '../../../services/session_store.dart';
 import '../../../util/card_image_url.dart' show BundledPlayCardImage;
@@ -22,10 +22,11 @@ class ViewCollectionPage extends StatefulWidget {
 
 class _ViewCollectionPageState extends State<ViewCollectionPage> {
   final _api = CollectionApiService();
-  final _teamsRepo = const TeamRepository();
+  final _filterOpts = CardsFilterOptionsService();
 
   List<CollectionCard> _cards = [];
   List<Team> _teams = [];
+  List<String> _nationalityOptions = const [];
   bool _loading = true;
   String? _error;
 
@@ -52,15 +53,23 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
           ? await _api.fetchCollectionDuplicates(userId: userId)
           : await _api.fetchCollection(userId: userId);
       List<Team> teams = [];
+      List<String> nationalities = const [];
       try {
-        teams = await _teamsRepo.fetchTeams();
-      } on TeamRepositoryException {
+        final fo = await _filterOpts.fetchFilterOptions();
+        teams = fo.teams;
+        nationalities = fo.nationalities;
+      } on CardsFilterOptionsException {
         teams = [];
+        nationalities = const [];
+      } catch (_) {
+        teams = [];
+        nationalities = const [];
       }
       if (!mounted) return;
       setState(() {
         _cards = cards;
         _teams = teams;
+        _nationalityOptions = nationalities;
         _loading = false;
       });
     } on CollectionApiException catch (e) {
@@ -98,12 +107,21 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
     if (_cardTypeFilter != null) {
       list = list
           .where(
-            (c) => CollectionCard.normalizedCardType(c.cardType) == _cardTypeFilter,
+            (c) =>
+                CollectionCard.normalizedCardType(c.cardType) ==
+                _cardTypeFilter,
           )
           .toList();
     }
     if (_nationalityFilter != null) {
-      list = list.where((c) => CollectionCard.nationalityBucket(c.nationality) == _nationalityFilter).toList();
+      list = list
+          .where(
+            (c) => CollectionCard.nationalityMatchesFilter(
+              c.nationality,
+              _nationalityFilter!,
+            ),
+          )
+          .toList();
     }
     if (_teamIdFilter != null) {
       list = list.where((c) => c.teamId == _teamIdFilter).toList();
@@ -142,73 +160,75 @@ class _ViewCollectionPageState extends State<ViewCollectionPage> {
               child: CircularProgressIndicator(color: CardGameUiTheme.gold),
             )
           : _error != null
-              ? _ErrorBody(message: _error!, onRetry: _load)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    CardCatalogFilterBar(
-                      cardGameStyle: true,
-                      positionOptions: _positionOptions,
-                      teams: _teams,
-                      positionFilter: _positionFilter,
-                      cardTypeFilter: _cardTypeFilter,
-                      nationalityFilter: _nationalityFilter,
-                      teamIdFilter: _teamIdFilter,
-                      onPosition: (v) => setState(() => _positionFilter = v),
-                      onCardType: (v) => setState(() => _cardTypeFilter = v),
-                      onNationality: (v) => setState(() => _nationalityFilter = v),
-                      onClub: (v) => setState(() => _teamIdFilter = v),
-                    ),
-                    Expanded(
-                      child: _cards.isEmpty
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(24),
-                                child: Text(
-                                  widget.duplicatesOnly
-                                      ? 'No duplicate cards yet.\nYou need at least two copies of the same card.'
-                                      : 'No cards yet.\nOpen packs to build your collection.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: CardGameUiTheme.onDark.withAlpha(180),
-                                    fontSize: 16,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : _visibleCards.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    'No cards match these filters.',
-                                    style: TextStyle(
-                                      color: CardGameUiTheme.onDark.withAlpha(180),
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                )
-                              : GridView.builder(
-                                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    mainAxisSpacing: 12,
-                                    crossAxisSpacing: 12,
-                                    childAspectRatio: 0.72,
-                                  ),
-                                  itemCount: _visibleCards.length,
-                                  itemBuilder: (context, i) => _CollectionCardTile(
-                                        card: _visibleCards[i],
-                                        showDuplicateBadge: widget.duplicatesOnly,
-                                        onOpenPreview: () => _showCollectionCardPreview(
-                                          context,
-                                          _visibleCards[i],
-                                          showDuplicateBadge: widget.duplicatesOnly,
-                                        ),
-                                      ),
-                                ),
-                    ),
-                  ],
+          ? _ErrorBody(message: _error!, onRetry: _load)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                CardCatalogFilterBar(
+                  cardGameStyle: true,
+                  positionOptions: _positionOptions,
+                  teams: _teams,
+                  nationalityOptions: _nationalityOptions,
+                  positionFilter: _positionFilter,
+                  cardTypeFilter: _cardTypeFilter,
+                  nationalityFilter: _nationalityFilter,
+                  teamIdFilter: _teamIdFilter,
+                  onPosition: (v) => setState(() => _positionFilter = v),
+                  onCardType: (v) => setState(() => _cardTypeFilter = v),
+                  onNationality: (v) => setState(() => _nationalityFilter = v),
+                  onClub: (v) => setState(() => _teamIdFilter = v),
                 ),
+                Expanded(
+                  child: _cards.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              widget.duplicatesOnly
+                                  ? 'No duplicate cards yet.\nYou need at least two copies of the same card.'
+                                  : 'No cards yet.\nOpen packs to build your collection.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: CardGameUiTheme.onDark.withAlpha(180),
+                                fontSize: 16,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        )
+                      : _visibleCards.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No cards match these filters.',
+                            style: TextStyle(
+                              color: CardGameUiTheme.onDark.withAlpha(180),
+                              fontSize: 16,
+                            ),
+                          ),
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                mainAxisSpacing: 12,
+                                crossAxisSpacing: 12,
+                                childAspectRatio: 0.72,
+                              ),
+                          itemCount: _visibleCards.length,
+                          itemBuilder: (context, i) => _CollectionCardTile(
+                            card: _visibleCards[i],
+                            showDuplicateBadge: widget.duplicatesOnly,
+                            onOpenPreview: () => _showCollectionCardPreview(
+                              context,
+                              _visibleCards[i],
+                              showDuplicateBadge: widget.duplicatesOnly,
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -271,7 +291,10 @@ void _showCollectionCardPreview(
                           color: CardGameUiTheme.orangeGlow,
                           borderRadius: BorderRadius.circular(12),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             child: Text(
                               '×$count',
                               style: const TextStyle(
@@ -302,8 +325,10 @@ void _showCollectionCardPreview(
             Text(
               [
                 'OVR ${card.overall}',
-                if (card.position.trim().isNotEmpty && card.position != '?') card.position,
-                if ((card.teamName ?? '').trim().isNotEmpty) card.teamName!.trim(),
+                if (card.position.trim().isNotEmpty && card.position != '?')
+                  card.position,
+                if ((card.teamName ?? '').trim().isNotEmpty)
+                  card.teamName!.trim(),
               ].join(' · '),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -320,10 +345,18 @@ void _showCollectionCardPreview(
               style: OutlinedButton.styleFrom(
                 foregroundColor: CardGameUiTheme.onDark.withAlpha(230),
                 side: BorderSide(color: CardGameUiTheme.gold.withAlpha(130)),
-                padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 36,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-              child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Close',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         ),
@@ -415,9 +448,7 @@ class _CollectionCardTile extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Positioned.fill(
-                child: _CollectionCardImageFill(card: card),
-              ),
+              Positioned.fill(child: _CollectionCardImageFill(card: card)),
               if (badge)
                 Positioned(
                   top: 8,
@@ -427,7 +458,10 @@ class _CollectionCardTile extends StatelessWidget {
                     color: CardGameUiTheme.orangeGlow,
                     borderRadius: BorderRadius.circular(10),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       child: Text(
                         '×$count',
                         style: const TextStyle(
@@ -461,7 +495,11 @@ class _ErrorBody extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.cloud_off_outlined, size: 48, color: CardGameUiTheme.onDark.withAlpha(160)),
+            Icon(
+              Icons.cloud_off_outlined,
+              size: 48,
+              color: CardGameUiTheme.onDark.withAlpha(160),
+            ),
             const SizedBox(height: 16),
             Text(
               message,
@@ -478,7 +516,10 @@ class _ErrorBody extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: CardGameUiTheme.gold,
                 side: const BorderSide(color: CardGameUiTheme.gold, width: 1.5),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 12,
+                ),
               ),
               child: const Text('Retry'),
             ),

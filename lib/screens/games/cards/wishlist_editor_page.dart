@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../config/backend_config.dart';
-import '../../../data/team_repository.dart';
 import '../../../models/catalog_card.dart';
 import '../../../models/team.dart';
+import '../../../services/cards_filter_options_service.dart';
 import '../../../services/catalog_api_service.dart';
 import '../../../services/session_store.dart';
 import '../../../services/wishlist_api_service.dart';
@@ -23,10 +23,11 @@ class WishlistEditorPage extends StatefulWidget {
 class _WishlistEditorPageState extends State<WishlistEditorPage> {
   final _catalogApi = CatalogApiService();
   final _wishlistApi = WishlistApiService();
-  final _teamsRepo = const TeamRepository();
+  final _filterOpts = CardsFilterOptionsService();
 
   List<CatalogCard> _cards = [];
   List<Team> _teams = [];
+  List<String> _nationalityOptions = const [];
   final Set<int> _wishlistIds = {};
   bool _loading = true;
   String? _error;
@@ -60,10 +61,17 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
     final userId = session?.userId ?? BackendConfig.devUserId;
     try {
       List<Team> teams = [];
+      List<String> nationalities = const [];
       try {
-        teams = await _teamsRepo.fetchTeams();
-      } on TeamRepositoryException {
+        final fo = await _filterOpts.fetchFilterOptions();
+        teams = fo.teams;
+        nationalities = fo.nationalities;
+      } on CardsFilterOptionsException {
         teams = [];
+        nationalities = const [];
+      } catch (_) {
+        teams = [];
+        nationalities = const [];
       }
       List<int>? wishIds;
       try {
@@ -79,11 +87,13 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
         cardType: _cardTypeFilter,
         onlyMissing: _onlyMissing,
       );
-      final resolvedWish = wishIds ??
+      final resolvedWish =
+          wishIds ??
           cards.where((c) => c.onWishlist).map((c) => c.cardId).toList();
       if (!mounted) return;
       setState(() {
         _teams = teams;
+        _nationalityOptions = nationalities;
         _cards = cards;
         _wishlistIds
           ..clear()
@@ -196,87 +206,86 @@ class _WishlistEditorPageState extends State<WishlistEditorPage> {
               child: CircularProgressIndicator(color: CardGameUiTheme.gold),
             )
           : _error != null
-              ? _WishlistErrorBody(message: _error!, onRetry: _load)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    CardCatalogFilterBar(
-                      cardGameStyle: true,
-                      positionOptions: _positionOptions,
-                      teams: _teams,
-                      positionFilter: _positionFilter,
-                      cardTypeFilter: _cardTypeFilter,
-                      nationalityFilter: _nationalityFilter,
-                      teamIdFilter: _teamIdFilter,
-                      onPosition: (v) {
-                        setState(() => _positionFilter = v);
-                        _load();
-                      },
-                      onCardType: (v) {
-                        setState(() => _cardTypeFilter = v);
-                        _load();
-                      },
-                      onNationality: (v) {
-                        setState(() => _nationalityFilter = v);
-                        _load();
-                      },
-                      onClub: (v) {
-                        setState(() => _teamIdFilter = v);
-                        _load();
-                      },
-                    ),
-                    _OnlyMissingToggleBar(
-                      value: _onlyMissing,
-                      onChanged: _loading
-                          ? null
-                          : (v) {
-                              setState(() => _onlyMissing = v);
-                              _load();
-                            },
-                    ),
-                    Expanded(
-                      child: _visibleCards.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No cards match these filters.',
-                                style: TextStyle(
-                                  color: CardGameUiTheme.onDark.withAlpha(180),
-                                  fontSize: 16,
-                                ),
-                              ),
-                            )
-                          : GridView.builder(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          ? _WishlistErrorBody(message: _error!, onRetry: _load)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                CardCatalogFilterBar(
+                  cardGameStyle: true,
+                  positionOptions: _positionOptions,
+                  teams: _teams,
+                  nationalityOptions: _nationalityOptions,
+                  positionFilter: _positionFilter,
+                  cardTypeFilter: _cardTypeFilter,
+                  nationalityFilter: _nationalityFilter,
+                  teamIdFilter: _teamIdFilter,
+                  onPosition: (v) {
+                    setState(() => _positionFilter = v);
+                    _load();
+                  },
+                  onCardType: (v) {
+                    setState(() => _cardTypeFilter = v);
+                    _load();
+                  },
+                  onNationality: (v) {
+                    setState(() => _nationalityFilter = v);
+                    _load();
+                  },
+                  onClub: (v) {
+                    setState(() => _teamIdFilter = v);
+                    _load();
+                  },
+                ),
+                _OnlyMissingToggleBar(
+                  value: _onlyMissing,
+                  onChanged: _loading
+                      ? null
+                      : (v) {
+                          setState(() => _onlyMissing = v);
+                          _load();
+                        },
+                ),
+                Expanded(
+                  child: _visibleCards.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No cards match these filters.',
+                            style: TextStyle(
+                              color: CardGameUiTheme.onDark.withAlpha(180),
+                              fontSize: 16,
+                            ),
+                          ),
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 2,
                                 mainAxisSpacing: 12,
                                 crossAxisSpacing: 12,
                                 childAspectRatio: 0.72,
                               ),
-                              itemCount: _visibleCards.length,
-                              itemBuilder: (context, i) {
-                                final c = _visibleCards[i];
-                                final on = _wishlistIds.contains(c.cardId);
-                                return _WishlistCatalogTile(
-                                  card: c,
-                                  onWishlist: on,
-                                  onTap: () => _toggleCard(c.cardId),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                          itemCount: _visibleCards.length,
+                          itemBuilder: (context, i) {
+                            final c = _visibleCards[i];
+                            final on = _wishlistIds.contains(c.cardId);
+                            return _WishlistCatalogTile(
+                              card: c,
+                              onWishlist: on,
+                              onTap: () => _toggleCard(c.cardId),
+                            );
+                          },
+                        ),
                 ),
+              ],
+            ),
     );
   }
 }
 
 /// Styled like the card-game chrome; keeps “only cards I don’t own” as a compact bar + switch.
 class _OnlyMissingToggleBar extends StatelessWidget {
-  const _OnlyMissingToggleBar({
-    required this.value,
-    required this.onChanged,
-  });
+  const _OnlyMissingToggleBar({required this.value, required this.onChanged});
 
   final bool value;
   final ValueChanged<bool>? onChanged;
@@ -297,7 +306,9 @@ class _OnlyMissingToggleBar extends StatelessWidget {
                   Text(
                     'Only cards I don\'t own',
                     style: TextStyle(
-                      color: value ? CardGameUiTheme.gold : CardGameUiTheme.onDark,
+                      color: value
+                          ? CardGameUiTheme.gold
+                          : CardGameUiTheme.onDark,
                       fontWeight: FontWeight.w700,
                       fontSize: 13.5,
                     ),
@@ -356,8 +367,9 @@ class _WishlistCatalogTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        onWishlist ? CardGameUiTheme.gold : CardGameUiTheme.gold.withAlpha(90);
+    final borderColor = onWishlist
+        ? CardGameUiTheme.gold
+        : CardGameUiTheme.gold.withAlpha(90);
     final borderWidth = onWishlist ? 2.0 : 1.2;
 
     return Material(
@@ -404,17 +416,17 @@ class _WishlistCatalogTile extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                left: 6,
-                top: 6,
-                child: _OwnedPill(owned: card.owned),
-              ),
+              Positioned(left: 6, top: 6, child: _OwnedPill(owned: card.owned)),
               Positioned(
                 right: 4,
                 top: 4,
                 child: Icon(
-                  onWishlist ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  color: onWishlist ? CardGameUiTheme.gold : CardGameUiTheme.onDark.withAlpha(220),
+                  onWishlist
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: onWishlist
+                      ? CardGameUiTheme.gold
+                      : CardGameUiTheme.onDark.withAlpha(220),
                   shadows: const [
                     Shadow(blurRadius: 6, color: Colors.black87),
                     Shadow(blurRadius: 2, color: Colors.black54),
@@ -462,7 +474,10 @@ class _OwnedPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: CardGameUiTheme.elevated.withAlpha(230),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: CardGameUiTheme.gold.withAlpha(100), width: 1),
+        border: Border.all(
+          color: CardGameUiTheme.gold.withAlpha(100),
+          width: 1,
+        ),
       ),
       child: Text(
         'NEED',
@@ -491,7 +506,11 @@ class _WishlistErrorBody extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.cloud_off_outlined, size: 48, color: CardGameUiTheme.onDark.withAlpha(160)),
+            Icon(
+              Icons.cloud_off_outlined,
+              size: 48,
+              color: CardGameUiTheme.onDark.withAlpha(160),
+            ),
             const SizedBox(height: 16),
             Text(
               message,
@@ -508,7 +527,10 @@ class _WishlistErrorBody extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: CardGameUiTheme.gold,
                 side: const BorderSide(color: CardGameUiTheme.gold, width: 1.5),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 12,
+                ),
               ),
               child: const Text('Retry'),
             ),

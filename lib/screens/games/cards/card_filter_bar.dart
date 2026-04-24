@@ -10,15 +10,36 @@ const String kCardTypeAssetImport = 'assets/images/card_type/Import.png';
 
 String clubLogoAssetPath(int teamId) => 'assets/images/club_logo/$teamId.png';
 
-String? _nationalityFlagEmoji(String country) {
-  switch (country) {
-    case 'Lebanon':
-      return '🇱🇧';
-    case 'USA':
-      return '🇺🇸';
-    default:
-      return null;
+Widget _clubMenuLogo(Team t) {
+  final url = t.logoUrl?.trim();
+  if (url != null && url.isNotEmpty) {
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      width: 40,
+      height: 40,
+      errorBuilder: (_, __, ___) => Image.asset(
+        clubLogoAssetPath(t.teamId),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            Icon(Icons.groups_2_outlined, color: AppColors.primary),
+      ),
+    );
   }
+  return Image.asset(
+    clubLogoAssetPath(t.teamId),
+    fit: BoxFit.cover,
+    errorBuilder: (_, __, ___) =>
+        Icon(Icons.groups_2_outlined, color: AppColors.primary),
+  );
+}
+
+/// Flag for known codes; otherwise null (caller may use 🏳️).
+String? _nationalityFlagEmojiForValue(String raw) {
+  final u = raw.trim().toUpperCase();
+  if (const {'LB', 'LEB', 'LEBANON', 'LBN'}.contains(u)) return '🇱🇧';
+  if (const {'US', 'USA', 'UNITED STATES'}.contains(u)) return '🇺🇸';
+  return null;
 }
 
 String _cardTypeBarLabel(String? canonical) {
@@ -42,8 +63,11 @@ Widget? _cardTypeBarTop(String? canonical) {
     child: Image.asset(
       asset,
       fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) =>
-          const Icon(Icons.style_outlined, size: 22, color: CardGameUiTheme.onDark),
+      errorBuilder: (_, __, ___) => const Icon(
+        Icons.style_outlined,
+        size: 22,
+        color: CardGameUiTheme.onDark,
+      ),
     ),
   );
 }
@@ -51,6 +75,32 @@ Widget? _cardTypeBarTop(String? canonical) {
 Widget _clubBarTop(List<Team> teams, int? teamId, Color iconColor) {
   if (teamId == null) {
     return Icon(Icons.groups_outlined, size: 24, color: iconColor);
+  }
+  String? logoUrl;
+  for (final t in teams) {
+    if (t.teamId == teamId) {
+      logoUrl = t.logoUrl?.trim();
+      break;
+    }
+  }
+  if (logoUrl != null && logoUrl.isNotEmpty) {
+    return SizedBox(
+      height: 26,
+      width: 34,
+      child: Center(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(5),
+          child: Image.network(
+            logoUrl,
+            width: 28,
+            height: 28,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                Icon(Icons.groups_outlined, size: 22, color: iconColor),
+          ),
+        ),
+      ),
+    );
   }
   return SizedBox(
     height: 26,
@@ -77,6 +127,9 @@ class CardCatalogFilterBar extends StatelessWidget {
     super.key,
     required this.positionOptions,
     required this.teams,
+
+    /// Distinct `players.nationality` values from the API (Lebanon variants first).
+    this.nationalityOptions = const [],
     required this.positionFilter,
     required this.cardTypeFilter,
     required this.nationalityFilter,
@@ -90,7 +143,9 @@ class CardCatalogFilterBar extends StatelessWidget {
 
   final List<String> positionOptions;
   final List<Team> teams;
+  final List<String> nationalityOptions;
   final String? positionFilter;
+
   /// Lowercase `base` or `import` to match [play_cards.card_type].
   final String? cardTypeFilter;
   final String? nationalityFilter;
@@ -99,6 +154,7 @@ class CardCatalogFilterBar extends StatelessWidget {
   final void Function(String?) onCardType;
   final void Function(String?) onNationality;
   final void Function(int?) onClub;
+
   /// When true, matches card hub / store dark styling ([CardGameUiTheme]).
   final bool cardGameStyle;
 
@@ -106,8 +162,9 @@ class CardCatalogFilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     if (cardGameStyle) {
       final clubActive = teamIdFilter != null;
-      final clubIconColor =
-          clubActive ? CardGameUiTheme.gold : CardGameUiTheme.onDark.withAlpha(160);
+      final clubIconColor = clubActive
+          ? CardGameUiTheme.gold
+          : CardGameUiTheme.onDark.withAlpha(160);
       return Material(
         color: CardGameUiTheme.elevated,
         child: Padding(
@@ -145,7 +202,8 @@ class CardCatalogFilterBar extends StatelessWidget {
                   icon: Icons.flag_outlined,
                   topOverride: nationalityFilter != null
                       ? Text(
-                          _nationalityFlagEmoji(nationalityFilter!) ?? '🏳️',
+                          _nationalityFlagEmojiForValue(nationalityFilter!) ??
+                              '🏳️',
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 22, height: 1.05),
                         )
@@ -154,6 +212,7 @@ class CardCatalogFilterBar extends StatelessWidget {
                   active: nationalityFilter != null,
                   onTap: () => _showNationalityBoxPicker(
                     context,
+                    nationalityOptions: nationalityOptions,
                     current: nationalityFilter,
                     onPick: onNationality,
                   ),
@@ -212,7 +271,10 @@ class CardCatalogFilterBar extends StatelessWidget {
               label: 'Type',
               active: cardTypeFilter != null,
               itemBuilder: (ctx) => [
-                const PopupMenuItem<String>(value: '__clear__', child: Text('All types')),
+                const PopupMenuItem<String>(
+                  value: '__clear__',
+                  child: Text('All types'),
+                ),
                 PopupMenuItem<String>(
                   value: 'base',
                   child: Row(
@@ -222,8 +284,10 @@ class CardCatalogFilterBar extends StatelessWidget {
                         width: 32,
                         height: 32,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) =>
-                            const Icon(Icons.image_not_supported_outlined, size: 28),
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.image_not_supported_outlined,
+                          size: 28,
+                        ),
                       ),
                       const SizedBox(width: 10),
                       const Text('Base'),
@@ -239,8 +303,10 @@ class CardCatalogFilterBar extends StatelessWidget {
                         width: 32,
                         height: 32,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) =>
-                            const Icon(Icons.image_not_supported_outlined, size: 28),
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.image_not_supported_outlined,
+                          size: 28,
+                        ),
                       ),
                       const SizedBox(width: 10),
                       const Text('Import'),
@@ -260,10 +326,14 @@ class CardCatalogFilterBar extends StatelessWidget {
               icon: Icons.flag_outlined,
               label: 'Nation',
               active: nationalityFilter != null,
-              itemBuilder: (ctx) => const [
-                PopupMenuItem<String>(value: '__clear__', child: Text('All')),
-                PopupMenuItem<String>(value: 'Lebanon', child: Text('Lebanon')),
-                PopupMenuItem<String>(value: 'USA', child: Text('USA')),
+              itemBuilder: (ctx) => [
+                const PopupMenuItem<String>(
+                  value: '__clear__',
+                  child: Text('All'),
+                ),
+                ...nationalityOptions.map(
+                  (n) => PopupMenuItem<String>(value: n, child: Text(n)),
+                ),
               ],
               onSelected: (v) {
                 if (v == '__clear__') {
@@ -284,18 +354,25 @@ class CardCatalogFilterBar extends StatelessWidget {
                     value: t.teamId,
                     child: Semantics(
                       label: t.teamName,
-                      child: SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.asset(
-                            clubLogoAssetPath(t.teamId),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                Icon(Icons.groups_2_outlined, color: AppColors.primary),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            height: 40,
+                            width: 40,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: _clubMenuLogo(t),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              t.teamName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -366,16 +443,16 @@ Future<void> _showCardTypeBoxPicker(
 
 Future<void> _showNationalityBoxPicker(
   BuildContext context, {
+  required List<String> nationalityOptions,
   required String? current,
   required void Function(String?) onPick,
 }) {
-  const nations = ['Lebanon', 'USA'];
-  final entries = nations
+  final entries = nationalityOptions
       .map(
         (n) => _FilterBoxEntry<String>(
           value: n,
           label: n,
-          flagEmoji: _nationalityFlagEmoji(n),
+          flagEmoji: _nationalityFlagEmojiForValue(n),
         ),
       )
       .toList();
@@ -400,8 +477,11 @@ Future<void> _showClubBoxPicker(
     for (final t in teams)
       _FilterBoxEntry(
         value: t.teamId,
-        label: '',
+        label: t.teamName,
         imageAsset: clubLogoAssetPath(t.teamId),
+        networkImageUrl: (t.logoUrl != null && t.logoUrl!.trim().isNotEmpty)
+            ? t.logoUrl!.trim()
+            : null,
         semanticsLabel: t.teamName,
       ),
   ];
@@ -422,6 +502,7 @@ class _FilterBoxEntry<T> {
     required this.label,
     this.flagEmoji,
     this.imageAsset,
+    this.networkImageUrl,
     this.imageSize = 56,
     this.semanticsLabel,
   });
@@ -430,6 +511,7 @@ class _FilterBoxEntry<T> {
   final String label;
   final String? flagEmoji;
   final String? imageAsset;
+  final String? networkImageUrl;
   final double imageSize;
   final String? semanticsLabel;
 }
@@ -456,7 +538,10 @@ Future<void> _showFilterBoxDialog<T>({
           decoration: BoxDecoration(
             color: CardGameUiTheme.panel,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: CardGameUiTheme.gold.withAlpha(100), width: 1.2),
+            border: Border.all(
+              color: CardGameUiTheme.gold.withAlpha(100),
+              width: 1.2,
+            ),
             boxShadow: [
               BoxShadow(
                 color: CardGameUiTheme.orangeGlow.withAlpha(40),
@@ -496,7 +581,9 @@ Future<void> _showFilterBoxDialog<T>({
               ),
               const SizedBox(height: 12),
               ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: (maxH - 150).clamp(160.0, 520.0)),
+                constraints: BoxConstraints(
+                  maxHeight: (maxH - 150).clamp(160.0, 520.0),
+                ),
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                   child: Wrap(
@@ -509,6 +596,7 @@ Future<void> _showFilterBoxDialog<T>({
                         label: e.label,
                         flagEmoji: e.flagEmoji,
                         imageAsset: e.imageAsset,
+                        networkImageUrl: e.networkImageUrl,
                         imageSize: e.imageSize,
                         semanticsLabel: e.semanticsLabel,
                         selected: sel,
@@ -530,13 +618,20 @@ Future<void> _showFilterBoxDialog<T>({
                   },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: CardGameUiTheme.onDark.withAlpha(220),
-                    side: BorderSide(color: CardGameUiTheme.gold.withAlpha(120)),
+                    side: BorderSide(
+                      color: CardGameUiTheme.gold.withAlpha(120),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   child: Text(
                     clearLabel,
-                    style: const TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.2),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                    ),
                   ),
                 ),
               ),
@@ -553,6 +648,7 @@ class _FilterOptionBox extends StatelessWidget {
     required this.label,
     this.flagEmoji,
     this.imageAsset,
+    this.networkImageUrl,
     this.imageSize = 56,
     this.semanticsLabel,
     required this.selected,
@@ -562,6 +658,7 @@ class _FilterOptionBox extends StatelessWidget {
   final String label;
   final String? flagEmoji;
   final String? imageAsset;
+  final String? networkImageUrl;
   final double imageSize;
   final String? semanticsLabel;
   final bool selected;
@@ -570,7 +667,9 @@ class _FilterOptionBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nameStyle = TextStyle(
-      color: selected ? CardGameUiTheme.onDark : CardGameUiTheme.onDark.withAlpha(210),
+      color: selected
+          ? CardGameUiTheme.onDark
+          : CardGameUiTheme.onDark.withAlpha(210),
       fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
       fontSize: 13.5,
       height: 1.2,
@@ -580,18 +679,28 @@ class _FilterOptionBox extends StatelessWidget {
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
       constraints: BoxConstraints(
-        minWidth: imageAsset != null && label.isEmpty ? imageSize + 16 : 96,
-        maxWidth: imageAsset != null && label.isEmpty ? imageSize + 24 : 160,
+        minWidth:
+            (imageAsset != null || networkImageUrl != null) && label.isEmpty
+            ? imageSize + 16
+            : 96,
+        maxWidth:
+            (imageAsset != null || networkImageUrl != null) && label.isEmpty
+            ? imageSize + 24
+            : 160,
       ),
       padding: EdgeInsets.symmetric(
         horizontal: 12,
-        vertical: imageAsset != null ? 10 : (flagEmoji != null ? 14 : 12),
+        vertical: (imageAsset != null || networkImageUrl != null)
+            ? 10
+            : (flagEmoji != null ? 14 : 12),
       ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           width: selected ? 2 : 1.2,
-          color: selected ? CardGameUiTheme.gold : CardGameUiTheme.panelBorder.withAlpha(200),
+          color: selected
+              ? CardGameUiTheme.gold
+              : CardGameUiTheme.panelBorder.withAlpha(200),
         ),
         color: selected
             ? CardGameUiTheme.gold.withAlpha(42)
@@ -609,7 +718,32 @@ class _FilterOptionBox extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (imageAsset != null) ...[
+          if (networkImageUrl != null) ...[
+            SizedBox(
+              width: imageSize,
+              height: imageSize,
+              child: Image.network(
+                networkImageUrl!,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => imageAsset != null
+                    ? Image.asset(
+                        imageAsset!,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.image_not_supported_outlined,
+                          size: imageSize * 0.45,
+                          color: CardGameUiTheme.onDark.withAlpha(120),
+                        ),
+                      )
+                    : Icon(
+                        Icons.image_not_supported_outlined,
+                        size: imageSize * 0.45,
+                        color: CardGameUiTheme.onDark.withAlpha(120),
+                      ),
+              ),
+            ),
+            if (label.isNotEmpty) const SizedBox(height: 8),
+          ] else if (imageAsset != null) ...[
             SizedBox(
               width: imageSize,
               height: imageSize,
@@ -647,7 +781,7 @@ class _FilterOptionBox extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Semantics(
-        label: semanticsLabel ?? (label.isEmpty ? 'Club logo' : label),
+        label: semanticsLabel ?? (label.isNotEmpty ? label : 'Club logo'),
         button: true,
         child: InkWell(
           onTap: onTap,
@@ -671,6 +805,7 @@ class CardFilterBoxTrigger extends StatelessWidget {
   });
 
   final IconData icon;
+
   /// When set (e.g. nation flag emoji), shown instead of [icon] in the top slot.
   final Widget? topOverride;
   final String label;
@@ -679,17 +814,15 @@ class CardFilterBoxTrigger extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor =
-        active ? CardGameUiTheme.gold : CardGameUiTheme.onDark.withAlpha(160);
-    final labelColor =
-        active ? CardGameUiTheme.gold : CardGameUiTheme.onDark.withAlpha(150);
+    final iconColor = active
+        ? CardGameUiTheme.gold
+        : CardGameUiTheme.onDark.withAlpha(160);
+    final labelColor = active
+        ? CardGameUiTheme.gold
+        : CardGameUiTheme.onDark.withAlpha(150);
 
     final top = topOverride != null
-        ? SizedBox(
-            height: 26,
-            width: 40,
-            child: Center(child: topOverride),
-          )
+        ? SizedBox(height: 26, width: 40, child: Center(child: topOverride))
         : Icon(icon, size: 26, color: iconColor);
 
     return InkWell(
@@ -708,11 +841,11 @@ class CardFilterBoxTrigger extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: labelColor,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: 11,
-                    height: 1.15,
-                  ),
+                color: labelColor,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 11,
+                height: 1.15,
+              ),
             ),
           ],
         ),
@@ -756,9 +889,9 @@ class CardFilterPopupButton<T> extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: active ? AppColors.primary : AppColors.onSurfaceVariant,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                ),
+              color: active ? AppColors.primary : AppColors.onSurfaceVariant,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
         ],
       ),

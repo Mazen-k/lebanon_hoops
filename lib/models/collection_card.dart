@@ -53,11 +53,17 @@ class CollectionCard {
     return 'Other';
   }
 
+  /// Case-insensitive match against a nationality value from [GET /cards/filter-options].
+  static bool nationalityMatchesFilter(String rawNation, String filterValue) {
+    return rawNation.trim().toLowerCase() == filterValue.trim().toLowerCase();
+  }
+
   factory CollectionCard.fromJson(Map<String, dynamic> json) {
     int n(String snake, [String? camel]) {
       final v = json[snake] ?? (camel != null ? json[camel] : null);
       if (v is int) return v;
-      if (v == null) throw FormatException('Missing $snake in collection card JSON');
+      if (v == null)
+        throw FormatException('Missing $snake in collection card JSON');
       return int.parse(v.toString());
     }
 

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../config/backend_config.dart';
-import '../../../data/team_repository.dart';
 import '../../../models/collection_card.dart';
 import '../../../models/team.dart';
 import '../../../models/tradeable_instance.dart';
+import '../../../services/cards_filter_options_service.dart';
 import '../../../services/collection_api_service.dart';
 import '../../../services/session_store.dart';
 import '../../../services/trade_api_service.dart'
@@ -40,11 +40,12 @@ class TradeSlotPickerPage extends StatefulWidget {
 class _TradeSlotPickerPageState extends State<TradeSlotPickerPage> {
   final _collectionApi = CollectionApiService();
   final _tradeApi = TradeApiService();
-  final _teamsRepo = const TeamRepository();
+  final _filterOpts = CardsFilterOptionsService();
 
   List<CollectionCard> _cards = [];
   List<TradeableInstance> _tradeable = [];
   List<Team> _teams = [];
+  List<String> _nationalityOptions = const [];
   bool _loading = true;
   String? _error;
 
@@ -74,16 +75,24 @@ class _TradeSlotPickerPageState extends State<TradeSlotPickerPage> {
       final cards = await cardsFuture;
       final trade = await tradeFuture;
       List<Team> teams = [];
+      List<String> nationalities = const [];
       try {
-        teams = await _teamsRepo.fetchTeams();
-      } on TeamRepositoryException {
+        final fo = await _filterOpts.fetchFilterOptions();
+        teams = fo.teams;
+        nationalities = fo.nationalities;
+      } on CardsFilterOptionsException {
         teams = [];
+        nationalities = const [];
+      } catch (_) {
+        teams = [];
+        nationalities = const [];
       }
       if (!mounted) return;
       setState(() {
         _cards = cards;
         _tradeable = trade;
         _teams = teams;
+        _nationalityOptions = nationalities;
         _loading = false;
       });
     } on CollectionApiException catch (e) {
@@ -127,16 +136,19 @@ class _TradeSlotPickerPageState extends State<TradeSlotPickerPage> {
     if (_cardTypeFilter != null) {
       list = list
           .where(
-            (c) => CollectionCard.normalizedCardType(c.cardType) == _cardTypeFilter,
+            (c) =>
+                CollectionCard.normalizedCardType(c.cardType) ==
+                _cardTypeFilter,
           )
           .toList();
     }
     if (_nationalityFilter != null) {
       list = list
           .where(
-            (c) =>
-                CollectionCard.nationalityBucket(c.nationality) ==
-                _nationalityFilter,
+            (c) => CollectionCard.nationalityMatchesFilter(
+              c.nationality,
+              _nationalityFilter!,
+            ),
           )
           .toList();
     }
@@ -220,6 +232,7 @@ class _TradeSlotPickerPageState extends State<TradeSlotPickerPage> {
                   cardGameStyle: true,
                   positionOptions: _positionOptions,
                   teams: _teams,
+                  nationalityOptions: _nationalityOptions,
                   positionFilter: _positionFilter,
                   cardTypeFilter: _cardTypeFilter,
                   nationalityFilter: _nationalityFilter,
