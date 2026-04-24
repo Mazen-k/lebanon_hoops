@@ -34,38 +34,13 @@ class GameBoxscoreScreen extends StatefulWidget {
   State<GameBoxscoreScreen> createState() => _GameBoxscoreScreenState();
 }
 
-class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTickerProviderStateMixin {
+class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
+    with SingleTickerProviderStateMixin {
   final _api = GamesApiService();
   Map<String, dynamic>? _payload;
   String? _error;
   bool _loading = true;
   late final TabController _tabController;
-
-  static const _statOrder = [
-    'Pts',
-    'REB',
-    'AST',
-    'STL',
-    'BLK',
-    'TO',
-    'PF',
-    'FG%',
-    'FGA',
-    'FGM',
-    '3P%',
-    '3PA',
-    '3PM',
-    '2P%',
-    '2PA',
-    '2PM',
-    'FT%',
-    'FTA',
-    'FTM',
-    'OFF',
-    'DEF',
-  ];
-
-  static const _playerStatOrder = ['Mins', ..._statOrder];
 
   @override
   void initState() {
@@ -130,7 +105,10 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
     return {};
   }
 
-  static Map<String, dynamic>? _teamBySide(List<dynamic>? teams, String sideNorm) {
+  static Map<String, dynamic>? _teamBySide(
+    List<dynamic>? teams,
+    String sideNorm,
+  ) {
     if (teams == null) return null;
     for (final t in teams) {
       if (t is! Map) continue;
@@ -182,14 +160,25 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
       'team_side': pickStr(['team_side', 'teamSide', 'TeamSide']),
       'team_name': pickStr(['team_name', 'teamName', 'TeamName']),
       'player': pickStr(['player', 'Player']),
-      'player_number': pickStr(['player_number', 'playerNumber', 'PlayerNumber']),
+      'player_number': pickStr([
+        'player_number',
+        'playerNumber',
+        'PlayerNumber',
+      ]),
       'action_text': pickStr(['action_text', 'actionText', 'ActionText']),
       'event_type': pickStr(['event_type', 'eventType', 'EventType']),
-      'is_scoring_event': pickDyn(['is_scoring_event', 'isScoringEvent', 'IsScoringEvent']),
+      'is_scoring_event': pickDyn([
+        'is_scoring_event',
+        'isScoringEvent',
+        'IsScoringEvent',
+      ]),
     };
   }
 
-  List<Map<String, dynamic>> _playersForSide(List<dynamic>? players, String sideNorm) {
+  List<Map<String, dynamic>> _playersForSide(
+    List<dynamic>? players,
+    String sideNorm,
+  ) {
     if (players == null) return [];
     final out = <Map<String, dynamic>>[];
     for (final p in players) {
@@ -223,20 +212,20 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        FilledButton(onPressed: _load, child: const Text('Retry')),
-                      ],
-                    ),
-                  ),
-                )
-              : _buildBody(context, scheme),
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(_error!, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton(onPressed: _load, child: const Text('Retry')),
+                  ],
+                ),
+              ),
+            )
+          : _buildBody(context, scheme),
     );
   }
 
@@ -250,7 +239,9 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
     final eventsRaw = payload['events'];
     final events = _normalizeEventRows(eventsRaw);
 
-    final gameMap = game is Map<String, dynamic> ? game : (game is Map ? Map<String, dynamic>.from(game) : null);
+    final gameMap = game is Map<String, dynamic>
+        ? game
+        : (game is Map ? Map<String, dynamic>.from(game) : null);
 
     final homeRow = _teamBySide(teams, 'home');
     final awayRow = _teamBySide(teams, 'away');
@@ -259,8 +250,12 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
     final homeTotals = _parseTotals(homeRow?['totals']);
     final awayTotals = _parseTotals(awayRow?['totals']);
 
-    final titleHome = homeName.isNotEmpty ? homeName : (gameMap?['home_team_name']?.toString() ?? 'Home');
-    final titleAway = awayName.isNotEmpty ? awayName : (gameMap?['away_team_name']?.toString() ?? 'Away');
+    final titleHome = homeName.isNotEmpty
+        ? homeName
+        : (gameMap?['home_team_name']?.toString() ?? 'Home');
+    final titleAway = awayName.isNotEmpty
+        ? awayName
+        : (gameMap?['away_team_name']?.toString() ?? 'Away');
     final hs = gameMap?['home_score'];
     final as_ = gameMap?['away_score'];
     final status = (gameMap?['status'] ?? '').toString();
@@ -303,8 +298,8 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
             letterSpacing: 0.6,
           ),
           tabs: const [
-            Tab(text: 'TEAM TOTALS'),
-            Tab(text: 'PLAYERS'),
+            Tab(text: 'INFO'),
+            Tab(text: 'BOX SCORE'),
             Tab(text: 'PLAY-BY-PLAY'),
           ],
         ),
@@ -318,11 +313,15 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen> with SingleTick
                 titleAway: titleAway,
                 homeTotals: homeTotals,
                 awayTotals: awayTotals,
+                homePlayers: _playersForSide(players, 'home'),
+                awayPlayers: _playersForSide(players, 'away'),
               ),
               _PlayersTab(
                 scheme: scheme,
                 titleHome: titleHome,
                 titleAway: titleAway,
+                homeLogo: gameMap?['home_team_logo']?.toString(),
+                awayLogo: gameMap?['away_team_logo']?.toString(),
                 homePlayers: _playersForSide(players, 'home'),
                 awayPlayers: _playersForSide(players, 'away'),
               ),
@@ -400,7 +399,10 @@ class _GameHeader extends StatelessWidget {
                 const SizedBox.shrink(),
               if (isLive)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: scheme.primary,
                     borderRadius: BorderRadius.circular(4),
@@ -514,8 +516,8 @@ class _TeamColumn extends StatelessWidget {
     final label = parts.length >= 2
         ? '${parts.first[0]}${parts.last[0]}'.toUpperCase()
         : name.isNotEmpty
-            ? name.substring(0, name.length.clamp(0, 2)).toUpperCase()
-            : '?';
+        ? name.substring(0, name.length.clamp(0, 2)).toUpperCase()
+        : '?';
     return Center(
       child: Text(
         label,
@@ -555,7 +557,9 @@ class _TeamColumn extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           name,
-          textAlign: align == CrossAxisAlignment.start ? TextAlign.start : TextAlign.end,
+          textAlign: align == CrossAxisAlignment.start
+              ? TextAlign.start
+              : TextAlign.end,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -582,6 +586,8 @@ class _TeamTotalsTab extends StatelessWidget {
     required this.titleAway,
     required this.homeTotals,
     required this.awayTotals,
+    required this.homePlayers,
+    required this.awayPlayers,
   });
 
   final ColorScheme scheme;
@@ -589,15 +595,52 @@ class _TeamTotalsTab extends StatelessWidget {
   final String titleAway;
   final Map<String, String> homeTotals;
   final Map<String, String> awayTotals;
+  final List<Map<String, dynamic>> homePlayers;
+  final List<Map<String, dynamic>> awayPlayers;
 
   @override
   Widget build(BuildContext context) {
-    if (homeTotals.isEmpty && awayTotals.isEmpty) {
+    const periodRows = [
+      _PeriodScoreRow(label: 'Q1', homeValue: '', awayValue: ''),
+      _PeriodScoreRow(label: 'Q2', homeValue: '', awayValue: ''),
+      _PeriodScoreRow(label: 'Q3', homeValue: '', awayValue: ''),
+      _PeriodScoreRow(label: 'Q4', homeValue: '', awayValue: ''),
+      _PeriodScoreRow(
+        label: 'Total',
+        homeValue: '',
+        awayValue: '',
+        isTotal: true,
+      ),
+    ];
+    final topScorers = _buildTopScorers(
+      homePlayers: homePlayers,
+      awayPlayers: awayPlayers,
+      homeTeamName: titleHome,
+      awayTeamName: titleAway,
+    );
+    final statRows = _buildStatRows(homeTotals, awayTotals);
+
+    if (topScorers.isEmpty && statRows.isEmpty) {
       return ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          _InfoHeroCard(
+            scheme: scheme,
+            titleHome: titleHome,
+            titleAway: titleAway,
+          ),
+          const SizedBox(height: 20),
+          _SectionHeading('Score by quarter', scheme),
+          const SizedBox(height: 10),
+          _QuarterScoreTable(
+            scheme: scheme,
+            titleHome: titleHome,
+            titleAway: titleAway,
+            rows: periodRows,
+          ),
+          const SizedBox(height: 24),
           Text(
-            'Team box score is not available for this game yet (totals appear after the match is synced).',
+            'Game info will appear here as soon as the stats feed is synced.',
             textAlign: TextAlign.center,
             style: TextStyle(color: scheme.onSurfaceVariant, height: 1.4),
           ),
@@ -605,115 +648,1436 @@ class _TeamTotalsTab extends StatelessWidget {
       );
     }
 
-    final keys = _orderedStatKeys(homeTotals, awayTotals);
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        _SectionHeading('Team totals', scheme),
-        const SizedBox(height: 10),
-        // Ghost border per Stitch design (outlineVariant at low opacity)
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Table(
-              columnWidths: const {
-                0: FlexColumnWidth(1.1),
-                1: FlexColumnWidth(1),
-                2: FlexColumnWidth(1),
-              },
-              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-              children: [
-                TableRow(
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest,
-                  ),
-                  children: [
-                    _cellHeader('Stat', scheme, align: TextAlign.left),
-                    _cellHeader(titleHome.toUpperCase(), scheme, align: TextAlign.right),
-                    _cellHeader(titleAway.toUpperCase(), scheme, align: TextAlign.right),
-                  ],
-                ),
-                for (var i = 0; i < keys.length; i++)
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: i.isOdd ? scheme.surfaceContainer.withValues(alpha: 0.5) : null,
-                    ),
-                    children: [
-                      _cellStat(keys[i], scheme),
-                      _cellVal(homeTotals[keys[i]] ?? '—', scheme),
-                      _cellVal(awayTotals[keys[i]] ?? '—', scheme),
-                    ],
-                  ),
-              ],
-            ),
-          ),
+        _InfoHeroCard(
+          scheme: scheme,
+          titleHome: titleHome,
+          titleAway: titleAway,
         ),
+        const SizedBox(height: 20),
+        _SectionHeading('Score by quarter', scheme),
+        const SizedBox(height: 10),
+        _QuarterScoreTable(
+          scheme: scheme,
+          titleHome: titleHome,
+          titleAway: titleAway,
+          rows: periodRows,
+        ),
+        const SizedBox(height: 24),
+        if (topScorers.isNotEmpty) ...[
+          _SectionHeading('Top leaders', scheme),
+          const SizedBox(height: 10),
+          _TopScorersStrip(scheme: scheme, scorers: topScorers),
+          const SizedBox(height: 24),
+        ],
+        if (statRows.isNotEmpty) ...[
+          _SectionHeading('Team stats', scheme),
+          const SizedBox(height: 10),
+          _TeamStatsComparisonCard(
+            scheme: scheme,
+            titleHome: titleHome,
+            titleAway: titleAway,
+            rows: statRows,
+          ),
+        ],
       ],
     );
   }
 
-  static List<String> _orderedStatKeys(Map<String, String> homeT, Map<String, String> awayT) {
-    final all = {...homeT.keys, ...awayT.keys}.where((k) => k != 'side').toList();
-    int rank(String k) {
-      final i = _GameBoxscoreScreenState._statOrder.indexWhere((p) => p.toLowerCase() == k.toLowerCase());
-      return i >= 0 ? i : 999;
-    }
-    all.sort((a, b) {
-      final ra = rank(a);
-      final rb = rank(b);
-      if (ra != rb) return ra.compareTo(rb);
-      return a.toLowerCase().compareTo(b.toLowerCase());
+  static List<_TopScorerRow> _buildTopScorers({
+    required List<Map<String, dynamic>> homePlayers,
+    required List<Map<String, dynamic>> awayPlayers,
+    required String homeTeamName,
+    required String awayTeamName,
+  }) {
+    final rows = <_TopScorerRow?>[
+      for (final player in homePlayers)
+        _topScorerFromPlayer(player, teamName: homeTeamName, isHome: true),
+      for (final player in awayPlayers)
+        _topScorerFromPlayer(player, teamName: awayTeamName, isHome: false),
+    ].whereType<_TopScorerRow>().toList();
+
+    rows.sort((a, b) {
+      final pointCompare = b.points.compareTo(a.points);
+      if (pointCompare != 0) return pointCompare;
+      final nameCompare = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      if (nameCompare != 0) return nameCompare;
+      return a.teamName.toLowerCase().compareTo(b.teamName.toLowerCase());
     });
-    return all;
+
+    final nonZero = rows.where((row) => row.points > 0).toList();
+    return (nonZero.isNotEmpty ? nonZero : rows).take(3).toList();
   }
 
-  Widget _cellHeader(String text, ColorScheme scheme, {required TextAlign align}) {
+  static _TopScorerRow? _topScorerFromPlayer(
+    Map<String, dynamic> player, {
+    required String teamName,
+    required bool isHome,
+  }) {
+    final name = (player['player_name'] ?? player['playerName'] ?? '')
+        .toString()
+        .trim();
+    if (name.isEmpty) return null;
+    final stats = _GameBoxscoreScreenState._parseTotals(player['stats']);
+    final points = _readInt(stats['Pts']) ?? 0;
+    final number = (player['player_number'] ?? player['playerNumber'] ?? '')
+        .toString()
+        .trim();
+    return _TopScorerRow(
+      name: name,
+      number: number,
+      teamName: teamName,
+      points: points,
+      isHome: isHome,
+    );
+  }
+
+  static List<_StatComparisonRow> _buildStatRows(
+    Map<String, String> homeT,
+    Map<String, String> awayT,
+  ) {
+    final rows = <_StatComparisonRow>[
+      _StatComparisonRow(
+        label: 'Points',
+        homeValue: homeT['Pts'] ?? '—',
+        awayValue: awayT['Pts'] ?? '—',
+      ),
+      _StatComparisonRow(
+        label: 'Field goals',
+        homeValue: _formatShootingLine(
+          homeT,
+          madeKey: 'FGM',
+          attemptsKey: 'FGA',
+          pctKey: 'FG%',
+        ),
+        awayValue: _formatShootingLine(
+          awayT,
+          madeKey: 'FGM',
+          attemptsKey: 'FGA',
+          pctKey: 'FG%',
+        ),
+      ),
+      _StatComparisonRow(
+        label: '2 points',
+        homeValue: _formatShootingLine(
+          homeT,
+          madeKey: '2PM',
+          attemptsKey: '2PA',
+          pctKey: '2P%',
+        ),
+        awayValue: _formatShootingLine(
+          awayT,
+          madeKey: '2PM',
+          attemptsKey: '2PA',
+          pctKey: '2P%',
+        ),
+      ),
+      _StatComparisonRow(
+        label: '3 points',
+        homeValue: _formatShootingLine(
+          homeT,
+          madeKey: '3PM',
+          attemptsKey: '3PA',
+          pctKey: '3P%',
+        ),
+        awayValue: _formatShootingLine(
+          awayT,
+          madeKey: '3PM',
+          attemptsKey: '3PA',
+          pctKey: '3P%',
+        ),
+      ),
+      _StatComparisonRow(
+        label: 'Free throws',
+        homeValue: _formatShootingLine(
+          homeT,
+          madeKey: 'FTM',
+          attemptsKey: 'FTA',
+          pctKey: 'FT%',
+        ),
+        awayValue: _formatShootingLine(
+          awayT,
+          madeKey: 'FTM',
+          attemptsKey: 'FTA',
+          pctKey: 'FT%',
+        ),
+      ),
+      _StatComparisonRow(
+        label: 'Rebounds',
+        homeValue: homeT['REB'] ?? '—',
+        awayValue: awayT['REB'] ?? '—',
+      ),
+      _StatComparisonRow(
+        label: 'Offensive',
+        homeValue: homeT['OFF'] ?? '—',
+        awayValue: awayT['OFF'] ?? '—',
+      ),
+      _StatComparisonRow(
+        label: 'Defensive',
+        homeValue: homeT['DEF'] ?? '—',
+        awayValue: awayT['DEF'] ?? '—',
+      ),
+      _StatComparisonRow(
+        label: 'Assists',
+        homeValue: homeT['AST'] ?? '—',
+        awayValue: awayT['AST'] ?? '—',
+      ),
+      _StatComparisonRow(
+        label: 'Steals',
+        homeValue: homeT['STL'] ?? '—',
+        awayValue: awayT['STL'] ?? '—',
+      ),
+      _StatComparisonRow(
+        label: 'Blocks',
+        homeValue: homeT['BLK'] ?? '—',
+        awayValue: awayT['BLK'] ?? '—',
+      ),
+      _StatComparisonRow(
+        label: 'Turnovers',
+        homeValue: homeT['TO'] ?? '—',
+        awayValue: awayT['TO'] ?? '—',
+      ),
+      _StatComparisonRow(
+        label: 'Fouls',
+        homeValue: homeT['PF'] ?? '—',
+        awayValue: awayT['PF'] ?? '—',
+      ),
+    ];
+    return rows
+        .where((row) => row.homeValue != '—' || row.awayValue != '—')
+        .toList();
+  }
+
+  static String _formatShootingLine(
+    Map<String, String> totals, {
+    required String madeKey,
+    required String attemptsKey,
+    required String pctKey,
+  }) {
+    final made = totals[madeKey];
+    final attempts = totals[attemptsKey];
+    final pct = totals[pctKey];
+
+    final hasMakes = made != null && made.isNotEmpty;
+    final hasAttempts = attempts != null && attempts.isNotEmpty;
+    final hasPct = pct != null && pct.isNotEmpty;
+
+    if (!hasMakes && !hasAttempts && !hasPct) return '—';
+
+    final buffer = StringBuffer();
+    if (hasMakes || hasAttempts) {
+      buffer.write('${made ?? '0'}/${attempts ?? '0'}');
+    }
+    if (hasPct) {
+      if (buffer.isNotEmpty) buffer.write('  ');
+      buffer.write('(${_percentLabel(pct)})');
+    }
+    return buffer.toString();
+  }
+
+  static String _percentLabel(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty || value == '—') return '—';
+    return value.endsWith('%') ? value : '$value%';
+  }
+
+  static int? _readInt(String? raw) {
+    if (raw == null) return null;
+    final cleaned = raw.trim();
+    if (cleaned.isEmpty) return null;
+    return int.tryParse(cleaned) ??
+        int.tryParse(cleaned.split('.').first) ??
+        int.tryParse(cleaned.replaceAll(RegExp(r'[^0-9-]'), ''));
+  }
+}
+
+class _InfoHeroCard extends StatelessWidget {
+  const _InfoHeroCard({
+    required this.scheme,
+    required this.titleHome,
+    required this.titleAway,
+  });
+
+  final ColorScheme scheme;
+  final String titleHome;
+  final String titleAway;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [scheme.surfaceContainerHighest, scheme.surfaceContainerLow],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: scheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'GAME INFO',
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '$titleHome vs $titleAway',
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+              letterSpacing: -0.4,
+              color: scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Quarter scoring will appear here once those values are available in the database. Team leaders and totals stay visible below.',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              height: 1.4,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuarterScoreTable extends StatelessWidget {
+  const _QuarterScoreTable({
+    required this.scheme,
+    required this.titleHome,
+    required this.titleAway,
+    required this.rows,
+  });
+
+  final ColorScheme scheme;
+  final String titleHome;
+  final String titleAway;
+  final List<_PeriodScoreRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            scheme.surfaceContainerLow,
+            scheme.surfaceContainer.withValues(alpha: 0.85),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Table(
+          columnWidths: const {0: FlexColumnWidth(1.8)},
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: [
+            TableRow(
+              decoration: BoxDecoration(color: scheme.surfaceContainerHighest),
+              children: [
+                _quarterHeaderCell(titleHome, scheme, align: TextAlign.left),
+                for (final row in rows)
+                  _quarterHeaderCell(
+                    row.label,
+                    scheme,
+                    align: TextAlign.center,
+                  ),
+              ],
+            ),
+            _quarterScoreRow(
+              scheme: scheme,
+              teamName: titleHome,
+              values: [for (final row in rows) row.homeValue],
+              emphasizeTotal: rows.map((row) => row.isTotal).toList(),
+              striped: false,
+            ),
+            _quarterScoreRow(
+              scheme: scheme,
+              teamName: titleAway,
+              values: [for (final row in rows) row.awayValue],
+              emphasizeTotal: rows.map((row) => row.isTotal).toList(),
+              striped: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _quarterHeaderCell(
+    String text,
+    ColorScheme scheme, {
+    required TextAlign align,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Text(
-        text,
+        text.toUpperCase(),
         textAlign: align,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontFamily: 'Lexend',
           fontWeight: FontWeight.w800,
           fontSize: 11,
-          letterSpacing: 0.4,
+          letterSpacing: 0.5,
           color: scheme.onSurfaceVariant,
         ),
       ),
     );
   }
 
-  Widget _cellStat(String text, ColorScheme scheme) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w600,
-          fontSize: 13,
-          color: scheme.onSurface,
+  static TableRow _quarterScoreRow({
+    required ColorScheme scheme,
+    required String teamName,
+    required List<String> values,
+    required List<bool> emphasizeTotal,
+    required bool striped,
+  }) {
+    return TableRow(
+      decoration: BoxDecoration(
+        color: striped ? scheme.surfaceContainer.withValues(alpha: 0.45) : null,
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Text(
+            teamName.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+              color: scheme.onSurface,
+            ),
+          ),
         ),
+        for (var index = 0; index < values.length; index++)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            child: Text(
+              values[index].isEmpty ? '—' : values[index],
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Lexend',
+                fontWeight: emphasizeTotal[index]
+                    ? FontWeight.w900
+                    : FontWeight.w700,
+                fontSize: emphasizeTotal[index] ? 14 : 13,
+                color: scheme.onSurface,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _TopScorersStrip extends StatelessWidget {
+  const _TopScorersStrip({required this.scheme, required this.scorers});
+
+  final ColorScheme scheme;
+  final List<_TopScorerRow> scorers;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var index = 0; index < scorers.length; index++) ...[
+          Expanded(
+            child: _TopScorerCard(scheme: scheme, scorer: scorers[index]),
+          ),
+          if (index != scorers.length - 1) const SizedBox(width: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _TopScorerCard extends StatelessWidget {
+  const _TopScorerCard({required this.scheme, required this.scorer});
+
+  final ColorScheme scheme;
+  final _TopScorerRow scorer;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = scorer.isHome ? scheme.primary : scheme.secondary;
+    final avatarLabel = scorer.number.isNotEmpty
+        ? '#${scorer.number}'
+        : _initials(scorer.name);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Align(
+            alignment: Alignment.center,
+            child: Container(
+              width: 34,
+              height: 4,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              avatarLabel,
+              style: TextStyle(
+                fontFamily: 'Lexend',
+                fontWeight: FontWeight.w800,
+                fontSize: scorer.number.isNotEmpty ? 13 : 15,
+                color: scheme.onSurface,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            scorer.name,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              height: 1.2,
+              color: scheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            scorer.teamName,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+              height: 1.25,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${scorer.points}',
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w900,
+              fontSize: 24,
+              letterSpacing: -0.8,
+              color: accent,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          Text(
+            'PTS',
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w800,
+              fontSize: 10,
+              letterSpacing: 0.9,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _cellVal(String text, ColorScheme scheme) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  static String _initials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) {
+      final token = parts.first.replaceAll('.', '');
+      return token.substring(0, token.length.clamp(0, 2)).toUpperCase();
+    }
+    final first = parts.first.replaceAll('.', '');
+    final last = parts.last.replaceAll('.', '');
+    final firstChar = first.isNotEmpty ? first[0] : '';
+    final lastChar = last.isNotEmpty ? last[0] : '';
+    final label = '$firstChar$lastChar'.trim();
+    return label.isEmpty ? '?' : label.toUpperCase();
+  }
+}
+
+class _TeamStatsComparisonCard extends StatelessWidget {
+  const _TeamStatsComparisonCard({
+    required this.scheme,
+    required this.titleHome,
+    required this.titleAway,
+    required this.rows,
+  });
+
+  final ColorScheme scheme;
+  final String titleHome;
+  final String titleAway;
+  final List<_StatComparisonRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(14),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    titleHome.toUpperCase(),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'TEAM STATS',
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                      letterSpacing: 0.9,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    titleAway.toUpperCase(),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (var index = 0; index < rows.length; index++)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              color: index.isOdd
+                  ? scheme.surfaceContainer.withValues(alpha: 0.4)
+                  : null,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      rows[index].homeValue,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: scheme.onSurface,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 124,
+                    child: Text(
+                      rows[index].label,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      rows[index].awayValue,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: scheme.onSurface,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PeriodScoreRow {
+  const _PeriodScoreRow({
+    required this.label,
+    required this.homeValue,
+    required this.awayValue,
+    this.isTotal = false,
+  });
+
+  final String label;
+  final String homeValue;
+  final String awayValue;
+  final bool isTotal;
+}
+
+class _TopScorerRow {
+  const _TopScorerRow({
+    required this.name,
+    required this.number,
+    required this.teamName,
+    required this.points,
+    required this.isHome,
+  });
+
+  final String name;
+  final String number;
+  final String teamName;
+  final int points;
+  final bool isHome;
+}
+
+class _StatComparisonRow {
+  const _StatComparisonRow({
+    required this.label,
+    required this.homeValue,
+    required this.awayValue,
+  });
+
+  final String label;
+  final String homeValue;
+  final String awayValue;
+}
+
+// ---------------------------------------------------------------------------
+// Players Tab
+// ---------------------------------------------------------------------------
+
+class _PlayersTab extends StatefulWidget {
+  const _PlayersTab({
+    required this.scheme,
+    required this.titleHome,
+    required this.titleAway,
+    this.homeLogo,
+    this.awayLogo,
+    required this.homePlayers,
+    required this.awayPlayers,
+  });
+
+  final ColorScheme scheme;
+  final String titleHome;
+  final String titleAway;
+  final String? homeLogo;
+  final String? awayLogo;
+  final List<Map<String, dynamic>> homePlayers;
+  final List<Map<String, dynamic>> awayPlayers;
+
+  @override
+  State<_PlayersTab> createState() => _PlayersTabState();
+}
+
+class _PlayersTabState extends State<_PlayersTab> {
+  bool _showHome = true;
+
+  static int _minsToSeconds(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty || value == '—') return -1;
+    final parts = value.split(':');
+    if (parts.length == 2) {
+      final mins = int.tryParse(parts[0]) ?? 0;
+      final secs = int.tryParse(parts[1]) ?? 0;
+      return mins * 60 + secs;
+    }
+    if (parts.length == 3) {
+      final hours = int.tryParse(parts[0]) ?? 0;
+      final mins = int.tryParse(parts[1]) ?? 0;
+      final secs = int.tryParse(parts[2]) ?? 0;
+      return hours * 3600 + mins * 60 + secs;
+    }
+    return int.tryParse(value) ?? -1;
+  }
+
+  static List<Map<String, dynamic>> _sortedPlayers(
+    List<Map<String, dynamic>> players,
+  ) {
+    final list = List<Map<String, dynamic>>.from(players);
+    list.sort((a, b) {
+      final aStats = _GameBoxscoreScreenState._parseTotals(a['stats']);
+      final bStats = _GameBoxscoreScreenState._parseTotals(b['stats']);
+      final minsCompare = _minsToSeconds(
+        bStats['Mins'] ?? bStats['MIN'] ?? '—',
+      ).compareTo(_minsToSeconds(aStats['Mins'] ?? aStats['MIN'] ?? '—'));
+      if (minsCompare != 0) return minsCompare;
+      final bPts = int.tryParse((bStats['Pts'] ?? '0').split('.').first) ?? 0;
+      final aPts = int.tryParse((aStats['Pts'] ?? '0').split('.').first) ?? 0;
+      if (bPts != aPts) return bPts.compareTo(aPts);
+      final aName = (a['player_name'] ?? '').toString().toLowerCase();
+      final bName = (b['player_name'] ?? '').toString().toLowerCase();
+      return aName.compareTo(bName);
+    });
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.homePlayers.isEmpty && widget.awayPlayers.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text(
+            'Box score data is not available yet. It appears after the match is synced.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: widget.scheme.onSurfaceVariant,
+              height: 1.4,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final visiblePlayers = _showHome
+        ? _sortedPlayers(widget.homePlayers)
+        : _sortedPlayers(widget.awayPlayers);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _SectionHeading('BOX SCORE', widget.scheme),
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: _BoxScoreTeamPicker(
+            scheme: widget.scheme,
+            homeTitle: widget.titleHome,
+            awayTitle: widget.titleAway,
+            homeLogo: widget.homeLogo,
+            awayLogo: widget.awayLogo,
+            showHome: _showHome,
+            onSelected: (showHome) => setState(() => _showHome = showHome),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 0),
+          child: _BoxScoreTeamSection(
+            scheme: widget.scheme,
+            title: _showHome ? widget.titleHome : widget.titleAway,
+            players: visiblePlayers,
+            isHome: _showHome,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BoxScoreTeamSection extends StatelessWidget {
+  const _BoxScoreTeamSection({
+    required this.scheme,
+    required this.title,
+    required this.players,
+    required this.isHome,
+  });
+
+  final ColorScheme scheme;
+  final String title;
+  final List<Map<String, dynamic>> players;
+  final bool isHome;
+
+  @override
+  Widget build(BuildContext context) {
+    if (players.isEmpty) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Text(
+            'No player lines for this side.',
+            style: TextStyle(
+              color: scheme.onSurfaceVariant,
+              fontSize: 13,
+              height: 1.35,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    (isHome ? scheme.primary : scheme.secondary).withValues(
+                      alpha: 0.12,
+                    ),
+                    scheme.surfaceContainerHighest,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: isHome ? scheme.primary : scheme.secondary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            fontFamily: 'Lexend',
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const _BoxScoreHeaderRow(),
+                ],
+              ),
+            ),
+            for (var index = 0; index < players.length; index++) ...[
+              if (index != 0)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: scheme.outlineVariant.withValues(alpha: 0.3),
+                ),
+              _BoxScorePlayerTile(scheme: scheme, player: players[index]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BoxScoreTeamPicker extends StatelessWidget {
+  const _BoxScoreTeamPicker({
+    required this.scheme,
+    required this.homeTitle,
+    required this.awayTitle,
+    required this.homeLogo,
+    required this.awayLogo,
+    required this.showHome,
+    required this.onSelected,
+  });
+
+  final ColorScheme scheme;
+  final String homeTitle;
+  final String awayTitle;
+  final String? homeLogo;
+  final String? awayLogo;
+  final bool showHome;
+  final ValueChanged<bool> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _TeamPickerChip(
+              scheme: scheme,
+              label: homeTitle,
+              logoUrl: homeLogo,
+              selected: showHome,
+              onTap: () => onSelected(true),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _TeamPickerChip(
+              scheme: scheme,
+              label: awayTitle,
+              logoUrl: awayLogo,
+              selected: !showHome,
+              onTap: () => onSelected(false),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamPickerChip extends StatelessWidget {
+  const _TeamPickerChip({
+    required this.scheme,
+    required this.label,
+    required this.logoUrl,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ColorScheme scheme;
+  final String label;
+  final String? logoUrl;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: selected ? scheme.surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              _TeamPickerLogo(scheme: scheme, label: label, logoUrl: logoUrl),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Lexend',
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                    fontSize: 13,
+                    color: selected
+                        ? scheme.onSurface
+                        : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamPickerLogo extends StatelessWidget {
+  const _TeamPickerLogo({
+    required this.scheme,
+    required this.label,
+    required this.logoUrl,
+  });
+
+  final ColorScheme scheme;
+  final String label;
+  final String? logoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLogo = logoUrl != null && logoUrl!.isNotEmpty;
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        shape: BoxShape.circle,
+      ),
+      padding: const EdgeInsets.all(2),
+      child: hasLogo
+          ? Image.network(
+              logoUrl!,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) =>
+                  _TeamPickerLogoFallback(label: label, scheme: scheme),
+            )
+          : _TeamPickerLogoFallback(label: label, scheme: scheme),
+    );
+  }
+}
+
+class _TeamPickerLogoFallback extends StatelessWidget {
+  const _TeamPickerLogoFallback({required this.label, required this.scheme});
+
+  final String label;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = label
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    final initials = parts.length >= 2
+        ? '${parts.first[0]}${parts.last[0]}'
+        : label.isNotEmpty
+        ? label.substring(0, label.length.clamp(0, 2))
+        : '?';
+    return Center(
       child: Text(
-        text,
-        textAlign: TextAlign.right,
+        initials.toUpperCase(),
+        style: TextStyle(
+          fontFamily: 'Lexend',
+          fontWeight: FontWeight.w800,
+          fontSize: 9,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+class _BoxScoreHeaderRow extends StatelessWidget {
+  const _BoxScoreHeaderRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final headerStyle = TextStyle(
+      fontFamily: 'Lexend',
+      fontWeight: FontWeight.w800,
+      fontSize: 10,
+      letterSpacing: 0.7,
+      color: scheme.onSurfaceVariant,
+    );
+
+    return Row(
+      children: [
+        Expanded(flex: 7, child: Text('PLAYER', style: headerStyle)),
+        _CompactHeaderCell(label: 'MIN', style: headerStyle),
+        _CompactHeaderCell(label: 'PTS', style: headerStyle),
+        _CompactHeaderCell(label: 'REB', style: headerStyle),
+        _CompactHeaderCell(label: 'AST', style: headerStyle),
+        const SizedBox(width: 28),
+      ],
+    );
+  }
+}
+
+class _CompactHeaderCell extends StatelessWidget {
+  const _CompactHeaderCell({required this.label, required this.style});
+
+  final String label;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      child: Text(label, textAlign: TextAlign.center, style: style),
+    );
+  }
+}
+
+class _BoxScorePlayerTile extends StatefulWidget {
+  const _BoxScorePlayerTile({required this.scheme, required this.player});
+
+  final ColorScheme scheme;
+  final Map<String, dynamic> player;
+
+  @override
+  State<_BoxScorePlayerTile> createState() => _BoxScorePlayerTileState();
+}
+
+class _BoxScorePlayerTileState extends State<_BoxScorePlayerTile> {
+  bool _expanded = false;
+
+  static Map<String, String> _stats(Map<String, dynamic> player) {
+    return _GameBoxscoreScreenState._parseTotals(player['stats']);
+  }
+
+  static String _playerName(Map<String, dynamic> player) {
+    return (player['player_name'] ?? player['playerName'] ?? '')
+        .toString()
+        .trim();
+  }
+
+  static String _playerNumber(Map<String, dynamic> player) {
+    return (player['player_number'] ?? player['playerNumber'] ?? '')
+        .toString()
+        .trim();
+  }
+
+  static String? _playerImageUrl(Map<String, dynamic> player) {
+    final value =
+        player['picture_url'] ??
+        player['pictureUrl'] ??
+        player['player_image_url'] ??
+        player['playerImageUrl'];
+    final url = value?.toString().trim() ?? '';
+    return url.isEmpty ? null : url;
+  }
+
+  static String _statValue(Map<String, String> stats, String key) {
+    for (final entry in stats.entries) {
+      if (entry.key.toLowerCase() == key.toLowerCase()) return entry.value;
+    }
+    return '—';
+  }
+
+  static String _percentLabel(String raw) {
+    if (raw == '—') return raw;
+    return raw.endsWith('%') ? raw : '$raw%';
+  }
+
+  static String _effValue(Map<String, String> stats) {
+    final pts = int.tryParse(_statValue(stats, 'Pts')) ?? 0;
+    final off = int.tryParse(_statValue(stats, 'OFF')) ?? 0;
+    final def = int.tryParse(_statValue(stats, 'DEF')) ?? 0;
+    final ast = int.tryParse(_statValue(stats, 'AST')) ?? 0;
+    final stl = int.tryParse(_statValue(stats, 'STL')) ?? 0;
+    final blk = int.tryParse(_statValue(stats, 'BLK')) ?? 0;
+    final fgm = int.tryParse(_statValue(stats, 'FGM')) ?? 0;
+    final fga = int.tryParse(_statValue(stats, 'FGA')) ?? 0;
+    final ftm = int.tryParse(_statValue(stats, 'FTM')) ?? 0;
+    final fta = int.tryParse(_statValue(stats, 'FTA')) ?? 0;
+    final turnovers = int.tryParse(_statValue(stats, 'TO')) ?? 0;
+    final misses = (fga - fgm) + (fta - ftm);
+    return '${pts + off + def + ast + stl + blk - turnovers - misses}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = _stats(widget.player);
+    final name = _playerName(widget.player);
+    final number = _playerNumber(widget.player);
+
+    return Theme(
+      data: Theme.of(context).copyWith(
+        dividerColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+      ),
+      child: ExpansionTile(
+        onExpansionChanged: (value) => setState(() => _expanded = value),
+        tilePadding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        iconColor: const Color(0xFFF2C94C),
+        collapsedIconColor: const Color(0xFFF2C94C),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        trailing: Icon(
+          _expanded
+              ? Icons.keyboard_arrow_up_rounded
+              : Icons.keyboard_arrow_down_rounded,
+          color: const Color(0xFFF2C94C),
+          size: 30,
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              flex: 7,
+              child: Row(
+                children: [
+                  _PlayerMiniAvatar(
+                    scheme: widget.scheme,
+                    name: name,
+                    number: number,
+                    imageUrl: _playerImageUrl(widget.player),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      name.isEmpty ? '—' : name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        height: 1.2,
+                        color: widget.scheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _CompactStatValue(value: _statValue(stats, 'Mins')),
+            _CompactStatValue(value: _statValue(stats, 'Pts')),
+            _CompactStatValue(value: _statValue(stats, 'REB')),
+            _CompactStatValue(value: _statValue(stats, 'AST')),
+          ],
+        ),
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 6),
+            decoration: BoxDecoration(
+              color: widget.scheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: widget.scheme.outlineVariant.withValues(alpha: 0.45),
+                ),
+              ),
+            ),
+            child: Column(
+              children: [
+                _ExpandedStatPanel(
+                  scheme: widget.scheme,
+                  pts: _statValue(stats, 'Pts'),
+                  off: _statValue(stats, 'OFF'),
+                  def: _statValue(stats, 'DEF'),
+                  reb: _statValue(stats, 'REB'),
+                  ast: _statValue(stats, 'AST'),
+                  stl: _statValue(stats, 'STL'),
+                  blk: _statValue(stats, 'BLK'),
+                  turnovers: _statValue(stats, 'TO'),
+                  pf: _statValue(stats, 'PF'),
+                  twoMadeAttempt:
+                      _statValue(stats, '2PM') == '—' &&
+                          _statValue(stats, '2PA') == '—'
+                      ? '—'
+                      : '${_statValue(stats, '2PM')}/${_statValue(stats, '2PA')}',
+                  twoPct: _percentLabel(_statValue(stats, '2P%')),
+                  threeMadeAttempt:
+                      _statValue(stats, '3PM') == '—' &&
+                          _statValue(stats, '3PA') == '—'
+                      ? '—'
+                      : '${_statValue(stats, '3PM')}/${_statValue(stats, '3PA')}',
+                  threePct: _percentLabel(_statValue(stats, '3P%')),
+                  ftMadeAttempt:
+                      _statValue(stats, 'FTM') == '—' &&
+                          _statValue(stats, 'FTA') == '—'
+                      ? '—'
+                      : '${_statValue(stats, 'FTM')}/${_statValue(stats, 'FTA')}',
+                  ftPct: _percentLabel(_statValue(stats, 'FT%')),
+                  eff: _effValue(stats),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactStatValue extends StatelessWidget {
+  const _CompactStatValue({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 40,
+      child: Text(
+        value,
+        textAlign: TextAlign.center,
         style: TextStyle(
           fontFamily: 'Lexend',
           fontWeight: FontWeight.w700,
-          fontSize: 13,
+          fontSize: 12,
           color: scheme.onSurface,
           fontFeatures: const [FontFeature.tabularFigures()],
         ),
@@ -722,207 +2086,349 @@ class _TeamTotalsTab extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Players Tab
-// ---------------------------------------------------------------------------
-
-class _PlayersTab extends StatelessWidget {
-  const _PlayersTab({
+class _PlayerMiniAvatar extends StatelessWidget {
+  const _PlayerMiniAvatar({
     required this.scheme,
-    required this.titleHome,
-    required this.titleAway,
-    required this.homePlayers,
-    required this.awayPlayers,
+    required this.name,
+    required this.number,
+    required this.imageUrl,
   });
 
   final ColorScheme scheme;
-  final String titleHome;
-  final String titleAway;
-  final List<Map<String, dynamic>> homePlayers;
-  final List<Map<String, dynamic>> awayPlayers;
+  final String name;
+  final String number;
+  final String? imageUrl;
+
+  static String _initials(String raw) {
+    final parts = raw
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) {
+      final token = parts.first.replaceAll('.', '');
+      return token.substring(0, token.length.clamp(0, 2)).toUpperCase();
+    }
+    return '${parts.first.replaceAll('.', '')[0]}${parts.last.replaceAll('.', '')[0]}'
+        .toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (homePlayers.isEmpty && awayPlayers.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Text(
-            'Player box scores are not available yet. They appear after the match is synced.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: scheme.onSurfaceVariant, height: 1.4),
-          ),
-        ],
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        _SectionHeading(titleHome.toUpperCase(), scheme),
-        const SizedBox(height: 10),
-        _TeamPlayerTable(scheme: scheme, players: homePlayers),
-        const SizedBox(height: 28),
-        _SectionHeading(titleAway.toUpperCase(), scheme),
-        const SizedBox(height: 10),
-        _TeamPlayerTable(scheme: scheme, players: awayPlayers),
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            shape: BoxShape.circle,
+          ),
+          child: ClipOval(
+            child: imageUrl != null
+                ? Image.network(
+                    imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _PlayerMiniAvatarFallback(
+                      initials: _initials(name),
+                      scheme: scheme,
+                    ),
+                  )
+                : _PlayerMiniAvatarFallback(
+                    initials: _initials(name),
+                    scheme: scheme,
+                  ),
+          ),
+        ),
+        if (number.isNotEmpty)
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: scheme.primary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                number,
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 9,
+                  color: scheme.onPrimary,
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
 }
 
-/// One team: header row + one row per player; stats are columns (scroll horizontally).
-class _TeamPlayerTable extends StatelessWidget {
-  const _TeamPlayerTable({required this.scheme, required this.players});
+class _PlayerMiniAvatarFallback extends StatelessWidget {
+  const _PlayerMiniAvatarFallback({
+    required this.initials,
+    required this.scheme,
+  });
 
+  final String initials;
   final ColorScheme scheme;
-  final List<Map<String, dynamic>> players;
-
-  static const _playerColW = 132.0;
-  static const _statColW = 46.0;
-
-  static String _playerLabel(Map<String, dynamic> row) {
-    final name = (row['player_name'] ?? row['playerName'] ?? '').toString().trim();
-    final num = (row['player_number'] ?? row['playerNumber'] ?? '').toString().trim();
-    if (num.isNotEmpty && name.isNotEmpty) return '#$num $name';
-    if (name.isNotEmpty) return name;
-    return '—';
-  }
-
-  static String _statCell(Map<String, String> stats, String col) {
-    for (final e in stats.entries) {
-      if (e.key.toLowerCase() == col.toLowerCase()) return e.value;
-    }
-    return '—';
-  }
 
   @override
   Widget build(BuildContext context) {
-    final columns = _GameBoxscoreScreenState._playerStatOrder;
-
-    if (players.isEmpty) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(12),
+    return Center(
+      child: Text(
+        initials,
+        style: TextStyle(
+          fontFamily: 'Lexend',
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          color: scheme.onSurface,
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Text(
-            'No player lines for this side.',
-            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13, height: 1.35),
-          ),
-        ),
-      );
-    }
-
-    final columnWidths = <int, TableColumnWidth>{
-      0: const FixedColumnWidth(_playerColW),
-    };
-    for (var i = 0; i < columns.length; i++) {
-      columnWidths[i + 1] = const FixedColumnWidth(_statColW);
-    }
-
-    final headerStyle = TextStyle(
-      fontFamily: 'Lexend',
-      fontWeight: FontWeight.w800,
-      fontSize: 10,
-      letterSpacing: 0.2,
-      height: 1.15,
-      color: scheme.onSurfaceVariant,
+      ),
     );
-    final playerStyle = TextStyle(
-      fontFamily: 'Lexend',
-      fontWeight: FontWeight.w700,
-      fontSize: 12,
-      height: 1.2,
-      color: scheme.onSurface,
-    );
-    final statStyle = TextStyle(
-      fontFamily: 'Lexend',
-      fontWeight: FontWeight.w700,
-      fontSize: 11,
-      color: scheme.onSurface,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
+  }
+}
 
-    final table = Table(
-      columnWidths: columnWidths,
-      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+class _ExpandedStatPanel extends StatelessWidget {
+  const _ExpandedStatPanel({
+    required this.scheme,
+    required this.pts,
+    required this.off,
+    required this.def,
+    required this.reb,
+    required this.ast,
+    required this.stl,
+    required this.blk,
+    required this.turnovers,
+    required this.pf,
+    required this.twoMadeAttempt,
+    required this.twoPct,
+    required this.threeMadeAttempt,
+    required this.threePct,
+    required this.ftMadeAttempt,
+    required this.ftPct,
+    required this.eff,
+  });
+
+  final ColorScheme scheme;
+  final String pts;
+  final String off;
+  final String def;
+  final String reb;
+  final String ast;
+  final String stl;
+  final String blk;
+  final String turnovers;
+  final String pf;
+  final String twoMadeAttempt;
+  final String twoPct;
+  final String threeMadeAttempt;
+  final String threePct;
+  final String ftMadeAttempt;
+  final String ftPct;
+  final String eff;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
       children: [
-        TableRow(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-          ),
+        Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
-              child: Text('PLAYER', style: headerStyle),
+            const Expanded(child: SizedBox()),
+            Expanded(
+              flex: 3,
+              child: _PanelGroupLabel(label: 'REB', scheme: scheme),
             ),
-            for (final c in columns)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                child: Text(
-                  c,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: headerStyle,
-                ),
-              ),
+            const Expanded(flex: 5, child: SizedBox()),
           ],
         ),
-        for (var r = 0; r < players.length; r++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: r.isOdd ? scheme.surfaceContainer.withValues(alpha: 0.5) : null,
+        Table(
+          border: TableBorder.symmetric(
+            inside: BorderSide(
+              color: scheme.outlineVariant.withValues(alpha: 0.28),
             ),
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                child: Text(
-                  _playerLabel(players[r]),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: playerStyle,
-                ),
-              ),
-              for (final c in columns)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                  child: Text(
-                    _statCell(_GameBoxscoreScreenState._parseTotals(players[r]['stats']), c),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: statStyle,
-                  ),
-                ),
-            ],
           ),
+          columnWidths: const {
+            0: FlexColumnWidth(),
+            1: FlexColumnWidth(),
+            2: FlexColumnWidth(),
+            3: FlexColumnWidth(),
+            4: FlexColumnWidth(),
+            5: FlexColumnWidth(),
+            6: FlexColumnWidth(),
+            7: FlexColumnWidth(),
+            8: FlexColumnWidth(),
+          },
+          children: [
+            TableRow(
+              decoration: BoxDecoration(color: scheme.surfaceContainerHighest),
+              children: [
+                _PanelHeaderCell(label: 'PTS', scheme: scheme),
+                _PanelHeaderCell(label: 'OFF', scheme: scheme),
+                _PanelHeaderCell(label: 'DEF', scheme: scheme),
+                _PanelHeaderCell(label: 'T', scheme: scheme),
+                _PanelHeaderCell(label: 'AST', scheme: scheme),
+                _PanelHeaderCell(label: 'STL', scheme: scheme),
+                _PanelHeaderCell(label: 'BLK', scheme: scheme),
+                _PanelHeaderCell(label: 'TO', scheme: scheme),
+                _PanelHeaderCell(label: 'PF', scheme: scheme),
+              ],
+            ),
+            TableRow(
+              children: [
+                _PanelValueCell(value: pts, scheme: scheme),
+                _PanelValueCell(value: off, scheme: scheme),
+                _PanelValueCell(value: def, scheme: scheme),
+                _PanelValueCell(value: reb, scheme: scheme),
+                _PanelValueCell(value: ast, scheme: scheme),
+                _PanelValueCell(value: stl, scheme: scheme),
+                _PanelValueCell(value: blk, scheme: scheme),
+                _PanelValueCell(value: turnovers, scheme: scheme),
+                _PanelValueCell(value: pf, scheme: scheme),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: _PanelGroupLabel(label: '2PTS', scheme: scheme),
+            ),
+            Expanded(
+              flex: 2,
+              child: _PanelGroupLabel(label: '3PTS', scheme: scheme),
+            ),
+            Expanded(
+              flex: 2,
+              child: _PanelGroupLabel(label: 'FT', scheme: scheme),
+            ),
+            Expanded(
+              child: _PanelGroupLabel(label: '', scheme: scheme),
+            ),
+          ],
+        ),
+        Table(
+          border: TableBorder.symmetric(
+            inside: BorderSide(
+              color: scheme.outlineVariant.withValues(alpha: 0.28),
+            ),
+          ),
+          columnWidths: const {
+            0: FlexColumnWidth(),
+            1: FlexColumnWidth(),
+            2: FlexColumnWidth(),
+            3: FlexColumnWidth(),
+            4: FlexColumnWidth(),
+            5: FlexColumnWidth(),
+            6: FlexColumnWidth(),
+          },
+          children: [
+            TableRow(
+              decoration: BoxDecoration(color: scheme.surfaceContainerHighest),
+              children: [
+                _PanelHeaderCell(label: 'M/A', scheme: scheme),
+                _PanelHeaderCell(label: '%', scheme: scheme),
+                _PanelHeaderCell(label: 'M/A', scheme: scheme),
+                _PanelHeaderCell(label: '%', scheme: scheme),
+                _PanelHeaderCell(label: 'M/A', scheme: scheme),
+                _PanelHeaderCell(label: '%', scheme: scheme),
+                _PanelHeaderCell(label: 'EFF', scheme: scheme),
+              ],
+            ),
+            TableRow(
+              children: [
+                _PanelValueCell(value: twoMadeAttempt, scheme: scheme),
+                _PanelValueCell(value: twoPct, scheme: scheme),
+                _PanelValueCell(value: threeMadeAttempt, scheme: scheme),
+                _PanelValueCell(value: threePct, scheme: scheme),
+                _PanelValueCell(value: ftMadeAttempt, scheme: scheme),
+                _PanelValueCell(value: ftPct, scheme: scheme),
+                _PanelValueCell(value: eff, scheme: scheme),
+              ],
+            ),
+          ],
+        ),
       ],
     );
+  }
+}
 
-    final tableWidth = _playerColW + columns.length * _statColW;
+class _PanelGroupLabel extends StatelessWidget {
+  const _PanelGroupLabel({required this.label, required this.scheme});
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
+  final String label;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 26,
+      alignment: Alignment.center,
+      color: scheme.surfaceContainerHighest,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Lexend',
+          fontWeight: FontWeight.w800,
+          fontSize: 10,
+          letterSpacing: 0.4,
+          color: scheme.onSurface,
+        ),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final maxW = constraints.maxWidth;
-            if (maxW.isFinite && tableWidth <= maxW) {
-              return table;
-            }
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(width: tableWidth, child: table),
-            );
-          },
+    );
+  }
+}
+
+class _PanelHeaderCell extends StatelessWidget {
+  const _PanelHeaderCell({required this.label, required this.scheme});
+
+  final String label;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontFamily: 'Lexend',
+          fontWeight: FontWeight.w700,
+          fontSize: 10,
+          letterSpacing: 0.3,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+class _PanelValueCell extends StatelessWidget {
+  const _PanelValueCell({required this.value, required this.scheme});
+
+  final String value;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+      child: Text(
+        value,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontFamily: 'Lexend',
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          color: scheme.onSurface,
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
     );
@@ -969,7 +2475,7 @@ class _PlayByPlayTab extends StatelessWidget {
   List<_PbpListItem> _buildListItems() {
     final items = <_PbpListItem>[];
     String? lastPeriod;
-    for (final row in events) {
+    for (final row in events.reversed) {
       final raw = (row['period'] ?? '').toString().trim();
       final label = _expandPeriod(raw);
       if (label != lastPeriod) {
@@ -1151,8 +2657,12 @@ class _PbpEventTile extends StatelessWidget {
     if (side == 'home') return scheme.primary;
     if (side == 'away') return scheme.secondary;
     final team = _str(row['team_name']).toLowerCase();
-    if (team.isNotEmpty && team == titleHome.toLowerCase()) return scheme.primary;
-    if (team.isNotEmpty && team == titleAway.toLowerCase()) return scheme.secondary;
+    if (team.isNotEmpty && team == titleHome.toLowerCase()) {
+      return scheme.primary;
+    }
+    if (team.isNotEmpty && team == titleAway.toLowerCase()) {
+      return scheme.secondary;
+    }
     return scheme.onSurfaceVariant;
   }
 
@@ -1255,7 +2765,10 @@ class _PbpEventTile extends StatelessWidget {
                         const SizedBox(width: 8),
                         // Score badge — surfaceContainerHighest (Level 3), no border
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: scheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(6),
@@ -1266,7 +2779,9 @@ class _PbpEventTile extends StatelessWidget {
                               fontFamily: 'Lexend',
                               fontWeight: FontWeight.w900,
                               fontSize: 12,
-                              fontFeatures: const [FontFeature.tabularFigures()],
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                               color: scheme.onSurface,
                             ),
                           ),

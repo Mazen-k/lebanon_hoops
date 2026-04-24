@@ -24,66 +24,97 @@ class _TeamsGridScreenState extends State<TeamsGridScreen> {
   Future<void> _loadTeams() async {
     try {
       final teams = await _teamsRepo.fetchTeams();
-      if (mounted) setState(() { _teams = teams; });
+      if (mounted) {
+        setState(() {
+          _teams = teams;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
 
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.wifi_off_rounded, size: 48, color: colorScheme.secondary),
-              const SizedBox(height: 16),
-              Text(_error!, style: TextStyle(color: colorScheme.secondary), textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(onPressed: () {
-                setState(() { _error = null; });
-                _loadTeams();
-              }, child: const Text('Retry')),
-            ],
+      return Padding(
+        padding: EdgeInsets.only(top: topInset),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.wifi_off_rounded,
+                  size: 48,
+                  color: colorScheme.secondary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _error!,
+                  style: TextStyle(color: colorScheme.secondary),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _error = null;
+                    });
+                    _loadTeams();
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
     if (_teams == null) {
-      return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+      return Padding(
+        padding: EdgeInsets.only(top: topInset),
+        child: Center(
+          child: CircularProgressIndicator(color: colorScheme.primary),
+        ),
+      );
     }
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface, 
-      body: SafeArea(
-        child: _teams!.isEmpty
-            ? Center(
+    return ColoredBox(
+      color: colorScheme.surface,
+      child: _teams!.isEmpty
+          ? Padding(
+              padding: EdgeInsets.only(top: topInset),
+              child: Center(
                 child: Text(
                   'No teams found',
                   style: TextStyle(color: colorScheme.secondary),
                 ),
-              )
-            : GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 96, 16, 120), 
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 1.4,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemCount: _teams!.length,
-                itemBuilder: (context, index) {
-                  final team = _teams![index];
-                  return _TeamCard(team: team);
-                },
               ),
-      ),
+            )
+          : GridView.builder(
+              padding: EdgeInsets.fromLTRB(16, topInset + 8, 16, 120),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 1.4,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: _teams!.length,
+              itemBuilder: (context, index) {
+                final team = _teams![index];
+                return _TeamCard(team: team);
+              },
+            ),
     );
   }
 }
@@ -99,9 +130,12 @@ class _TeamCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => TeamProfileScreen(teamId: team.teamId),
-        ));
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TeamProfileScreen(teamId: team.teamId),
+          ),
+        );
       },
       child: Container(
         clipBehavior: Clip.antiAlias,

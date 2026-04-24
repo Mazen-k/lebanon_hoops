@@ -79,12 +79,8 @@ class _FixturesScreenState extends State<FixturesScreen>
             .where((f) => f.matchId > 0)
             .toList();
 
-        final derivedWeeks = list
-            .map((f) => f.week)
-            .whereType<int>()
-            .toSet()
-            .toList()
-          ..sort();
+        final derivedWeeks =
+            list.map((f) => f.week).whereType<int>().toSet().toList()..sort();
 
         if (derivedWeeks.isNotEmpty) {
           final grouped = <int, List<GameFixtureView>>{};
@@ -161,13 +157,16 @@ class _FixturesScreenState extends State<FixturesScreen>
     setState(() => _weekLoadInFlight.add(week));
     try {
       final rows = await _api.fetchGames(
-          competitionId: widget.competitionId, week: week);
+        competitionId: widget.competitionId,
+        week: week,
+      );
       if (!mounted) return;
-      final list = rows
-          .map(GameFixtureView.fromGamesApiRow)
-          .where((f) => f.matchId > 0)
-          .toList()
-        ..sort((a, b) => a.matchId.compareTo(b.matchId));
+      final list =
+          rows
+              .map(GameFixtureView.fromGamesApiRow)
+              .where((f) => f.matchId > 0)
+              .toList()
+            ..sort((a, b) => a.matchId.compareTo(b.matchId));
       setState(() {
         _fixturesByWeek[week] = list;
         _weekLoadInFlight.remove(week);
@@ -185,8 +184,7 @@ class _FixturesScreenState extends State<FixturesScreen>
     if (_legacySingleList) {
       setState(() => _loadingBootstrap = true);
       try {
-        final rows =
-            await _api.fetchGames(competitionId: widget.competitionId);
+        final rows = await _api.fetchGames(competitionId: widget.competitionId);
         if (!mounted) return;
         final list = rows
             .map(GameFixtureView.fromGamesApiRow)
@@ -216,24 +214,6 @@ class _FixturesScreenState extends State<FixturesScreen>
     if (index > 0) _loadWeek(_weeks[index - 1]);
   }
 
-  void _goToPrev() {
-    if (_pageIndex > 0) {
-      _pageController?.previousPage(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOutCubic,
-      );
-    }
-  }
-
-  void _goToNext() {
-    if (_pageIndex < _weeks.length - 1) {
-      _pageController?.nextPage(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOutCubic,
-      );
-    }
-  }
-
   /// Briefly fades the label out and back in when the week changes.
   void _animateLabelChange(VoidCallback change) {
     _labelAnim.reverse().then((_) {
@@ -242,96 +222,41 @@ class _FixturesScreenState extends State<FixturesScreen>
     });
   }
 
-  // ─── date-range helper ────────────────────────────────────────────────────
-
-  /// Tries to extract a compact date range string from the fixtures of [week].
-  /// Falls back to "Week N" if the dates can't be parsed.
-  String _weekLabel(int week) {
-    final fixtures = _fixturesByWeek[week];
-    if (fixtures == null || fixtures.isEmpty) return 'WEEK $week';
-
-    // metaLine often contains text like "Fri, Apr 25" or "2025-04-25 19:00".
-    // Try to parse the earliest and latest dates.
-    final dates = <DateTime>[];
-    for (final f in fixtures) {
-      final dt = _parseDateFromMetaLine(f.metaLine);
-      if (dt != null) dates.add(dt);
-    }
-
-    if (dates.isEmpty) return 'WEEK $week';
-
-    dates.sort();
-    final first = dates.first;
-    final last = dates.last;
-
-    if (first.month == last.month) {
-      // Same month → "Apr 22 – 28"
-      return '${_monthAbbr(first.month)} ${first.day} – ${last.day}';
-    } else {
-      // Span months → "Apr 28 – May 3"
-      return '${_monthAbbr(first.month)} ${first.day} – ${_monthAbbr(last.month)} ${last.day}';
-    }
-  }
-
-  static DateTime? _parseDateFromMetaLine(String text) {
-    // ISO format: 2025-04-25 ...
-    final iso = RegExp(r'(\d{4})-(\d{2})-(\d{2})');
-    final m = iso.firstMatch(text);
-    if (m != null) {
-      return DateTime.tryParse('${m.group(1)}-${m.group(2)}-${m.group(3)}');
-    }
-    // Friendly format: "Fri, Apr 25" or "Apr 25"
-    final months = {
-      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-      'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
-    };
-    final friendly = RegExp(
-        r'(?:mon|tue|wed|thu|fri|sat|sun)?[,\s]*([a-z]{3})\s+(\d{1,2})',
-        caseSensitive: false);
-    final fm = friendly.firstMatch(text);
-    if (fm != null) {
-      final mo = months[fm.group(1)!.toLowerCase()];
-      final day = int.tryParse(fm.group(2)!);
-      if (mo != null && day != null) {
-        final now = DateTime.now();
-        return DateTime(now.year, mo, day);
-      }
-    }
-    return null;
-  }
-
-  static String _monthAbbr(int month) => const [
-        '',
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-      ][month];
-
   // ─── build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
 
     if (_loadingBootstrap) {
       return ColoredBox(
         color: cs.surface,
-        child: Center(child: CircularProgressIndicator(color: cs.primary)),
+        child: Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: Center(child: CircularProgressIndicator(color: cs.primary)),
+        ),
       );
     }
     if (_errorBootstrap != null) {
       return ColoredBox(
         color: cs.surface,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(_errorBootstrap!, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                FilledButton(
-                    onPressed: _bootstrap, child: const Text('Retry')),
-              ],
+        child: Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(_errorBootstrap!, textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _bootstrap,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -342,10 +267,13 @@ class _FixturesScreenState extends State<FixturesScreen>
     if (_legacySingleList) {
       return ColoredBox(
         color: cs.surface,
-        child: RefreshIndicator(
-          color: cs.primary,
-          onRefresh: _refreshVisible,
-          child: _buildFixtureList(cs, _legacyFixtures),
+        child: Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: RefreshIndicator(
+            color: cs.primary,
+            onRefresh: _refreshVisible,
+            child: _buildFixtureList(cs, _legacyFixtures),
+          ),
         ),
       );
     }
@@ -354,10 +282,13 @@ class _FixturesScreenState extends State<FixturesScreen>
     if (pc == null || _weeks.isEmpty) {
       return ColoredBox(
         color: cs.surface,
-        child: Center(
-          child: Text(
-            'No week data for this competition.',
-            style: TextStyle(color: cs.onSurfaceVariant),
+        child: Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: Center(
+            child: Text(
+              'No week data for this competition.',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
           ),
         ),
       );
@@ -368,16 +299,11 @@ class _FixturesScreenState extends State<FixturesScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          SizedBox(height: topInset),
           _WeekNavigatorHeader(
-            weekNumber: _weeks[_pageIndex],
-            weekLabel: _weekLabel(_weeks[_pageIndex]),
+            weeks: _weeks,
+            focusedIndex: _pageIndex,
             labelFade: _labelFade,
-            canGoPrev: _pageIndex > 0,
-            canGoNext: _pageIndex < _weeks.length - 1,
-            totalWeeks: _weeks.length,
-            currentIndex: _pageIndex,
-            onPrev: _goToPrev,
-            onNext: _goToNext,
             colorScheme: cs,
           ),
           Expanded(
@@ -449,216 +375,134 @@ class _FixturesScreenState extends State<FixturesScreen>
 
 class _WeekNavigatorHeader extends StatelessWidget {
   const _WeekNavigatorHeader({
-    required this.weekNumber,
-    required this.weekLabel,
+    required this.weeks,
+    required this.focusedIndex,
     required this.labelFade,
-    required this.canGoPrev,
-    required this.canGoNext,
-    required this.totalWeeks,
-    required this.currentIndex,
-    required this.onPrev,
-    required this.onNext,
     required this.colorScheme,
   });
 
-  final int weekNumber;
-  final String weekLabel;
+  final List<int> weeks;
+  final int focusedIndex;
   final Animation<double> labelFade;
-  final bool canGoPrev;
-  final bool canGoNext;
-  final int totalWeeks;
-  final int currentIndex;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
   final ColorScheme colorScheme;
 
   @override
   Widget build(BuildContext context) {
     final cs = colorScheme;
-    final hasDates = !weekLabel.startsWith('WEEK ');
-
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: cs.outline.withValues(alpha: 0.12),
+      margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      child: FadeTransition(
+        opacity: labelFade,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final visibleCount = width >= 430
+                ? 7
+                : width >= 340
+                ? 5
+                : 3;
+            final half = visibleCount ~/ 2;
+            final start = (focusedIndex - half).clamp(
+              0,
+              (weeks.length - visibleCount).clamp(0, weeks.length),
+            );
+            final end = (start + visibleCount).clamp(0, weeks.length);
+            final visibleWeeks = weeks.sublist(start, end);
+
+            return Row(
+              children: [
+                for (var i = 0; i < visibleWeeks.length; i++) ...[
+                  Expanded(
+                    child: _WeekLabelChip(
+                      week: visibleWeeks[i],
+                      isFocused: start + i == focusedIndex,
+                      colorScheme: cs,
+                    ),
+                  ),
+                  if (i != visibleWeeks.length - 1) const SizedBox(width: 4),
+                ],
+              ],
+            );
+          },
         ),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+      ),
+    );
+  }
+}
+
+class _WeekLabelChip extends StatelessWidget {
+  const _WeekLabelChip({
+    required this.week,
+    required this.isFocused,
+    required this.colorScheme,
+  });
+
+  final int week;
+  final bool isFocused;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = colorScheme;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.symmetric(
+        horizontal: isFocused ? 6 : 4,
+        vertical: isFocused ? 10 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: isFocused
+            ? cs.primary.withValues(alpha: 0.12)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'WEEK',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontSize: isFocused ? 9 : 8,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.9,
+              color: isFocused
+                  ? cs.primary
+                  : cs.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$week',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontSize: isFocused ? 24 : 16,
+              fontWeight: isFocused ? FontWeight.w900 : FontWeight.w700,
+              fontStyle: isFocused ? FontStyle.italic : FontStyle.normal,
+              letterSpacing: isFocused ? -0.7 : -0.2,
+              color: isFocused ? cs.onSurface : cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            width: isFocused ? 28 : 16,
+            height: 3,
+            decoration: BoxDecoration(
+              color: isFocused
+                  ? cs.primary
+                  : cs.outlineVariant.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(999),
+            ),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                _NavArrow(
-                  icon: Icons.chevron_left_rounded,
-                  enabled: canGoPrev,
-                  onTap: onPrev,
-                  colorScheme: cs,
-                ),
-                Expanded(
-                  child: FadeTransition(
-                    opacity: labelFade,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // "WEEK 3" always shown as the primary label.
-                        Text(
-                          'WEEK $weekNumber',
-                          style: TextStyle(
-                            fontFamily: 'Lexend',
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        // Date range shown below when available.
-                        if (hasDates) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            weekLabel,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.3,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                _NavArrow(
-                  icon: Icons.chevron_right_rounded,
-                  enabled: canGoNext,
-                  onTap: onNext,
-                  colorScheme: cs,
-                ),
-              ],
-            ),
-            // Dot indicator row.
-            if (totalWeeks > 1) ...[
-              const SizedBox(height: 8),
-              _DotIndicator(
-                count: totalWeeks,
-                current: currentIndex,
-                colorScheme: cs,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Navigation Arrow ──────────────────────────────────────────────────────
-
-class _NavArrow extends StatelessWidget {
-  const _NavArrow({
-    required this.icon,
-    required this.enabled,
-    required this.onTap,
-    required this.colorScheme,
-  });
-
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-  final ColorScheme colorScheme;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: enabled
-                ? cs.primary.withValues(alpha: 0.10)
-                : cs.onSurface.withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            icon,
-            size: 24,
-            color: enabled
-                ? cs.primary
-                : cs.onSurface.withValues(alpha: 0.22),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Dot Indicator ─────────────────────────────────────────────────────────
-
-class _DotIndicator extends StatelessWidget {
-  const _DotIndicator({
-    required this.count,
-    required this.current,
-    required this.colorScheme,
-  });
-
-  final int count;
-  final int current;
-  final ColorScheme colorScheme;
-
-  @override
-  Widget build(BuildContext context) {
-    // Show at most 7 dots; collapse with an ellipsis effect otherwise.
-    const maxDots = 7;
-    final showAll = count <= maxDots;
-    final cs = colorScheme;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(showAll ? count : maxDots, (i) {
-        // Map visible dot index to actual week index when collapsed.
-        final int actualIndex;
-        if (showAll) {
-          actualIndex = i;
-        } else {
-          // Sliding window: keep current roughly centred.
-          final half = maxDots ~/ 2;
-          final start = (current - half).clamp(0, count - maxDots);
-          actualIndex = start + i;
-        }
-
-        final isActive = actualIndex == current;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-          margin: const EdgeInsets.symmetric(horizontal: 2.5),
-          width: isActive ? 18 : 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: isActive
-                ? cs.primary
-                : cs.onSurface.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(3),
-          ),
-        );
-      }),
     );
   }
 }
