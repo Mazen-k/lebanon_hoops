@@ -23,12 +23,24 @@ class TeamRepositoryException implements Exception {
 class TeamRepository {
   const TeamRepository();
 
-  Uri _teamsUri() {
+  Uri _teamsUri({int? competitionId}) {
     final base = BackendConfig.apiBaseUrl.trim();
-    final baseUri = Uri.parse(base.endsWith('/') ? base.substring(0, base.length - 1) : base);
+    final baseUri = Uri.parse(
+      base.endsWith('/') ? base.substring(0, base.length - 1) : base,
+    );
     final path = BackendConfig.teamsPath.trim().replaceAll(RegExp(r'^/+'), '');
-    final segments = [...baseUri.pathSegments.where((s) => s.isNotEmpty), ...path.split('/')];
-    return baseUri.replace(pathSegments: segments);
+    final segments = [
+      ...baseUri.pathSegments.where((s) => s.isNotEmpty),
+      ...path.split('/'),
+    ];
+    final uri = baseUri.replace(pathSegments: segments);
+    if (competitionId == null) return uri;
+    return uri.replace(
+      queryParameters: {
+        ...uri.queryParameters,
+        'competition_id': '$competitionId',
+      },
+    );
   }
 
   Map<String, dynamic>? _asJsonObject(dynamic item) {
@@ -40,19 +52,19 @@ class TeamRepository {
   }
 
   /// Pass [client] in tests; otherwise a one-shot client is used and closed.
-  Future<List<Team>> fetchTeams({http.Client? client}) async {
-    final uri = _teamsUri();
+  /// When [competitionId] is provided, the server narrows the list to teams
+  /// participating in that competition (via `competition_teams`).
+  Future<List<Team>> fetchTeams({
+    http.Client? client,
+    int? competitionId,
+  }) async {
+    final uri = _teamsUri(competitionId: competitionId);
     final ownClient = client ?? http.Client();
     try {
       late http.Response res;
       try {
         res = await ownClient
-            .get(
-              uri,
-              headers: const {
-                'Accept': 'application/json',
-              },
-            )
+            .get(uri, headers: const {'Accept': 'application/json'})
             .timeout(const Duration(seconds: 15));
       } catch (e) {
         throw TeamRepositoryException(
@@ -76,9 +88,12 @@ class TeamRepository {
       } else if (decoded is Map) {
         final map = _asJsonObject(decoded);
         if (map == null) {
-          throw TeamRepositoryException('Teams JSON root must be a list or object.');
+          throw TeamRepositoryException(
+            'Teams JSON root must be a list or object.',
+          );
         }
-        final inner = map['teams'] ?? map['data'] ?? map['results'] ?? map['rows'];
+        final inner =
+            map['teams'] ?? map['data'] ?? map['results'] ?? map['rows'];
         if (inner is! List<dynamic>) {
           throw TeamRepositoryException(
             'Expected a JSON array or an object with a "teams", "data", "results", or "rows" array. '
@@ -87,7 +102,9 @@ class TeamRepository {
         }
         rawList = inner;
       } else {
-        throw TeamRepositoryException('Unexpected JSON for teams: ${decoded.runtimeType}');
+        throw TeamRepositoryException(
+          'Unexpected JSON for teams: ${decoded.runtimeType}',
+        );
       }
 
       final teams = <Team>[];
@@ -109,7 +126,9 @@ class TeamRepository {
         );
       }
 
-      teams.sort((a, b) => a.teamName.toLowerCase().compareTo(b.teamName.toLowerCase()));
+      teams.sort(
+        (a, b) => a.teamName.toLowerCase().compareTo(b.teamName.toLowerCase()),
+      );
       return teams;
     } finally {
       if (client == null) {

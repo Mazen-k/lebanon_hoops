@@ -2,18 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../models/game_fixture_view.dart';
 import '../services/games_api_service.dart';
+import '../state/competition_filter.dart';
 import 'game_boxscore_screen.dart';
 import '../widgets/league_fixture_card.dart';
 
 /// League schedule from `games`, split by `games.week` with a premium week
 /// navigator header.  Supports tap-arrows, swipe (PageView), and date-range
 /// labels derived from the fixtures themselves.
+///
+/// The competition id is taken from [AppCompetitionFilter]; when the user
+/// changes gender/season on the Home page, this screen reloads automatically.
 class FixturesScreen extends StatefulWidget {
-  const FixturesScreen({super.key, this.competitionId = 42001});
+  const FixturesScreen({super.key, this.competitionId});
 
   static const int defaultCompetitionId = 42001;
 
-  final int competitionId;
+  /// If provided, overrides the global [AppCompetitionFilter].
+  final int? competitionId;
 
   @override
   State<FixturesScreen> createState() => _FixturesScreenState();
@@ -22,6 +27,7 @@ class FixturesScreen extends StatefulWidget {
 class _FixturesScreenState extends State<FixturesScreen>
     with SingleTickerProviderStateMixin {
   final _api = GamesApiService();
+  final AppCompetitionFilter _filter = AppCompetitionFilter.instance;
   PageController? _pageController;
   List<int> _weeks = const [];
   final Map<int, List<GameFixtureView>> _fixturesByWeek = {};
@@ -31,10 +37,15 @@ class _FixturesScreenState extends State<FixturesScreen>
   bool _legacySingleList = false;
   List<GameFixtureView> _legacyFixtures = const [];
   int _pageIndex = 0;
+  int _bootstrapSeq = 0;
+  int? _activeCompetitionId;
 
   // Animation controller for the week label cross-fade.
   late final AnimationController _labelAnim;
   late final Animation<double> _labelFade;
+
+  int get _competitionId =>
+      widget.competitionId ?? _filter.selected.competitionId;
 
   @override
   void initState() {
@@ -45,35 +56,58 @@ class _FixturesScreenState extends State<FixturesScreen>
       value: 1.0,
     );
     _labelFade = CurvedAnimation(parent: _labelAnim, curve: Curves.easeInOut);
+    if (widget.competitionId == null) {
+      _filter.addListener(_onFilterChanged);
+    }
     _bootstrap();
   }
 
   @override
   void dispose() {
+    if (widget.competitionId == null) {
+      _filter.removeListener(_onFilterChanged);
+    }
     _pageController?.dispose();
     _labelAnim.dispose();
     super.dispose();
   }
 
+  void _onFilterChanged() {
+    if (!mounted) return;
+    if (_activeCompetitionId == _filter.selected.competitionId) return;
+    _bootstrap();
+  }
+
   // ─── bootstrap ────────────────────────────────────────────────────────────
 
   Future<void> _bootstrap() async {
+    final seq = ++_bootstrapSeq;
+    final cid = _competitionId;
     setState(() {
       _loadingBootstrap = true;
       _errorBootstrap = null;
+      _fixturesByWeek.clear();
+      _weekLoadInFlight.clear();
+      _legacyFixtures = const [];
+      _weeks = const [];
+      _legacySingleList = false;
+      _pageIndex = 0;
+      _pageController?.dispose();
+      _pageController = null;
+      _activeCompetitionId = cid;
     });
     try {
       List<int> weeks = [];
       try {
-        weeks = await _api.fetchGameWeeks(competitionId: widget.competitionId);
+        weeks = await _api.fetchGameWeeks(competitionId: cid);
       } on GamesApiException {
         weeks = [];
       }
-      if (!mounted) return;
+      if (!mounted || seq != _bootstrapSeq) return;
 
       if (weeks.isEmpty) {
-        final rows = await _api.fetchGames(competitionId: widget.competitionId);
-        if (!mounted) return;
+        final rows = await _api.fetchGames(competitionId: cid);
+        if (!mounted || seq != _bootstrapSeq) return;
         final list = rows
             .map(GameFixtureView.fromGamesApiRow)
             .where((f) => f.matchId > 0)
@@ -133,14 +167,14 @@ class _FixturesScreenState extends State<FixturesScreen>
 
       await _loadWeek(weeks[initialPage], force: true);
     } on GamesApiException catch (e) {
-      if (mounted) {
+      if (mounted && seq == _bootstrapSeq) {
         setState(() {
           _errorBootstrap = e.message;
           _loadingBootstrap = false;
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && seq == _bootstrapSeq) {
         setState(() {
           _errorBootstrap = '$e';
           _loadingBootstrap = false;
@@ -154,13 +188,11 @@ class _FixturesScreenState extends State<FixturesScreen>
   Future<void> _loadWeek(int week, {bool force = false}) async {
     if (!force && _fixturesByWeek.containsKey(week)) return;
     if (_weekLoadInFlight.contains(week)) return;
+    final cid = _competitionId;
     setState(() => _weekLoadInFlight.add(week));
     try {
-      final rows = await _api.fetchGames(
-        competitionId: widget.competitionId,
-        week: week,
-      );
-      if (!mounted) return;
+      final rows = await _api.fetchGames(competitionId: cid, week: week);
+      if (!mounted || cid != _activeCompetitionId) return;
       final list =
           rows
               .map(GameFixtureView.fromGamesApiRow)
@@ -182,10 +214,11 @@ class _FixturesScreenState extends State<FixturesScreen>
 
   Future<void> _refreshVisible() async {
     if (_legacySingleList) {
+      final cid = _competitionId;
       setState(() => _loadingBootstrap = true);
       try {
-        final rows = await _api.fetchGames(competitionId: widget.competitionId);
-        if (!mounted) return;
+        final rows = await _api.fetchGames(competitionId: cid);
+        if (!mounted || cid != _activeCompetitionId) return;
         final list = rows
             .map(GameFixtureView.fromGamesApiRow)
             .where((f) => f.matchId > 0)

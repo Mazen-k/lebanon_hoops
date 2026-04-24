@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
+import '../widgets/competition_selector_bar.dart';
 import 'ticket_selection_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -10,7 +11,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   final PageController _newsController = PageController();
   int _currentNewsIndex = 0;
   Timer? _newsTimer;
@@ -25,8 +27,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       'team2Code': 'RIY',
       'score1': '88',
       'score2': '82',
-      'team1Img': 'https://lh3.googleusercontent.com/aida-public/AB6AXuBeZhnyferj-0miau0a5BOEYCYhBmM9gCvWP3yHRNpv4Si_AcCoU0lwRW7hLmOevY0Eh_o5C2SjXiuZvB-mthKA1pjq9xWSFS7cc-Qk7IRAVpNjhnm8PG6w7_3tNwh-Sl5nKXeT6JZdltRtBsTJdE833AYv6oHj0RJhhPUYrEiv4cSC8cDKGT9t-2suTaGZPXApcZGC_rmuEmMD48AsRckdOW45rdhqvUzdyGx8EwRW4Xg3vUUy8JbsAzpgZRhSectMoKG739zI0JXd',
-      'team2Img': 'https://lh3.googleusercontent.com/aida-public/AB6AXuDUecrR3vIHtF6cEprw8zD9yiavYsEputoDcXvW3aymeq9zxNr7N0gT0JNnvYlTq1w8kL6dO0-TzUcscfOF7sXBqdH2uahMaTqx84a5W9wWDePp05ovXdizqswItr1LO4fnIzU92PTvfl1RZA3Rz9bfWDtVHnG0bepiIscjUd3ccJ9Gvs4iNDt8b4tZ8ZyHPMrUNS4hcKA_88kMNPJFI7HZt3FiEjpITO3u3jPfaBjtgJmf24irUBo2Uwu_vtZAPX0v39Ea3AY9c47u',
+      'team1Img':
+          'https://lh3.googleusercontent.com/aida-public/AB6AXuBeZhnyferj-0miau0a5BOEYCYhBmM9gCvWP3yHRNpv4Si_AcCoU0lwRW7hLmOevY0Eh_o5C2SjXiuZvB-mthKA1pjq9xWSFS7cc-Qk7IRAVpNjhnm8PG6w7_3tNwh-Sl5nKXeT6JZdltRtBsTJdE833AYv6oHj0RJhhPUYrEiv4cSC8cDKGT9t-2suTaGZPXApcZGC_rmuEmMD48AsRckdOW45rdhqvUzdyGx8EwRW4Xg3vUUy8JbsAzpgZRhSectMoKG739zI0JXd',
+      'team2Img':
+          'https://lh3.googleusercontent.com/aida-public/AB6AXuDUecrR3vIHtF6cEprw8zD9yiavYsEputoDcXvW3aymeq9zxNr7N0gT0JNnvYlTq1w8kL6dO0-TzUcscfOF7sXBqdH2uahMaTqx84a5W9wWDePp05ovXdizqswItr1LO4fnIzU92PTvfl1RZA3Rz9bfWDtVHnG0bepiIscjUd3ccJ9Gvs4iNDt8b4tZ8ZyHPMrUNS4hcKA_88kMNPJFI7HZt3FiEjpITO3u3jPfaBjtgJmf24irUBo2Uwu_vtZAPX0v39Ea3AY9c47u',
     },
     {
       'isLive': false,
@@ -36,28 +40,36 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       'team2Code': 'ANT',
       'score1': '45',
       'score2': '41',
-      'team1Img': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCERcE_itviUqsRb4ZzCp7yfhuHNph9wsobGv6kVpsuTtUd8qvqgDt7ee0bVFYpPTIF1KTSC3l0r0_bmMo-TbnQZjfsDjHDo1SvjHmwfxZGfkPqe_vzpfe9Go3xoOrbw_vRLsU5aINidXAWHGxnOYn2B4wTrJO0qe0qX_Op9RAyg56oNfYWPypXOp0TKVFSZbS4sFFJmtOpxJWY0Cds1ZGdi8Vq-PU1xuXM5oMZ6yQh5s2S02bsVs9uOMaoEiGGx-blUeVpOkk1QxdK',
-      'team2Img': 'https://lh3.googleusercontent.com/aida-public/AB6AXuBlopqXV-bzBWo8tkLEFGT2CZdR__srY_xmWXCunT3IVHmXrNeeGF66Ghre_S4hAdoKumBCvt089Vt3ZpUKmRqGV_7YwONWaNevJ3dFOX_q7w68D9zLyRVM3kneOmRbWV4K7MVqMFKCkPOrQp5MukJgPZVmYF1JNpLDw67VgQRe13qUy_uKjHwbyClZ2BNiTq76HxqQXjEMeAFtHQ7MnYe7bomTVAq2s2gCmV7Wkl1H6dczKDPKvaOnyRLlg1MhbDVBZPGKQZBUTG7P',
+      'team1Img':
+          'https://lh3.googleusercontent.com/aida-public/AB6AXuCERcE_itviUqsRb4ZzCp7yfhuHNph9wsobGv6kVpsuTtUd8qvqgDt7ee0bVFYpPTIF1KTSC3l0r0_bmMo-TbnQZjfsDjHDo1SvjHmwfxZGfkPqe_vzpfe9Go3xoOrbw_vRLsU5aINidXAWHGxnOYn2B4wTrJO0qe0qX_Op9RAyg56oNfYWPypXOp0TKVFSZbS4sFFJmtOpxJWY0Cds1ZGdi8Vq-PU1xuXM5oMZ6yQh5s2S02bsVs9uOMaoEiGGx-blUeVpOkk1QxdK',
+      'team2Img':
+          'https://lh3.googleusercontent.com/aida-public/AB6AXuBlopqXV-bzBWo8tkLEFGT2CZdR__srY_xmWXCunT3IVHmXrNeeGF66Ghre_S4hAdoKumBCvt089Vt3ZpUKmRqGV_7YwONWaNevJ3dFOX_q7w68D9zLyRVM3kneOmRbWV4K7MVqMFKCkPOrQp5MukJgPZVmYF1JNpLDw67VgQRe13qUy_uKjHwbyClZ2BNiTq76HxqQXjEMeAFtHQ7MnYe7bomTVAq2s2gCmV7Wkl1H6dczKDPKvaOnyRLlg1MhbDVBZPGKQZBUTG7P',
     },
   ];
 
   final List<Map<String, String>> _breakingNews = [
     {
       'title': 'WAEL ARAKJI LEADS RIYADI TO THRILLING OVERTIME VICTORY',
-      'subtitle': 'The Lebanese point guard dropped 34 points in a historic performance at the Saeb Salam Arena tonight.',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
+      'subtitle':
+          'The Lebanese point guard dropped 34 points in a historic performance at the Saeb Salam Arena tonight.',
+      'image':
+          'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
       'tag': 'BREAKING NEWS',
     },
     {
       'title': 'SAGESSE SECURES CRITICAL WIN OVER ANTUNIEH',
-      'subtitle': 'The green team dominates the paint to stay top of the standings after a fierce battle at the Ghazir stadium.',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
+      'subtitle':
+          'The green team dominates the paint to stay top of the standings after a fierce battle at the Ghazir stadium.',
+      'image':
+          'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
       'tag': 'GAME REPORT',
     },
     {
       'title': 'LBL CUP FINAL TICKETS NOW ON SALE',
-      'subtitle': 'Don\'t miss out on the biggest game of the season. Grab your tickets now for the showdown at Nouhad Nawfal Arena.',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
+      'subtitle':
+          'Don\'t miss out on the biggest game of the season. Grab your tickets now for the showdown at Nouhad Nawfal Arena.',
+      'image':
+          'https://lh3.googleusercontent.com/aida-public/AB6AXuCU9MgtLh0Evk_CTs2FKxcCqiKBY4O_K8gyorHPiIje40vJG4ahm-7hnAS-iD9PMyiOtskELCm26E6hoKHsdPxG9uT6rxR7AstGOvL-LEYxzUwU8oUTGAiaXS7fK7ctoHfZ6fEK4IaXaDZjBm7Gbqlusy8pb6V14LFC26b1zE5Q3GjT0wWd0uxE4ufojHPT2ZRP6a8Vd_pxPkzWDwIFWuxRtG-8H4Jyny6cxx-WFSrE2AF9ttSSkejN-V7YZjxQY-XWvtlkRxshMEK-',
       'tag': 'TICKETS',
     },
   ];
@@ -96,10 +108,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.only(top: 24, bottom: 128),
+          padding: const EdgeInsets.only(top: kToolbarHeight, bottom: 128),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const CompetitionSelectorBar(),
+              const SizedBox(height: 24),
               _buildLiveGamesSection(context),
               const SizedBox(height: 32),
               _buildBreakingNewsSection(context),
@@ -112,7 +126,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketSelectionScreen())),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TicketSelectionScreen()),
+        ),
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
         shape: const CircleBorder(),
@@ -122,7 +139,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title, {Widget? trailing}) {
+  Widget _buildSectionHeader(
+    BuildContext context,
+    String title, {
+    Widget? trailing,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -133,7 +154,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           Container(
             padding: const EdgeInsets.only(left: 12),
             decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: colorScheme.primary, width: 4)),
+              border: Border(
+                left: BorderSide(color: colorScheme.primary, width: 4),
+              ),
             ),
             child: Text(
               title,
@@ -156,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildLiveGamesSection(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     if (_liveGamesData.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -170,7 +193,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           child: Column(
             children: [
-              Icon(Icons.sports_basketball_outlined, size: 48, color: colorScheme.secondary.withAlpha(100)),
+              Icon(
+                Icons.sports_basketball_outlined,
+                size: 48,
+                color: colorScheme.secondary.withAlpha(100),
+              ),
               const SizedBox(height: 16),
               Text(
                 'NO LIVE GAMES RIGHT NOW',
@@ -197,8 +224,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 onPressed: () {},
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: colorScheme.primary),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                 ),
                 child: Text(
                   'VIEW RECENT RESULTS',
@@ -233,7 +265,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 if (_pulseController != null)
                   ScaleTransition(
                     scale: Tween(begin: 0.85, end: 1.15).animate(
-                      CurvedAnimation(parent: _pulseController!, curve: Curves.easeInOut),
+                      CurvedAnimation(
+                        parent: _pulseController!,
+                        curve: Curves.easeInOut,
+                      ),
                     ),
                     child: Container(
                       width: 8,
@@ -318,7 +353,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     required String team2Img,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final bgColor = isLive ? colorScheme.surfaceContainerHighest : colorScheme.surfaceContainerHigh;
+    final bgColor = isLive
+        ? colorScheme.surfaceContainerHighest
+        : colorScheme.surfaceContainerHigh;
     final textColor = colorScheme.onSurface;
     final statusColor = colorScheme.onSurface.withAlpha(179);
     final vsColor = colorScheme.primary;
@@ -327,7 +364,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Entering Live Game Center for $team1Code vs $team2Code...'),
+            content: Text(
+              'Entering Live Game Center for $team1Code vs $team2Code...',
+            ),
             duration: const Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
             backgroundColor: colorScheme.primary,
@@ -340,7 +379,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withAlpha(13)), // border-white/5
+          border: Border.all(
+            color: Colors.white.withAlpha(13),
+          ), // border-white/5
         ),
         child: Column(
           children: [
@@ -359,14 +400,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 if (isLive)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: colorScheme.primary,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Text(
                       'Live',
-                      style: TextStyle(fontFamily: 'Inter', color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   )
                 else if (badgeText != null)
@@ -432,7 +481,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildTeamColumn(BuildContext context, String code, Color textColor, String imgUrl) {
+  Widget _buildTeamColumn(
+    BuildContext context,
+    String code,
+    Color textColor,
+    String imgUrl,
+  ) {
     return Column(
       children: [
         Container(
@@ -443,7 +497,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             shape: BoxShape.circle,
           ),
           padding: const EdgeInsets.all(8),
-          child: Image.network(imgUrl, fit: BoxFit.contain, errorBuilder: (c,e,s) => Icon(Icons.shield, color: Theme.of(context).colorScheme.secondary, size: 24)),
+          child: Image.network(
+            imgUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (c, e, s) => Icon(
+              Icons.shield,
+              color: Theme.of(context).colorScheme.secondary,
+              size: 24,
+            ),
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -485,10 +547,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   children: [
                     Opacity(
                       opacity: 0.6,
-                      child: Image.network(
-                        item['image']!,
-                        fit: BoxFit.cover,
-                      ),
+                      child: Image.network(item['image']!, fit: BoxFit.cover),
                     ),
                     Container(
                       decoration: BoxDecoration(
@@ -496,7 +555,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           colors: [
                             colorScheme.surface,
                             colorScheme.surface.withAlpha(102),
-                            Colors.transparent
+                            Colors.transparent,
                           ],
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
@@ -512,7 +571,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: colorScheme.primary,
                               borderRadius: BorderRadius.circular(4),
@@ -546,8 +607,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 14,
-                              color: colorScheme.onSurface
-                                  .withAlpha(204), // text-on-surface/80
+                              color: colorScheme.onSurface.withAlpha(
+                                204,
+                              ), // text-on-surface/80
                               height: 1.4,
                             ),
                             maxLines: 2,
@@ -599,11 +661,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           trailing: TextButton(
             onPressed: () {
               // Navigate to Standings/Schedule tab
-              final state = context.findAncestorStateOfType<State>(); 
+              final state = context.findAncestorStateOfType<State>();
               // This is a bit hacky, but let's assume the user wants to see more.
               // We'll just show a snackbar for now or navigate if we can find the shell state.
-               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Opening Full Schedule...'), duration: Duration(seconds: 1)),
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Opening Full Schedule...'),
+                  duration: Duration(seconds: 1),
+                ),
               );
             },
             child: Text(
@@ -633,12 +698,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               return _buildTicketCard(
                 context: context,
                 index: index,
-                date: isFirst ? 'FRIDAY, OCT 27 • 20:30' : 'SATURDAY, OCT 28 • 17:00',
+                date: isFirst
+                    ? 'FRIDAY, OCT 27 • 20:30'
+                    : 'SATURDAY, OCT 28 • 17:00',
                 venue: isFirst ? 'MANARA ARENA' : 'NOUHAD NAWFAL',
                 team1Code: isFirst ? 'CHA' : 'HOM',
                 team2Code: isFirst ? 'HOO' : 'MAR',
-                team1Img: isFirst ? 'https://lh3.googleusercontent.com/aida-public/AB6AXuCC8faf2GNMciTs72ELic_OLq0juj6BuREhykpM_PhNjZdj8BOq5ejI53lPu86sGeG0Zl4FIPJ5jAIdgbWVyDMh5uLNm_T5K8ug3RRCiy70m6eGLoBjSSjEi7d6Znw4-VB4HhssfQhCodN2sHX2h-sJ_680_-AyR9F5eLzPpogREB6TRGZ895X3yU6FElkIkyTqisjzIfgLLoNIt2BP4aiQrdATFsFOEXeaTkB8DLhalYxVTtYIx82GVRuOfeMLlI0CVfOh5TEuLDvO' : 'https://lh3.googleusercontent.com/aida-public/AB6AXuCbmKctCxM-iMB-fPCQtRfUVsgKTy8Ao-TsaNvTzu4aRoZkVQs7T6_eU9P1u_w6HpJNnxDSHDwKkUhU4yNDz-7_CjK4uDm1sE5p-GfmTEktewnoMf2apJSjbVVq_RJ56tos1fyBeKGObnxzuU-iHk7uoz4e7aKYhCb_pDsCU2by78McdFSfr8T9Sdrt__hVWOSKtuI2L7TubBz6_s-DLb7ST3PkxPd947xUmWPiNaPOLvWagB0IwalNRYBBDa6QIp3cSVcsfJxwWuue',
-                team2Img: isFirst ? 'https://lh3.googleusercontent.com/aida-public/AB6AXuAVD8YnSRXkJBW1AJgFJWKBzxHNxNfcNoYlZhR7lX4guB8PnpXpubsq6Y6KjY_GAI5xhmvaZqGtWTCjOapNzD143ubCZKNwfAFrsV7Xaai99-eP8Gxh2j81AKLi94DOesbbUx5mozmMmDy7P81KURtyAamRiZNZddnr-rVJ2FV5-M9z9FoOMGEfUeP-lb2R5X7sj3k4Up6wnyOvjcqwz3EoCliG7nmYryeuykSJtD7YbrdLC45tBh1nhzjUNavqox8OBfGqauF8s0LG' : 'https://lh3.googleusercontent.com/aida-public/AB6AXuBaJQ43dOwdhnO4oj_FKLk16rShhynZcT3KNNu6S-ayVpZ9enBInG2Nx2FrJdv4SaJ_8zhE06woLaXhKb0j_G6IDmhSA4jeDjno4LDVpUxL32MyVnf1UrjiEerl3CUOQC13K6J2ZSbKZGYNQIxx0JkgyAuMTLKckVq51U3FEDOX-Equ8-Oie4MBWFtKPqB8pkk0XbrIMBRpQeZ_L5c3j7B9oKdtePGBo4oSW8ysWi_oxIObk8fgatYhNy7jzGZpU97g1NovRYOFoR08',
+                team1Img: isFirst
+                    ? 'https://lh3.googleusercontent.com/aida-public/AB6AXuCC8faf2GNMciTs72ELic_OLq0juj6BuREhykpM_PhNjZdj8BOq5ejI53lPu86sGeG0Zl4FIPJ5jAIdgbWVyDMh5uLNm_T5K8ug3RRCiy70m6eGLoBjSSjEi7d6Znw4-VB4HhssfQhCodN2sHX2h-sJ_680_-AyR9F5eLzPpogREB6TRGZ895X3yU6FElkIkyTqisjzIfgLLoNIt2BP4aiQrdATFsFOEXeaTkB8DLhalYxVTtYIx82GVRuOfeMLlI0CVfOh5TEuLDvO'
+                    : 'https://lh3.googleusercontent.com/aida-public/AB6AXuCbmKctCxM-iMB-fPCQtRfUVsgKTy8Ao-TsaNvTzu4aRoZkVQs7T6_eU9P1u_w6HpJNnxDSHDwKkUhU4yNDz-7_CjK4uDm1sE5p-GfmTEktewnoMf2apJSjbVVq_RJ56tos1fyBeKGObnxzuU-iHk7uoz4e7aKYhCb_pDsCU2by78McdFSfr8T9Sdrt__hVWOSKtuI2L7TubBz6_s-DLb7ST3PkxPd947xUmWPiNaPOLvWagB0IwalNRYBBDa6QIp3cSVcsfJxwWuue',
+                team2Img: isFirst
+                    ? 'https://lh3.googleusercontent.com/aida-public/AB6AXuAVD8YnSRXkJBW1AJgFJWKBzxHNxNfcNoYlZhR7lX4guB8PnpXpubsq6Y6KjY_GAI5xhmvaZqGtWTCjOapNzD143ubCZKNwfAFrsV7Xaai99-eP8Gxh2j81AKLi94DOesbbUx5mozmMmDy7P81KURtyAamRiZNZddnr-rVJ2FV5-M9z9FoOMGEfUeP-lb2R5X7sj3k4Up6wnyOvjcqwz3EoCliG7nmYryeuykSJtD7YbrdLC45tBh1nhzjUNavqox8OBfGqauF8s0LG'
+                    : 'https://lh3.googleusercontent.com/aida-public/AB6AXuBaJQ43dOwdhnO4oj_FKLk16rShhynZcT3KNNu6S-ayVpZ9enBInG2Nx2FrJdv4SaJ_8zhE06woLaXhKb0j_G6IDmhSA4jeDjno4LDVpUxL32MyVnf1UrjiEerl3CUOQC13K6J2ZSbKZGYNQIxx0JkgyAuMTLKckVq51U3FEDOX-Equ8-Oie4MBWFtKPqB8pkk0XbrIMBRpQeZ_L5c3j7B9oKdtePGBo4oSW8ysWi_oxIObk8fgatYhNy7jzGZpU97g1NovRYOFoR08',
               );
             },
           ),
@@ -668,10 +739,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         border: Border.all(color: Colors.white.withAlpha(13)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2), 
-            blurRadius: 10, 
-            offset: const Offset(0, 4)
-          )
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -680,8 +751,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerLow,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              border: Border(bottom: BorderSide(color: Colors.white.withAlpha(13))),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+              border: Border(
+                bottom: BorderSide(color: Colors.white.withAlpha(13)),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -689,7 +764,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Expanded(
                   child: Text(
                     date,
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.onSurfaceVariant),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -703,15 +783,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(isReminded ? 'Reminder removed' : 'Reminder set for this game!'),
+                        content: Text(
+                          isReminded
+                              ? 'Reminder removed'
+                              : 'Reminder set for this game!',
+                        ),
                         duration: const Duration(seconds: 1),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
                   },
                   icon: Icon(
-                    isReminded ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
-                    color: isReminded ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                    isReminded
+                        ? Icons.notifications_active_rounded
+                        : Icons.notifications_none_rounded,
+                    color: isReminded
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
                     size: 18,
                   ),
                   constraints: const BoxConstraints(),
@@ -720,14 +808,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceVariant,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     venue,
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
+                    ),
                   ),
                 ),
               ],
@@ -735,21 +831,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           Expanded(
             child: Padding(
-               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-               child: Row(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildTicketTeam(context, team1Code, team1Img),
-                    Text(
-                      'VS',
-                      style: TextStyle(
-                        fontFamily: 'Lexend',
-                        fontSize: 20,
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w900,
-                        fontStyle: FontStyle.italic,
-                      ),
+                  Text(
+                    'VS',
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontSize: 20,
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w900,
+                      fontStyle: FontStyle.italic,
                     ),
+                  ),
                   _buildTicketTeam(context, team2Code, team2Img),
                 ],
               ),
@@ -757,17 +853,30 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           Material(
             color: colorScheme.primary,
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(12),
+            ),
             child: InkWell(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketSelectionScreen())),
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TicketSelectionScreen(),
+                ),
+              ),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(12),
+              ),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 alignment: Alignment.center,
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.confirmation_number, color: Colors.white, size: 14),
+                    Icon(
+                      Icons.confirmation_number,
+                      color: Colors.white,
+                      size: 14,
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'BUY TICKETS',
@@ -803,7 +912,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           padding: const EdgeInsets.all(8),
           margin: const EdgeInsets.only(bottom: 8),
-          child: Image.network(imgUrl, fit: BoxFit.contain, errorBuilder: (c,e,s) => Icon(Icons.shield, color: colorScheme.secondary, size: 28)),
+          child: Image.network(
+            imgUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (c, e, s) =>
+                Icon(Icons.shield, color: colorScheme.secondary, size: 28),
+          ),
         ),
         Text(
           code.toUpperCase(),
@@ -871,7 +985,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       'https://lh3.googleusercontent.com/aida-public/AB6AXuDIzsjzrOvYPWBDZsnhO7BpxSHRAC90apP10GjUVN1_Mkbt7YR5RjeENChGJ1AdDwL7Qzs0lqnHX7gvrxV5ERKZj6sXSG0zdKhNbP1GuUHxGWGTInKmMm1hG3txybGHc3Qw3cnrfsTnMNaNjf_08KiF2HWdLMTvXpzGch-yhVPA373AbEZr3F9qJwFz2NAIXOEbPwCwa5AFC3uuWr9KRMrH_tkNJXF9AFo7iyCSYSOspDHYFClQsA0YqTCkDHHLAoaoh-QSDLzPEun2',
                       fit: BoxFit.cover,
                       alignment: Alignment.centerLeft,
-                      errorBuilder: (c,e,s) => Icon(Icons.person, size: 100, color: colorScheme.secondary),
+                      errorBuilder: (c, e, s) => Icon(
+                        Icons.person,
+                        size: 100,
+                        color: colorScheme.secondary,
+                      ),
                     ),
                   ),
                 ),
@@ -884,7 +1002,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                           Text(
+                          Text(
                             'PLAYER OF THE WEEK',
                             style: TextStyle(
                               fontFamily: 'Lexend',
@@ -896,7 +1014,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             ),
                           ),
                           const SizedBox(height: 4),
-                           Text(
+                          Text(
                             'SERGIO\nEL DARWICH',
                             style: TextStyle(
                               fontFamily: 'Lexend',
@@ -907,9 +1025,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             ),
                           ),
                           const SizedBox(height: 4),
-                           Text(
+                          Text(
                             'BEIRUT CLUB • GUARD',
-                            style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary),
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.secondary,
+                            ),
                           ),
                         ],
                       ),
@@ -931,9 +1054,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _buildSecondaryPerformer(context, 'Omari Spellman', 'Rebounds Leader', '14.3', 'RPG', 'https://lh3.googleusercontent.com/aida-public/AB6AXuBGkL957XYsrycUmC-N_7vejj9y4jFXS9pXb74WJSNyMW3VSm8GRtIse6uSng_hWepCONIh80CLfQE54WmUDJ-_nbnKegpHBlHkv_t9RByTCG0FGC4vxfx89SRQdPNOYmeOg-RlVZDi5IbOZkFeGNFroj4-N1vxLwu0l_GCXNb80Dw69Ubmt2r25UTt7-rMtlYvdLbFRLo_HjXuz6BE2Rnz-oXEbkrp7Rni_6fQI0SCpIkIoz3IOncehQ71xlZr8KDqn4uLTFk-zD2p')),
+              Expanded(
+                child: _buildSecondaryPerformer(
+                  context,
+                  'Omari Spellman',
+                  'Rebounds Leader',
+                  '14.3',
+                  'RPG',
+                  'https://lh3.googleusercontent.com/aida-public/AB6AXuBGkL957XYsrycUmC-N_7vejj9y4jFXS9pXb74WJSNyMW3VSm8GRtIse6uSng_hWepCONIh80CLfQE54WmUDJ-_nbnKegpHBlHkv_t9RByTCG0FGC4vxfx89SRQdPNOYmeOg-RlVZDi5IbOZkFeGNFroj4-N1vxLwu0l_GCXNb80Dw69Ubmt2r25UTt7-rMtlYvdLbFRLo_HjXuz6BE2Rnz-oXEbkrp7Rni_6fQI0SCpIkIoz3IOncehQ71xlZr8KDqn4uLTFk-zD2p',
+                ),
+              ),
               const SizedBox(width: 16),
-              Expanded(child: _buildSecondaryPerformer(context, 'Ali Mezher', 'Assists Leader', '8.9', 'APG', 'https://lh3.googleusercontent.com/aida-public/AB6AXuCRr_ol2LJioV3KhfH-1HZc3hw7nBKIaEptbKc9l3bFSLHsTKRZtCmwxNBLhiII57FBTReMI_V9HeJjha7rXZ-PZxcbFZki6ddl5RFSiSROTkUHrCeuRvDDuCOjIQ4AgmzJR1qieUQX7xBz-SJUXRS0otz35g90wggZU4UmaBMKe427lP3qMe7QkSkYlGnZvXi8lnXKkkUFS1IVkop7yKYKdmvsWRohaVOVzvKJmGfR_WBETAeOv5PQEjJhfF6y5vpt7EQg6S__9k35')),
+              Expanded(
+                child: _buildSecondaryPerformer(
+                  context,
+                  'Ali Mezher',
+                  'Assists Leader',
+                  '8.9',
+                  'APG',
+                  'https://lh3.googleusercontent.com/aida-public/AB6AXuCRr_ol2LJioV3KhfH-1HZc3hw7nBKIaEptbKc9l3bFSLHsTKRZtCmwxNBLhiII57FBTReMI_V9HeJjha7rXZ-PZxcbFZki6ddl5RFSiSROTkUHrCeuRvDDuCOjIQ4AgmzJR1qieUQX7xBz-SJUXRS0otz35g90wggZU4UmaBMKe427lP3qMe7QkSkYlGnZvXi8lnXKkkUFS1IVkop7yKYKdmvsWRohaVOVzvKJmGfR_WBETAeOv5PQEjJhfF6y5vpt7EQg6S__9k35',
+                ),
+              ),
             ],
           ),
         ],
@@ -941,27 +1082,55 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildStat(BuildContext context, String label, String value, bool borderLeft) {
+  Widget _buildStat(
+    BuildContext context,
+    String label,
+    String value,
+    bool borderLeft,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: EdgeInsets.only(left: borderLeft ? 16 : 0),
       decoration: BoxDecoration(
-        border: borderLeft ? Border(left: BorderSide(color: Colors.white.withAlpha(26))) : null,
+        border: borderLeft
+            ? Border(left: BorderSide(color: Colors.white.withAlpha(26)))
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.secondary)),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: colorScheme.secondary,
+            ),
+          ),
           Text(
             value,
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: colorScheme.primary, fontFamily: 'Lexend', height: 1.0),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: colorScheme.primary,
+              fontFamily: 'Lexend',
+              height: 1.0,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSecondaryPerformer(BuildContext context, String name, String sublabel, String stat, String statLabel, String imgUrl) {
+  Widget _buildSecondaryPerformer(
+    BuildContext context,
+    String name,
+    String sublabel,
+    String stat,
+    String statLabel,
+    String imgUrl,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
@@ -991,22 +1160,45 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   color: Colors.white10,
                   shape: BoxShape.circle,
                 ),
-                child: Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => Icon(Icons.person, color: colorScheme.secondary)),
+                child: Image.network(
+                  imgUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (c, e, s) =>
+                      Icon(Icons.person, color: colorScheme.secondary),
+                ),
               ),
-              Text('#1', style: TextStyle(fontFamily: 'Lexend', fontSize: 18, fontWeight: FontWeight.w900, color: colorScheme.primary)),
+              Text(
+                '#1',
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: colorScheme.primary,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
             name.toUpperCase(),
-            style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w800, color: colorScheme.onSurface),
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: colorScheme.onSurface,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
             sublabel,
-            style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w500, color: colorScheme.secondary),
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.secondary,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -1014,14 +1206,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             children: [
               Text(
                 stat,
-                style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, height: 1.0, color: colorScheme.onSurface),
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  height: 1.0,
+                  color: colorScheme.onSurface,
+                ),
               ),
               const SizedBox(width: 4),
               Padding(
                 padding: const EdgeInsets.only(bottom: 2.0),
                 child: Text(
                   statLabel,
-                  style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.secondary),
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.secondary,
+                  ),
                 ),
               ),
             ],

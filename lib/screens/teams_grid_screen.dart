@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/team_repository.dart';
 import '../models/team.dart';
+import '../state/competition_filter.dart';
 import 'team_profile_screen.dart';
 
 class TeamsGridScreen extends StatefulWidget {
@@ -12,29 +13,53 @@ class TeamsGridScreen extends StatefulWidget {
 
 class _TeamsGridScreenState extends State<TeamsGridScreen> {
   final _teamsRepo = const TeamRepository();
+  final AppCompetitionFilter _filter = AppCompetitionFilter.instance;
   List<Team>? _teams;
   String? _error;
+  int _loadSeq = 0;
+  int? _loadedForCompetitionId;
 
   @override
   void initState() {
     super.initState();
+    _filter.addListener(_onFilterChanged);
+    _loadTeams();
+  }
+
+  @override
+  void dispose() {
+    _filter.removeListener(_onFilterChanged);
+    super.dispose();
+  }
+
+  void _onFilterChanged() {
+    if (!mounted) return;
+    if (_loadedForCompetitionId == _filter.selected.competitionId) return;
     _loadTeams();
   }
 
   Future<void> _loadTeams() async {
+    final seq = ++_loadSeq;
+    final cid = _filter.selected.competitionId;
+    if (mounted) {
+      setState(() {
+        _teams = null;
+        _error = null;
+      });
+    }
     try {
-      final teams = await _teamsRepo.fetchTeams();
-      if (mounted) {
-        setState(() {
-          _teams = teams;
-        });
-      }
+      final teams = await _teamsRepo.fetchTeams(competitionId: cid);
+      if (!mounted || seq != _loadSeq) return;
+      setState(() {
+        _teams = teams;
+        _loadedForCompetitionId = cid;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-        });
-      }
+      if (!mounted || seq != _loadSeq) return;
+      setState(() {
+        _error = e.toString();
+        _loadedForCompetitionId = cid;
+      });
     }
   }
 
@@ -65,12 +90,7 @@ class _TeamsGridScreenState extends State<TeamsGridScreen> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _error = null;
-                    });
-                    _loadTeams();
-                  },
+                  onPressed: _loadTeams,
                   child: const Text('Retry'),
                 ),
               ],
