@@ -2641,6 +2641,37 @@ app.post('/api/public/reservations', postPublicReservationHandler);
 // FLB Game routes
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** `games` row shape with home/away logos taken from `teams` when set (else `games.*` logos). */
+const GAME_ROW_SELECT_WITH_TEAM_LOGOS = `
+  g.match_id,
+  g.competition_id,
+  g.status,
+  g.raw_status,
+  g.date_time_text,
+  g.venue,
+  g.venue_id,
+  g.home_team_id,
+  g.home_team_name,
+  COALESCE(NULLIF(TRIM(th.team_logo), ''), g.home_team_logo) AS home_team_logo,
+  g.away_team_id,
+  g.away_team_name,
+  COALESCE(NULLIF(TRIM(ta.team_logo), ''), g.away_team_logo) AS away_team_logo,
+  g.home_score,
+  g.away_score,
+  g.summary_url,
+  g.boxscore_url,
+  g.playbyplay_url,
+  g.shotchart_url,
+  g.week,
+  g.updated_at
+`;
+
+const GAME_ROW_FROM_WITH_TEAM_LOGOS = `
+  FROM games g
+  LEFT JOIN teams th ON th.team_id = g.home_team_id
+  LEFT JOIN teams ta ON ta.team_id = g.away_team_id
+`;
+
 /** GET /games  — optional ?competition_id=… & ?week=… (integer). Upcoming + live + recent finals ordered by date */
 async function listGamesHandler(req, res) {
   try {
@@ -2652,23 +2683,23 @@ async function listGamesHandler(req, res) {
     let compClause = '';
     if (compId != null && !Number.isNaN(compId)) {
       params.push(compId);
-      compClause = `AND competition_id = $${params.length}`;
+      compClause = `AND g.competition_id = $${params.length}`;
     }
     let weekClause = '';
     if (weekNum != null && !Number.isNaN(weekNum)) {
       params.push(weekNum);
-      weekClause = `AND week = $${params.length}`;
+      weekClause = `AND g.week = $${params.length}`;
     }
     const { rows } = await pool.query(
       `
-      SELECT *
-      FROM games
-      WHERE status IN ('live', 'scheduled', 'final')
+      SELECT ${GAME_ROW_SELECT_WITH_TEAM_LOGOS}
+      ${GAME_ROW_FROM_WITH_TEAM_LOGOS}
+      WHERE g.status IN ('live', 'scheduled', 'final')
       ${compClause}
       ${weekClause}
       ORDER BY
-        CASE status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
-        updated_at DESC
+        CASE g.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
+        g.updated_at DESC
       LIMIT 200
     `,
       params,
@@ -2719,7 +2750,14 @@ async function getGameHandler(req, res) {
   const matchId = Number(req.params.matchId);
   if (Number.isNaN(matchId)) return res.status(400).json({ error: 'matchId must be an integer' });
   try {
-    const { rows } = await pool.query('SELECT * FROM games WHERE match_id = $1::bigint', [matchId]);
+    const { rows } = await pool.query(
+      `
+      SELECT ${GAME_ROW_SELECT_WITH_TEAM_LOGOS}
+      ${GAME_ROW_FROM_WITH_TEAM_LOGOS}
+      WHERE g.match_id = $1::bigint
+      `,
+      [matchId],
+    );
     if (rows.length === 0) return res.status(404).json({ error: 'Game not found' });
     res.json(rows[0]);
   } catch (err) {
@@ -2760,7 +2798,14 @@ async function getGameBoxscoreHandler(req, res) {
   if (Number.isNaN(matchId)) return res.status(400).json({ error: 'matchId must be an integer' });
   try {
     const [gameRes, teamsRes, playersRes, eventsRes] = await Promise.all([
-      pool.query('SELECT * FROM games WHERE match_id = $1::bigint', [matchId]),
+      pool.query(
+        `
+        SELECT ${GAME_ROW_SELECT_WITH_TEAM_LOGOS}
+        ${GAME_ROW_FROM_WITH_TEAM_LOGOS}
+        WHERE g.match_id = $1::bigint
+        `,
+        [matchId],
+      ),
       pool.query('SELECT * FROM team_boxscores WHERE match_id = $1::bigint ORDER BY side', [matchId]),
       pool.query(
         'SELECT * FROM player_boxscores WHERE match_id = $1::bigint ORDER BY side, player_name',
