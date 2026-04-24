@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/standings_calculator.dart';
+import '../data/team_repository.dart';
 import '../services/games_api_service.dart';
 import '../state/competition_filter.dart';
 
@@ -19,6 +20,7 @@ class StandingsScreen extends StatefulWidget {
 
 class _StandingsScreenState extends State<StandingsScreen> {
   final GamesApiService _api = GamesApiService();
+  final TeamRepository _teamsRepo = const TeamRepository();
   final AppCompetitionFilter _filter = AppCompetitionFilter.instance;
 
   List<StandingRow> _rows = const [];
@@ -57,10 +59,22 @@ class _StandingsScreenState extends State<StandingsScreen> {
       _error = null;
     });
     try {
-      final rows = await _api.fetchGames(competitionId: cid);
+      final gameRows = await _api.fetchGames(competitionId: cid);
+      if (!mounted || seq != _loadSeq) return;
+      var standings = computeStandings(gameRows);
+      try {
+        final teams = await _teamsRepo.fetchTeams(competitionId: cid);
+        if (!mounted || seq != _loadSeq) return;
+        final logoById = <String, String?>{
+          for (final t in teams) '${t.teamId}': t.logoUrl,
+        };
+        standings = applyLogosFromTeamTable(standings, logoById);
+      } catch (_) {
+        // Keep logos from game rows if /teams fails.
+      }
       if (!mounted || seq != _loadSeq) return;
       setState(() {
-        _rows = computeStandings(rows);
+        _rows = standings;
         _loading = false;
         _loadedForCompetitionId = cid;
       });

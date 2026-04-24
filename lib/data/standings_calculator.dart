@@ -38,6 +38,32 @@ class StandingRow {
   }
 }
 
+String? _nonEmptyLogo(String? raw) {
+  if (raw == null) return null;
+  final t = raw.trim();
+  return t.isEmpty ? null : t;
+}
+
+/// Prefer logos from the `teams` table (`team_id` → URL) over [StandingRow.teamLogo]
+/// (which comes from game rows / API).
+List<StandingRow> applyLogosFromTeamTable(
+  List<StandingRow> rows,
+  Map<String, String?> logoByTeamId,
+) {
+  return [
+    for (final r in rows)
+      StandingRow(
+        teamId: r.teamId,
+        teamName: r.teamName,
+        teamLogo: _nonEmptyLogo(logoByTeamId[r.teamId]) ?? r.teamLogo,
+        wins: r.wins,
+        losses: r.losses,
+        pointsFor: r.pointsFor,
+        pointsAgainst: r.pointsAgainst,
+      ),
+  ];
+}
+
 /// Aggregates a `/games` payload into a sorted [StandingRow] list.
 ///
 /// Only games with both scores present are counted (i.e. games that were
