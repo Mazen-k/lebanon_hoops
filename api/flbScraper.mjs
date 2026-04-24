@@ -463,7 +463,7 @@ function parseBoxscoreTable($, $h4, $table, side) {
  */
 export async function getBoxscore(competitionId, matchId) {
   const url = boxscoreUrl(competitionId, matchId);
-  const { html } = await fetchRendered(url, { waitForSelector: '.boxscore table.tableClass tbody tr' });
+  const { html } = await fetchRendered(url, { waitForSelector: '.boxscore, .match-header', settleMs: 2500 });
   const $ = cheerio.load(html);
 
   const header = parseMatchHeader($, competitionId, matchId);

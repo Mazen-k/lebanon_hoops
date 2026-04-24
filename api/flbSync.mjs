@@ -385,11 +385,13 @@ async function runScheduleRefresh(pool) {
 
     const backfillWhere = SCRAPE_PLAY_BY_PLAY
       ? `g.status = 'final'
+         AND g.competition_id = 42001
          AND (
            NOT EXISTS (SELECT 1 FROM player_boxscores pb WHERE pb.match_id = g.match_id LIMIT 1)
            OR NOT EXISTS (SELECT 1 FROM game_events   ge WHERE ge.match_id = g.match_id LIMIT 1)
          )`
       : `g.status = 'final'
+         AND g.competition_id = 42001
          AND NOT EXISTS (SELECT 1 FROM player_boxscores pb WHERE pb.match_id = g.match_id LIMIT 1)`;
 
     const { rows: gamesNeedingWork } = await pool.query(`
@@ -397,7 +399,6 @@ async function runScheduleRefresh(pool) {
       FROM games g
       WHERE ${backfillWhere}
       ORDER BY g.match_id DESC
-      LIMIT 100
     `);
 
     const boxNeeded = gamesNeedingWork.filter(r => r.needs_box).length;

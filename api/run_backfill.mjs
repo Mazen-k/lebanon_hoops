@@ -5,9 +5,13 @@
  */
 import pg from 'pg';
 import dotenv from 'dotenv';
-import { _internals } from './flbSync.mjs';
 
 dotenv.config();
+
+// Must be set before flbSync.mjs is imported — it reads COMPETITION_IDS at module load time.
+process.env.FLB_COMPETITION_IDS = '42001';
+
+const { _internals } = await import('./flbSync.mjs');
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
