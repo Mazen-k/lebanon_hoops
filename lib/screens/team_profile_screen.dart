@@ -655,175 +655,143 @@ class _OverviewUpcomingMatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: colorScheme.inverseSurface,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: colorScheme.primary.withValues(alpha: 0.15),
-                blurRadius: 32,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    final cs = Theme.of(context).colorScheme;
+
+    final cardBody = Ink(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        fixture.leagueLabel.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                          color: colorScheme.onInverseSurface.withValues(
-                            alpha: 0.6,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        fixture.metaLine.toUpperCase(),
-                        textAlign: TextAlign.right,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                          color: colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 4,
-                      child: Column(
-                        children: [
-                          _TeamCrestBadge(teamName: fixture.homeName, size: 56),
-                          const SizedBox(height: 12),
-                          Text(
-                            fixture.homeName.toUpperCase(),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'Lexend',
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14,
-                              letterSpacing: -0.5,
-                              color: colorScheme.onInverseSurface,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Column(
-                        children: [
-                          Text(
-                            'VS',
-                            style: TextStyle(
-                              fontFamily: 'Lexend',
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1,
-                              color: colorScheme.onInverseSurface.withValues(
-                                alpha: 0.3,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary,
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: Text(
-                              fixture.centerLabel ?? '—',
-                              style: TextStyle(
-                                fontFamily: 'Lexend',
-                                fontWeight: FontWeight.w900,
-                                fontSize: 14,
-                                color: colorScheme.onPrimary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      flex: 4,
-                      child: Column(
-                        children: [
-                          _TeamCrestBadge(teamName: fixture.awayName, size: 56),
-                          const SizedBox(height: 12),
-                          Text(
-                            fixture.awayName.toUpperCase(),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'Lexend',
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14,
-                              letterSpacing: -0.5,
-                              color: colorScheme.onInverseSurface,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Divider(
-                  color: colorScheme.onInverseSurface.withValues(alpha: 0.1),
-                  height: 1,
-                ),
-                const SizedBox(height: 16),
-                Center(
+                Expanded(
                   child: Text(
-                    'GET TICKETS',
+                    fixture.metaLine.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2.0,
-                      color: colorScheme.primary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.4,
+                      color: cs.onSurfaceVariant,
                     ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'UPCOMING',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                _TeamCrestBadge(teamName: fixture.homeName, size: 36),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    fixture.homeName.toUpperCase(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      letterSpacing: -0.3,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    'VS',
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      letterSpacing: -0.5,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    fixture.awayName.toUpperCase(),
+                    textAlign: TextAlign.right,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      letterSpacing: -0.3,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _TeamCrestBadge(teamName: fixture.awayName, size: 36),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: FilledButton(
+                onPressed: onTap,
+                style: FilledButton.styleFrom(
+                  backgroundColor: cs.primaryContainer,
+                  foregroundColor: cs.onPrimaryContainer,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'GET TICKETS',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2.0,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x18000000),
+            blurRadius: 10,
+            spreadRadius: 0,
+            offset: Offset(0, 3),
           ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: cardBody,
         ),
       ),
     );
@@ -1262,169 +1230,210 @@ class _LeagueFixtureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final bool isFuture = !fixture.isPast;
+    final cs = Theme.of(context).colorScheme;
+    final isFuture = !fixture.isPast;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: isFuture ? onCardTap : null,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: colorScheme.onSurface.withValues(alpha: 0.04),
-                blurRadius: 32,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            child: Column(
+    final cardBody = Ink(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Meta + status ───────────────────────────────────
+            Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        fixture.metaLine.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                          color: colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
-                      ),
+                Expanded(
+                  child: Text(
+                    fixture.metaLine.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.4,
+                      color: cs.onSurfaceVariant,
                     ),
-                    if (isFuture)
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: colorScheme.primary,
-                        ),
-                      )
-                    else
-                      Text(
-                        'FT',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                          color: colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.7,
-                          ),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 4,
-                      child: Row(
-                        children: [
-                          _TeamCrestBadge(teamName: fixture.homeName, size: 40),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              fixture.homeName.toUpperCase(),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'Lexend',
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
-                                letterSpacing: -0.5,
-                                color: colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Center(
-                        child: isFuture
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Text(
-                                  fixture.centerLabel ?? '—',
-                                  style: TextStyle(
-                                    fontFamily: 'Lexend',
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 12,
-                                    color: colorScheme.onPrimary,
-                                  ),
-                                ),
-                              )
-                            : Text(
-                                '${fixture.homeScore} - ${fixture.awayScore}',
-                                style: TextStyle(
-                                  fontFamily: 'Lexend',
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -1.5,
-                                  color: colorScheme.onSurface,
-                                ),
-                              ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 4,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              fixture.awayName.toUpperCase(),
-                              textAlign: TextAlign.right,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'Lexend',
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
-                                letterSpacing: -0.5,
-                                color: colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          _TeamCrestBadge(teamName: fixture.awayName, size: 40),
-                        ],
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 8),
+                Text(
+                  isFuture ? 'UPCOMING' : 'FT',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: cs.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 14),
+            // ── Body ────────────────────────────────────────────
+            if (isFuture)
+              // Upcoming: home logo | home name | VS | away name | away logo
+              Row(
+                children: [
+                  _TeamCrestBadge(teamName: fixture.homeName, size: 36),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      fixture.homeName.toUpperCase(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        letterSpacing: -0.3,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      'VS',
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        letterSpacing: -0.5,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      fixture.awayName.toUpperCase(),
+                      textAlign: TextAlign.right,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        letterSpacing: -0.3,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _TeamCrestBadge(teamName: fixture.awayName, size: 36),
+                ],
+              )
+            else
+              // Past: two stacked rows  logo | name | score
+              Column(
+                children: [
+                  Row(
+                    children: [
+                      _TeamCrestBadge(teamName: fixture.homeName, size: 36),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          fixture.homeName.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Lexend',
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                            letterSpacing: -0.3,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        fixture.homeScore != null
+                            ? '${fixture.homeScore}'
+                            : '—',
+                        style: TextStyle(
+                          fontFamily: 'Lexend',
+                          fontWeight: FontWeight.w900,
+                          fontSize: 22,
+                          letterSpacing: -1.0,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _TeamCrestBadge(teamName: fixture.awayName, size: 36),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          fixture.awayName.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Lexend',
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                            letterSpacing: -0.3,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        fixture.awayScore != null
+                            ? '${fixture.awayScore}'
+                            : '—',
+                        style: TextStyle(
+                          fontFamily: 'Lexend',
+                          fontWeight: FontWeight.w900,
+                          fontSize: 22,
+                          letterSpacing: -1.0,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+
+    const kShadow = BoxDecoration(
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+      boxShadow: [
+        BoxShadow(
+          color: Color(0x18000000),
+          blurRadius: 10,
+          spreadRadius: 0,
+          offset: Offset(0, 3),
+        ),
+      ],
+    );
+
+    if (onCardTap == null) {
+      return DecoratedBox(
+        decoration: kShadow,
+        child: Material(color: Colors.transparent, child: cardBody),
+      );
+    }
+
+    return DecoratedBox(
+      decoration: kShadow,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onCardTap,
+          borderRadius: BorderRadius.circular(12),
+          child: cardBody,
         ),
       ),
     );
   }
 }
+
 
 class _TeamCrestBadge extends StatelessWidget {
   const _TeamCrestBadge({required this.teamName, this.size = 40});

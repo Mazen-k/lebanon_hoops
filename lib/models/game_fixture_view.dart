@@ -7,6 +7,7 @@ class GameFixtureView {
     required this.homeName,
     required this.awayName,
     required this.isPast,
+    this.week,
     this.homeScore,
     this.awayScore,
     this.centerLabel,
@@ -21,6 +22,7 @@ class GameFixtureView {
   final String homeName;
   final String awayName;
   final bool isPast;
+  final int? week;
   final int? homeScore;
   final int? awayScore;
   final String? centerLabel;
@@ -36,6 +38,7 @@ class GameFixtureView {
     }
 
     final matchId = optInt(json['match_id'] ?? json['matchId']) ?? 0;
+    final week = optInt(json['week']);
     final status = (json['status'] ?? json['raw_status'] ?? '').toString().toLowerCase();
     final isPast = status == 'final';
     final dateText = (json['date_time_text'] ?? json['dateTimeText'] ?? '').toString().trim();
@@ -66,6 +69,7 @@ class GameFixtureView {
       homeName: home,
       awayName: away,
       isPast: isPast,
+      week: week,
       homeScore: homeScore,
       awayScore: awayScore,
       centerLabel: center,

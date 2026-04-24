@@ -54,7 +54,9 @@ class AppNavigationShellState extends State<AppNavigationShell> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       extendBody: true,
-      appBar: AppBar(
+      appBar: _currentIndex == 3
+          ? null
+          : AppBar(
               title: Text(
                 _titles[_currentIndex].toUpperCase(),
                 style: const TextStyle(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/game_fixture_view.dart';
 
-/// League-style match row (same look as team profile fixtures). When [onCardTap] is set, the whole card is tappable.
+/// League-style match card. When [onCardTap] is set, the whole card is tappable.
 class LeagueFixtureCard extends StatelessWidget {
   const LeagueFixtureCard({
     super.key,
@@ -15,28 +15,21 @@ class LeagueFixtureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isFuture = !fixture.isPast;
+    final cs = Theme.of(context).colorScheme;
+    final isLive = fixture.centerLabel == 'LIVE';
     final interactive = onCardTap != null;
 
-    final content = Ink(
+    final cardBody = Ink(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.onSurface.withValues(alpha: 0.04),
-            blurRadius: 32,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
@@ -44,142 +37,228 @@ class LeagueFixtureCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.4,
+                      color: cs.onSurfaceVariant,
                     ),
                   ),
                 ),
-                if (isFuture)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: fixture.centerLabel == 'LIVE' ? Colors.redAccent : colorScheme.primary,
-                    ),
-                  )
-                else
-                  Text(
-                    'FT',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                    ),
-                  ),
+                const SizedBox(width: 8),
+                _StatusLabel(isPast: fixture.isPast, isLive: isLive, colorScheme: cs),
               ],
             ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  flex: 4,
-                  child: Row(
-                    children: [
-                      _TeamVisual(name: fixture.homeName, logoUrl: fixture.homeLogoUrl, size: 40),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          fixture.homeName.toUpperCase(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'Lexend',
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13,
-                            letterSpacing: -0.5,
-                            color: colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Center(
-                    child: isFuture
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: fixture.centerLabel == 'LIVE'
-                                  ? Colors.redAccent
-                                  : colorScheme.primary,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              fixture.centerLabel ?? '—',
-                              style: TextStyle(
-                                fontFamily: 'Lexend',
-                                fontWeight: FontWeight.w900,
-                                fontSize: 11,
-                                color: Colors.white,
-                              ),
-                            ),
-                          )
-                        : Text(
-                            '${fixture.homeScore ?? '—'} - ${fixture.awayScore ?? '—'}',
-                            style: TextStyle(
-                              fontFamily: 'Lexend',
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -1.5,
-                              color: colorScheme.onSurface,
-                            ),
-                          ),
-                  ),
-                ),
-                Expanded(
-                  flex: 4,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          fixture.awayName.toUpperCase(),
-                          textAlign: TextAlign.right,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'Lexend',
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13,
-                            letterSpacing: -0.5,
-                            color: colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      _TeamVisual(name: fixture.awayName, logoUrl: fixture.awayLogoUrl, size: 40),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            const SizedBox(height: 14),
+            if (fixture.isPast || isLive)
+              _ScoredRows(fixture: fixture, colorScheme: cs)
+            else
+              _UpcomingRow(fixture: fixture, colorScheme: cs),
           ],
         ),
       ),
     );
 
+    const _kShadow = BoxDecoration(
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+      boxShadow: [
+        BoxShadow(
+          color: Color(0x18000000), // ~9 % black — subtle in light & dark
+          blurRadius: 10,
+          spreadRadius: 0,
+          offset: Offset(0, 3),
+        ),
+      ],
+    );
+
     if (!interactive) {
-      return Material(
-        color: Colors.transparent,
-        child: content,
+      return DecoratedBox(
+        decoration: _kShadow,
+        child: Material(color: Colors.transparent, child: cardBody),
       );
     }
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onCardTap,
-        borderRadius: BorderRadius.circular(16),
-        child: content,
+    return DecoratedBox(
+      decoration: _kShadow,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onCardTap,
+          borderRadius: BorderRadius.circular(12),
+          child: cardBody,
+        ),
       ),
+    );
+  }
+}
+
+class _StatusLabel extends StatelessWidget {
+  const _StatusLabel({
+    required this.isPast,
+    required this.isLive,
+    required this.colorScheme,
+  });
+
+  final bool isPast;
+  final bool isLive;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLive) {
+      return Text(
+        'LIVE',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.0,
+          color: colorScheme.error,
+        ),
+      );
+    }
+    return Text(
+      isPast ? 'FT' : 'UPCOMING',
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+        color: colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+}
+
+/// Two stacked team rows each showing [logo | name | score], used for
+/// completed and live games so each score aligns with its team name.
+class _ScoredRows extends StatelessWidget {
+  const _ScoredRows({required this.fixture, required this.colorScheme});
+
+  final GameFixtureView fixture;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _TeamScoreRow(
+          name: fixture.homeName,
+          logoUrl: fixture.homeLogoUrl,
+          score: fixture.homeScore,
+          colorScheme: colorScheme,
+        ),
+        const SizedBox(height: 10),
+        _TeamScoreRow(
+          name: fixture.awayName,
+          logoUrl: fixture.awayLogoUrl,
+          score: fixture.awayScore,
+          colorScheme: colorScheme,
+        ),
+      ],
+    );
+  }
+}
+
+class _TeamScoreRow extends StatelessWidget {
+  const _TeamScoreRow({
+    required this.name,
+    required this.logoUrl,
+    required this.score,
+    required this.colorScheme,
+  });
+
+  final String name;
+  final String? logoUrl;
+  final int? score;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _TeamVisual(name: name, logoUrl: logoUrl, size: 36),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            name.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+              letterSpacing: -0.3,
+              color: colorScheme.onSurface,
+            ),
+          ),
+        ),
+        Text(
+          score != null ? '$score' : '—',
+          style: TextStyle(
+            fontFamily: 'Lexend',
+            fontWeight: FontWeight.w900,
+            fontSize: 22,
+            letterSpacing: -1.0,
+            color: colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Single horizontal row: [home logo | home name | VS | away name | away logo]
+class _UpcomingRow extends StatelessWidget {
+  const _UpcomingRow({required this.fixture, required this.colorScheme});
+
+  final GameFixtureView fixture;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final nameStyle = TextStyle(
+      fontFamily: 'Lexend',
+      fontWeight: FontWeight.w900,
+      fontSize: 13,
+      letterSpacing: -0.3,
+      color: colorScheme.onSurface,
+    );
+
+    return Row(
+      children: [
+        _TeamVisual(name: fixture.homeName, logoUrl: fixture.homeLogoUrl, size: 36),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            fixture.homeName.toUpperCase(),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: nameStyle,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            'VS',
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              letterSpacing: -0.5,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            fixture.awayName.toUpperCase(),
+            textAlign: TextAlign.right,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: nameStyle,
+          ),
+        ),
+        const SizedBox(width: 10),
+        _TeamVisual(name: fixture.awayName, logoUrl: fixture.awayLogoUrl, size: 36),
+      ],
     );
   }
 }
