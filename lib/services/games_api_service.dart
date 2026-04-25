@@ -103,6 +103,55 @@ class GamesApiService {
     }
   }
 
+  /// Top team by win record for a completed competition (null if not found).
+  Future<Map<String, dynamic>?> fetchCompetitionChampion({
+    required int competitionId,
+  }) async {
+    final paths = _pair('competitions/$competitionId/champion');
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .get(_rootUri(p), headers: const {'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 25));
+        if (res.statusCode == 404) return null;
+        if (res.statusCode < 200 || res.statusCode >= 300) return null;
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is Map<String, dynamic>) return d;
+        if (d is Map) return Map<String, dynamic>.from(d);
+        return null;
+      }
+      return null;
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
+
+  /// Quarter/period score breakdown from `game_period_scores`.
+  Future<List<Map<String, dynamic>>> fetchPeriodScores({
+    required int matchId,
+  }) async {
+    final paths = _pair('games/$matchId/period-scores');
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .get(_rootUri(p), headers: const {'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 25));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          throw GamesApiException('Period scores failed (${res.statusCode})');
+        }
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is! List) return [];
+        return d.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      return [];
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
+
   /// Full box score: `games` + `team_boxscores` + `player_boxscores` + `game_events` (play-by-play).
   Future<Map<String, dynamic>> fetchBoxscore({required int matchId}) async {
     final paths = _pair('games/$matchId/boxscore');

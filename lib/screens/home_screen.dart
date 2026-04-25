@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
+import '../services/games_api_service.dart';
+import '../state/competition_filter.dart';
 import '../widgets/competition_selector_bar.dart';
+import 'game_boxscore_screen.dart';
 import 'ticket_selection_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,36 +18,19 @@ class _HomeScreenState extends State<HomeScreen>
   final PageController _newsController = PageController();
   int _currentNewsIndex = 0;
   Timer? _newsTimer;
-  final Set<int> _reminderIndices = {};
+  final Set<int> _remindedMatchIds = {};
   AnimationController? _pulseController;
 
-  final List<Map<String, dynamic>> _liveGamesData = [
-    {
-      'isLive': true,
-      'status': '4TH QUARTER - 2:14',
-      'team1Code': 'SAG',
-      'team2Code': 'RIY',
-      'score1': '88',
-      'score2': '82',
-      'team1Img':
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBeZhnyferj-0miau0a5BOEYCYhBmM9gCvWP3yHRNpv4Si_AcCoU0lwRW7hLmOevY0Eh_o5C2SjXiuZvB-mthKA1pjq9xWSFS7cc-Qk7IRAVpNjhnm8PG6w7_3tNwh-Sl5nKXeT6JZdltRtBsTJdE833AYv6oHj0RJhhPUYrEiv4cSC8cDKGT9t-2suTaGZPXApcZGC_rmuEmMD48AsRckdOW45rdhqvUzdyGx8EwRW4Xg3vUUy8JbsAzpgZRhSectMoKG739zI0JXd',
-      'team2Img':
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDUecrR3vIHtF6cEprw8zD9yiavYsEputoDcXvW3aymeq9zxNr7N0gT0JNnvYlTq1w8kL6dO0-TzUcscfOF7sXBqdH2uahMaTqx84a5W9wWDePp05ovXdizqswItr1LO4fnIzU92PTvfl1RZA3Rz9bfWDtVHnG0bepiIscjUd3ccJ9Gvs4iNDt8b4tZ8ZyHPMrUNS4hcKA_88kMNPJFI7HZt3FiEjpITO3u3jPfaBjtgJmf24irUBo2Uwu_vtZAPX0v39Ea3AY9c47u',
-    },
-    {
-      'isLive': false,
-      'status': 'HALF TIME',
-      'badgeText': 'LBL CUP',
-      'team1Code': 'BEI',
-      'team2Code': 'ANT',
-      'score1': '45',
-      'score2': '41',
-      'team1Img':
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuCERcE_itviUqsRb4ZzCp7yfhuHNph9wsobGv6kVpsuTtUd8qvqgDt7ee0bVFYpPTIF1KTSC3l0r0_bmMo-TbnQZjfsDjHDo1SvjHmwfxZGfkPqe_vzpfe9Go3xoOrbw_vRLsU5aINidXAWHGxnOYn2B4wTrJO0qe0qX_Op9RAyg56oNfYWPypXOp0TKVFSZbS4sFFJmtOpxJWY0Cds1ZGdi8Vq-PU1xuXM5oMZ6yQh5s2S02bsVs9uOMaoEiGGx-blUeVpOkk1QxdK',
-      'team2Img':
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBlopqXV-bzBWo8tkLEFGT2CZdR__srY_xmWXCunT3IVHmXrNeeGF66Ghre_S4hAdoKumBCvt089Vt3ZpUKmRqGV_7YwONWaNevJ3dFOX_q7w68D9zLyRVM3kneOmRbWV4K7MVqMFKCkPOrQp5MukJgPZVmYF1JNpLDw67VgQRe13qUy_uKjHwbyClZ2BNiTq76HxqQXjEMeAFtHQ7MnYe7bomTVAq2s2gCmV7Wkl1H6dczKDPKvaOnyRLlg1MhbDVBZPGKQZBUTG7P',
-    },
-  ];
+  final _api = GamesApiService();
+  final _filter = AppCompetitionFilter.instance;
+  bool _gamesLoading = false;
+  List<Map<String, dynamic>> _liveGames = const [];
+  List<Map<String, dynamic>> _upcomingGames = const [];
+  List<Map<String, dynamic>> _activeUpcomingGames = const [];
+  List<Map<String, dynamic>> _completedChampions = const [];
+
+  // Competitions that are fully over — show their champion instead of live section.
+  static const List<int> _completedCompIds = [39158, 39159];
 
   final List<Map<String, String>> _breakingNews = [
     {
@@ -78,6 +63,12 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     _startNewsTimer();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _filter.addListener(_onFilterChanged);
+    _loadGames();
   }
 
   void _startNewsTimer() {
@@ -93,8 +84,61 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
+  void _onFilterChanged() => _loadGames();
+
+  Future<void> _loadGames() async {
+    if (mounted) setState(() => _gamesLoading = true);
+    try {
+      await _filter.ensureLoaded();
+      final selectedId = _filter.selected.competitionId;
+      final isCompleted = _completedCompIds.contains(selectedId);
+
+      final gamesF = _api.fetchGames(competitionId: selectedId);
+      final championF = isCompleted
+          ? _api
+              .fetchCompetitionChampion(competitionId: selectedId)
+              .onError((_, __) => null)
+          : Future<Map<String, dynamic>?>.value(null);
+
+      final games = await gamesF;
+      final champion = await championF;
+
+      if (!mounted) return;
+      setState(() {
+        _liveGames = games
+            .where(
+              (g) => (g['status'] ?? '').toString().toLowerCase() == 'live',
+            )
+            .toList();
+        _upcomingGames = games
+            .where((g) {
+              final s = (g['status'] ?? '').toString().toLowerCase();
+              return s == 'scheduled' || s == 'postponed';
+            })
+            .take(5)
+            .toList();
+        _activeUpcomingGames = isCompleted ? const [] : _upcomingGames;
+        _completedChampions =
+            champion != null ? [champion] : const [];
+        _gamesLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _gamesLoading = false);
+    }
+  }
+
+  static String _abbr(String name) {
+    final words = name.trim().split(RegExp(r'\s+'));
+    if (words.length >= 2) {
+      return words.take(3).map((w) => w.isEmpty ? '' : w[0]).join().toUpperCase();
+    }
+    final s = words.first;
+    return s.substring(0, s.length.clamp(0, 3)).toUpperCase();
+  }
+
   @override
   void dispose() {
+    _filter.removeListener(_onFilterChanged);
     _pulseController?.dispose();
     _newsTimer?.cancel();
     _newsController.dispose();
@@ -180,7 +224,114 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildLiveGamesSection(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    if (_liveGamesData.isEmpty) {
+    // Live games — show them with pulsing LIVE badge
+    if (_liveGames.isNotEmpty || _gamesLoading) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(
+            context,
+            'LIVE LBL GAMES',
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withAlpha((255 * 0.1).round()),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  if (_pulseController != null)
+                    ScaleTransition(
+                      scale: Tween(begin: 0.85, end: 1.15).animate(
+                        CurvedAnimation(
+                          parent: _pulseController!,
+                          curve: Curves.easeInOut,
+                        ),
+                      ),
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: colorScheme.primary.withAlpha(150),
+                              blurRadius: 4,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'LIVE',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 156,
+            child: _gamesLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    itemCount: _liveGames.length,
+                    itemBuilder: (context, index) {
+                      final g = _liveGames[index];
+                      final matchId =
+                          int.tryParse(g['match_id'].toString()) ?? 0;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 16),
+                        child: _buildLiveGameCard(
+                          context: context,
+                          matchId: matchId,
+                          status: (g['raw_status'] ?? g['status'] ?? 'LIVE')
+                              .toString()
+                              .toUpperCase(),
+                          team1Code: _abbr(
+                            (g['home_team_name'] ?? 'Home').toString(),
+                          ),
+                          team2Code: _abbr(
+                            (g['away_team_name'] ?? 'Away').toString(),
+                          ),
+                          score1: (g['home_score'] ?? 0).toString(),
+                          score2: (g['away_score'] ?? 0).toString(),
+                          team1Img: g['home_team_logo']?.toString() ?? '',
+                          team2Img: g['away_team_logo']?.toString() ?? '',
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      );
+    }
+
+    // No live games — show upcoming D1 and/or champions as available
+    final hasUpcoming = _activeUpcomingGames.isNotEmpty;
+    final hasChampions = _completedChampions.isNotEmpty;
+
+    if (!hasUpcoming && !hasChampions) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Container(
@@ -248,103 +399,353 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
 
+    // Combined: upcoming D1 games and/or season champions
+    const gold = Color(0xFFFFD700);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader(
-          context,
-          'LIVE LBL GAMES',
-          trailing: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: colorScheme.primary.withAlpha((255 * 0.1).round()),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                if (_pulseController != null)
-                  ScaleTransition(
-                    scale: Tween(begin: 0.85, end: 1.15).animate(
-                      CurvedAnimation(
-                        parent: _pulseController!,
-                        curve: Curves.easeInOut,
-                      ),
-                    ),
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: colorScheme.primary.withAlpha(150),
-                            blurRadius: 4,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
+        if (hasUpcoming) ...[
+          _buildSectionHeader(
+            context,
+            'UPCOMING D1 GAMES',
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withAlpha(25),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today_rounded,
+                    size: 12,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'NEXT UP',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
                       color: colorScheme.primary,
-                      shape: BoxShape.circle,
                     ),
                   ),
-                const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 156,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              itemCount: _activeUpcomingGames.length,
+              itemBuilder: (context, index) => Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: _buildUpcomingGameCard(
+                  context,
+                  _activeUpcomingGames[index],
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (hasUpcoming && hasChampions) const SizedBox(height: 32),
+        if (hasChampions) ...[
+          _buildSectionHeader(
+            context,
+            'SEASON CHAMPIONS',
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: gold.withAlpha(30),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.emoji_events, color: gold, size: 14),
+                  SizedBox(width: 6),
+                  Text(
+                    'FINAL',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: gold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 200,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              itemCount: _completedChampions.length,
+              itemBuilder: (context, index) => Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: _buildChampionCard(
+                  context,
+                  _completedChampions[index],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildUpcomingGameCard(
+    BuildContext context,
+    Map<String, dynamic> g,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final matchId = int.tryParse(g['match_id'].toString()) ?? 0;
+    final dt = (g['date_time_text'] ?? '').toString().trim();
+    final st = (g['status'] ?? '').toString().toLowerCase();
+    final dateLabel =
+        dt.isNotEmpty ? dt.toUpperCase() : (st == 'postponed' ? 'POSTPONED' : 'TBD');
+    final team1Code = _abbr((g['home_team_name'] ?? 'Home').toString());
+    final team2Code = _abbr((g['away_team_name'] ?? 'Away').toString());
+    final team1Img = g['home_team_logo']?.toString() ?? '';
+    final team2Img = g['away_team_logo']?.toString() ?? '';
+
+    return GestureDetector(
+      onTap: matchId > 0
+          ? () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => GameBoxscoreScreen(matchId: matchId),
+                ),
+              )
+          : null,
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withAlpha(13)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 Text(
-                  'LIVE',
+                  dateLabel,
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 12,
+                    fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
+                    letterSpacing: 1.0,
+                    color: colorScheme.onSurface.withAlpha(179),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: colorScheme.outline.withAlpha(60),
+                    ),
+                  ),
+                  child: Text(
+                    st == 'postponed' ? 'POSTPONED' : 'UPCOMING',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 156,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            itemCount: _liveGamesData.length,
-            itemBuilder: (context, index) {
-              final game = _liveGamesData[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: _buildLiveGameCard(
-                  context: context,
-                  isLive: game['isLive'],
-                  status: game['status'],
-                  badgeText: game['badgeText'],
-                  team1Code: game['team1Code'],
-                  team2Code: game['team2Code'],
-                  score1: game['score1'],
-                  score2: game['score2'],
-                  team1Img: game['team1Img'],
-                  team2Img: game['team2Img'],
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildTeamColumn(
+                  context,
+                  team1Code,
+                  colorScheme.onSurface,
+                  team1Img,
                 ),
-              );
-            },
-          ),
+                Text(
+                  'VS',
+                  style: TextStyle(
+                    fontFamily: 'Lexend',
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                    color: colorScheme.primary,
+                    height: 1.0,
+                  ),
+                ),
+                _buildTeamColumn(
+                  context,
+                  team2Code,
+                  colorScheme.onSurface,
+                  team2Img,
+                ),
+              ],
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+
+  static String _championLabel(Map<String, dynamic> c) {
+    final g = (c['gender'] ?? '').toString().toUpperCase();
+    final genderStr = g == 'M' ? "MEN'S" : "WOMEN'S";
+    final name = (c['competition_name'] ?? '')
+        .toString()
+        .toUpperCase()
+        .replaceAll('DIVISION', 'DIV');
+    final start = (c['start_year'] ?? '').toString();
+    final end = (c['end_year'] ?? '').toString();
+    final sy = start.length >= 4 ? start.substring(2) : start;
+    final ey = end.length >= 4 ? end.substring(2) : end;
+    return '$genderStr $name • $sy/$ey';
+  }
+
+  Widget _buildChampionCard(
+    BuildContext context,
+    Map<String, dynamic> champion,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    const gold = Color(0xFFFFD700);
+    final teamName = (champion['team_name'] ?? 'Unknown').toString();
+    final wins = champion['wins'] ?? 0;
+    final losses = champion['losses'] ?? 0;
+    final logoUrl = champion['logo_url']?.toString() ?? '';
+    final label = _championLabel(champion);
+
+    return Container(
+      width: 200,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: gold.withAlpha(60)),
+        boxShadow: [
+          BoxShadow(
+            color: gold.withAlpha(20),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: colorScheme.onSurfaceVariant,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: gold.withAlpha(30),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.emoji_events, color: gold, size: 10),
+                    SizedBox(width: 3),
+                    Text(
+                      'CHAMP',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: gold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            padding: const EdgeInsets.all(10),
+            child: Image.network(
+              logoUrl,
+              fit: BoxFit.contain,
+              errorBuilder: (c, e, s) => Icon(
+                Icons.shield,
+                color: colorScheme.secondary,
+                size: 32,
+              ),
+            ),
+          ),
+          Column(
+            children: [
+              Text(
+                teamName.toUpperCase(),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: colorScheme.onSurface,
+                  height: 1.1,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '$wins W – $losses L',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: gold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildLiveGameCard({
     required BuildContext context,
-    required bool isLive,
+    required int matchId,
     required String status,
-    String? badgeText,
     required String team1Code,
     required String team2Code,
     required String score1,
@@ -353,35 +754,24 @@ class _HomeScreenState extends State<HomeScreen>
     required String team2Img,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final bgColor = isLive
-        ? colorScheme.surfaceContainerHighest
-        : colorScheme.surfaceContainerHigh;
     final textColor = colorScheme.onSurface;
     final statusColor = colorScheme.onSurface.withAlpha(179);
     final vsColor = colorScheme.primary;
 
     return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Entering Live Game Center for $team1Code vs $team2Code...',
-            ),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: colorScheme.primary,
-          ),
-        );
-      },
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => GameBoxscoreScreen(matchId: matchId),
+        ),
+      ),
       child: Container(
         width: 280,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: bgColor,
+          color: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.white.withAlpha(13),
-          ), // border-white/5
+          border: Border.all(color: Colors.white.withAlpha(13)),
         ),
         child: Column(
           children: [
@@ -389,7 +779,7 @@ class _HomeScreenState extends State<HomeScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  status.toUpperCase(),
+                  status,
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 10,
@@ -398,36 +788,25 @@ class _HomeScreenState extends State<HomeScreen>
                     color: statusColor,
                   ),
                 ),
-                if (isLive)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'Live',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  )
-                else if (badgeText != null)
-                  Text(
-                    badgeText.toUpperCase(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'Live',
                     style: TextStyle(
                       fontFamily: 'Inter',
+                      color: Colors.white,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: colorScheme.secondary,
                     ),
                   ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -686,41 +1065,65 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 260,
-          child: ListView.separated(
-            padding: const EdgeInsets.only(left: 24, right: 24, bottom: 4),
-            scrollDirection: Axis.horizontal,
-            itemCount: 2,
-            separatorBuilder: (context, index) => const SizedBox(width: 16),
-            itemBuilder: (context, index) {
-              final isFirst = index == 0;
-              return _buildTicketCard(
-                context: context,
-                index: index,
-                date: isFirst
-                    ? 'FRIDAY, OCT 27 • 20:30'
-                    : 'SATURDAY, OCT 28 • 17:00',
-                venue: isFirst ? 'MANARA ARENA' : 'NOUHAD NAWFAL',
-                team1Code: isFirst ? 'CHA' : 'HOM',
-                team2Code: isFirst ? 'HOO' : 'MAR',
-                team1Img: isFirst
-                    ? 'https://lh3.googleusercontent.com/aida-public/AB6AXuCC8faf2GNMciTs72ELic_OLq0juj6BuREhykpM_PhNjZdj8BOq5ejI53lPu86sGeG0Zl4FIPJ5jAIdgbWVyDMh5uLNm_T5K8ug3RRCiy70m6eGLoBjSSjEi7d6Znw4-VB4HhssfQhCodN2sHX2h-sJ_680_-AyR9F5eLzPpogREB6TRGZ895X3yU6FElkIkyTqisjzIfgLLoNIt2BP4aiQrdATFsFOEXeaTkB8DLhalYxVTtYIx82GVRuOfeMLlI0CVfOh5TEuLDvO'
-                    : 'https://lh3.googleusercontent.com/aida-public/AB6AXuCbmKctCxM-iMB-fPCQtRfUVsgKTy8Ao-TsaNvTzu4aRoZkVQs7T6_eU9P1u_w6HpJNnxDSHDwKkUhU4yNDz-7_CjK4uDm1sE5p-GfmTEktewnoMf2apJSjbVVq_RJ56tos1fyBeKGObnxzuU-iHk7uoz4e7aKYhCb_pDsCU2by78McdFSfr8T9Sdrt__hVWOSKtuI2L7TubBz6_s-DLb7ST3PkxPd947xUmWPiNaPOLvWagB0IwalNRYBBDa6QIp3cSVcsfJxwWuue',
-                team2Img: isFirst
-                    ? 'https://lh3.googleusercontent.com/aida-public/AB6AXuAVD8YnSRXkJBW1AJgFJWKBzxHNxNfcNoYlZhR7lX4guB8PnpXpubsq6Y6KjY_GAI5xhmvaZqGtWTCjOapNzD143ubCZKNwfAFrsV7Xaai99-eP8Gxh2j81AKLi94DOesbbUx5mozmMmDy7P81KURtyAamRiZNZddnr-rVJ2FV5-M9z9FoOMGEfUeP-lb2R5X7sj3k4Up6wnyOvjcqwz3EoCliG7nmYryeuykSJtD7YbrdLC45tBh1nhzjUNavqox8OBfGqauF8s0LG'
-                    : 'https://lh3.googleusercontent.com/aida-public/AB6AXuBaJQ43dOwdhnO4oj_FKLk16rShhynZcT3KNNu6S-ayVpZ9enBInG2Nx2FrJdv4SaJ_8zhE06woLaXhKb0j_G6IDmhSA4jeDjno4LDVpUxL32MyVnf1UrjiEerl3CUOQC13K6J2ZSbKZGYNQIxx0JkgyAuMTLKckVq51U3FEDOX-Equ8-Oie4MBWFtKPqB8pkk0XbrIMBRpQeZ_L5c3j7B9oKdtePGBo4oSW8ysWi_oxIObk8fgatYhNy7jzGZpU97g1NovRYOFoR08',
-              );
-            },
+        if (_gamesLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_upcomingGames.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              'No upcoming games scheduled.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 260,
+            child: ListView.separated(
+              padding: const EdgeInsets.only(left: 24, right: 24, bottom: 4),
+              scrollDirection: Axis.horizontal,
+              itemCount: _upcomingGames.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 16),
+              itemBuilder: (context, index) {
+                final g = _upcomingGames[index];
+                final matchId =
+                    int.tryParse(g['match_id'].toString()) ?? 0;
+                return _buildTicketCard(
+                  context: context,
+                  matchId: matchId,
+                  date: (() {
+                    final dt = (g['date_time_text'] ?? '').toString().trim();
+                    final st = (g['status'] ?? '').toString().toLowerCase();
+                    return dt.isNotEmpty
+                        ? dt.toUpperCase()
+                        : (st == 'postponed' ? 'POSTPONED' : 'TBD');
+                  })(),
+                  venue: (g['venue'] ?? '').toString().toUpperCase(),
+                  team1Code: _abbr(
+                    (g['home_team_name'] ?? 'Home').toString(),
+                  ),
+                  team2Code: _abbr(
+                    (g['away_team_name'] ?? 'Away').toString(),
+                  ),
+                  team1Img: g['home_team_logo']?.toString() ?? '',
+                  team2Img: g['away_team_logo']?.toString() ?? '',
+                );
+              },
+            ),
           ),
-        ),
       ],
     );
   }
 
   Widget _buildTicketCard({
     required BuildContext context,
-    required int index,
+    required int matchId,
     required String date,
     required String venue,
     required String team1Code,
@@ -729,7 +1132,7 @@ class _HomeScreenState extends State<HomeScreen>
     required String team2Img,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isReminded = _reminderIndices.contains(index);
+    final isReminded = _remindedMatchIds.contains(matchId);
 
     return Container(
       width: 300,
@@ -776,9 +1179,9 @@ class _HomeScreenState extends State<HomeScreen>
                   onPressed: () {
                     setState(() {
                       if (isReminded) {
-                        _reminderIndices.remove(index);
+                        _remindedMatchIds.remove(matchId);
                       } else {
-                        _reminderIndices.add(index);
+                        _remindedMatchIds.add(matchId);
                       }
                     });
                     ScaffoldMessenger.of(context).showSnackBar(

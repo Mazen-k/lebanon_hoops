@@ -38,6 +38,7 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
     with SingleTickerProviderStateMixin {
   final _api = GamesApiService();
   Map<String, dynamic>? _payload;
+  List<Map<String, dynamic>> _periodScores = const [];
   String? _error;
   bool _loading = true;
   late final TabController _tabController;
@@ -61,10 +62,16 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
       _error = null;
     });
     try {
-      final data = await _api.fetchBoxscore(matchId: widget.matchId);
+      final boxscoreF = _api.fetchBoxscore(matchId: widget.matchId);
+      final periodsF = _api
+          .fetchPeriodScores(matchId: widget.matchId)
+          .onError((_, __) => <Map<String, dynamic>>[]);
+      final data = await boxscoreF;
+      final periods = await periodsF;
       if (!mounted) return;
       setState(() {
         _payload = data;
+        _periodScores = periods;
         _loading = false;
       });
     } on GamesApiException catch (e) {
@@ -315,6 +322,7 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
                 awayTotals: awayTotals,
                 homePlayers: _playersForSide(players, 'home'),
                 awayPlayers: _playersForSide(players, 'away'),
+                periodScores: _periodScores,
               ),
               _PlayersTab(
                 scheme: scheme,
@@ -588,6 +596,7 @@ class _TeamTotalsTab extends StatelessWidget {
     required this.awayTotals,
     required this.homePlayers,
     required this.awayPlayers,
+    required this.periodScores,
   });
 
   final ColorScheme scheme;
@@ -597,21 +606,50 @@ class _TeamTotalsTab extends StatelessWidget {
   final Map<String, String> awayTotals;
   final List<Map<String, dynamic>> homePlayers;
   final List<Map<String, dynamic>> awayPlayers;
+  final List<Map<String, dynamic>> periodScores;
+
+  static List<_PeriodScoreRow> _buildPeriodRows(
+    List<Map<String, dynamic>> scores,
+  ) {
+    if (scores.isEmpty) {
+      return const [
+        _PeriodScoreRow(label: 'Q1', homeValue: '', awayValue: ''),
+        _PeriodScoreRow(label: 'Q2', homeValue: '', awayValue: ''),
+        _PeriodScoreRow(label: 'Q3', homeValue: '', awayValue: ''),
+        _PeriodScoreRow(label: 'Q4', homeValue: '', awayValue: ''),
+        _PeriodScoreRow(label: 'Total', homeValue: '', awayValue: '', isTotal: true),
+      ];
+    }
+    String toLabel(String period) {
+      final m = RegExp(r'^P(\d+)$').firstMatch(period);
+      return m != null ? 'Q${m.group(1)}' : period;
+    }
+
+    final rows = scores
+        .map(
+          (p) => _PeriodScoreRow(
+            label: toLabel(p['period'] as String),
+            homeValue: '${p['home_score']}',
+            awayValue: '${p['away_score']}',
+          ),
+        )
+        .toList();
+
+    final last = scores.last;
+    rows.add(
+      _PeriodScoreRow(
+        label: 'Total',
+        homeValue: '${last['home_running_total']}',
+        awayValue: '${last['away_running_total']}',
+        isTotal: true,
+      ),
+    );
+    return rows;
+  }
 
   @override
   Widget build(BuildContext context) {
-    const periodRows = [
-      _PeriodScoreRow(label: 'Q1', homeValue: '', awayValue: ''),
-      _PeriodScoreRow(label: 'Q2', homeValue: '', awayValue: ''),
-      _PeriodScoreRow(label: 'Q3', homeValue: '', awayValue: ''),
-      _PeriodScoreRow(label: 'Q4', homeValue: '', awayValue: ''),
-      _PeriodScoreRow(
-        label: 'Total',
-        homeValue: '',
-        awayValue: '',
-        isTotal: true,
-      ),
-    ];
+    final periodRows = _buildPeriodRows(periodScores);
     final topScorers = _buildTopScorers(
       homePlayers: homePlayers,
       awayPlayers: awayPlayers,
@@ -951,17 +989,6 @@ class _InfoHeroCard extends StatelessWidget {
               fontSize: 18,
               letterSpacing: -0.4,
               color: scheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Quarter scoring will appear here once those values are available in the database. Team leaders and totals stay visible below.',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w500,
-              fontSize: 13,
-              height: 1.4,
-              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
