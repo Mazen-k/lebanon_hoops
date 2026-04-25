@@ -42,11 +42,12 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   bool _showTeamStats = true;
 
   // —— Table chrome (rows use theme surface so it matches app background) ——
-  static const Color _kHeaderBg = Color(0xFFE0E0E0);
+  static const Color _kAccentRed = Color(0xFFBB0013);
+  static const Color _kHeaderBg = _kAccentRed;
+  static const Color _kPlayerStatsBg = Color(0xFFEDEDED);
   static const Color _kBorder = Color(0xFFCFCFCF);
   static const Color _kText = Color(0xFF000000);
   static const Color _kSubtext = Color(0xFF666666);
-  static const Color _kSwitchGreen = Color(0xFF4CAF50);
 
   static const double _hdrH = 48;
   static const double _rowH = 56;
@@ -171,6 +172,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bottomPad = appShellBottomBarOverlap(context);
+    final pageBg = _showTeamStats ? cs.surface : _kPlayerStatsBg;
 
     final Widget scrollChild;
     if (!_showTeamStats) {
@@ -214,7 +216,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     }
 
     return ColoredBox(
-      color: cs.surface,
+      color: pageBg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -282,7 +284,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
                 Switch(
                   value: !_perGame,
                   onChanged: (totalsOn) => setState(() => _perGame = !totalsOn),
-                  activeTrackColor: _kSwitchGreen,
+                  activeTrackColor: _kAccentRed,
                   activeThumbColor: Colors.white,
                   inactiveTrackColor: const Color(0xFFBDBDBD),
                   inactiveThumbColor: Colors.white,
@@ -396,7 +398,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
           fontWeight: FontWeight.w900,
           fontSize: 11,
           letterSpacing: 0.6,
-          color: _kText,
+          color: Colors.white,
         ),
       ),
     );
@@ -465,7 +467,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
           fontWeight: FontWeight.w900,
           fontSize: 10.5,
           letterSpacing: 0.35,
-          color: _kText,
+          color: Colors.white,
         ),
       ),
     );
@@ -578,7 +580,9 @@ class _StatsModeChip extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           decoration: BoxDecoration(
-            color: selected ? scheme.surface : Colors.transparent,
+            color: selected
+                ? _TeamStatsScreenState._kAccentRed
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Center(
@@ -591,7 +595,7 @@ class _StatsModeChip extends StatelessWidget {
                 fontFamily: 'Lexend',
                 fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                 fontSize: 13,
-                color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+                color: selected ? Colors.white : scheme.onSurfaceVariant,
               ),
             ),
           ),

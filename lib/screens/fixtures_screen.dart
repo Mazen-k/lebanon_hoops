@@ -48,6 +48,18 @@ class _FixturesScreenState extends State<FixturesScreen>
   int get _competitionId =>
       widget.competitionId ?? _filter.selected.competitionId;
 
+  static int _compareGameWeeks(int a, int b) {
+    final aRegular = a >= 0;
+    final bRegular = b >= 0;
+    if (aRegular && bRegular) return a.compareTo(b);
+    if (aRegular) return -1;
+    if (bRegular) return 1;
+    return a.abs().compareTo(b.abs());
+  }
+
+  static List<int> _orderedGameWeeks(Iterable<int> weeks) =>
+      weeks.toList()..sort(_compareGameWeeks);
+
   @override
   void initState() {
     super.initState();
@@ -100,7 +112,9 @@ class _FixturesScreenState extends State<FixturesScreen>
     try {
       List<int> weeks = [];
       try {
-        weeks = await _api.fetchGameWeeks(competitionId: cid);
+        weeks = _orderedGameWeeks(
+          await _api.fetchGameWeeks(competitionId: cid),
+        );
       } on GamesApiException {
         weeks = [];
       }
@@ -114,8 +128,9 @@ class _FixturesScreenState extends State<FixturesScreen>
             .where((f) => f.matchId > 0)
             .toList();
 
-        final derivedWeeks =
-            list.map((f) => f.week).whereType<int>().toSet().toList()..sort();
+        final derivedWeeks = _orderedGameWeeks(
+          list.map((f) => f.week).whereType<int>().toSet(),
+        );
 
         if (derivedWeeks.isNotEmpty) {
           final grouped = <int, List<GameFixtureView>>{};
@@ -468,6 +483,7 @@ class _WeekLabelChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = colorScheme;
+    final label = _WeekDisplayLabel.fromWeek(week);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
@@ -485,7 +501,7 @@ class _WeekLabelChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'WEEK',
+            label.top,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -500,15 +516,21 @@ class _WeekLabelChip extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            '$week',
-            maxLines: 1,
+            label.bottom,
+            maxLines: label.isSpecial ? 2 : 1,
             overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Lexend',
-              fontSize: isFocused ? 24 : 16,
+              fontSize: label.isSpecial
+                  ? (isFocused ? 12 : 9.5)
+                  : (isFocused ? 24 : 16),
               fontWeight: isFocused ? FontWeight.w900 : FontWeight.w700,
               fontStyle: isFocused ? FontStyle.italic : FontStyle.normal,
-              letterSpacing: isFocused ? -0.7 : -0.2,
+              letterSpacing: label.isSpecial
+                  ? (isFocused ? -0.15 : 0)
+                  : (isFocused ? -0.7 : -0.2),
+              height: label.isSpecial ? 1.05 : null,
               color: isFocused ? cs.onSurface : cs.onSurfaceVariant,
             ),
           ),
@@ -527,5 +549,53 @@ class _WeekLabelChip extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _WeekDisplayLabel {
+  const _WeekDisplayLabel({
+    required this.top,
+    required this.bottom,
+    required this.isSpecial,
+  });
+
+  final String top;
+  final String bottom;
+  final bool isSpecial;
+
+  factory _WeekDisplayLabel.fromWeek(int week) {
+    return switch (week) {
+      -1 => const _WeekDisplayLabel(
+        top: 'STAGE',
+        bottom: 'RELEGATION\nROUND 1',
+        isSpecial: true,
+      ),
+      -2 => const _WeekDisplayLabel(
+        top: 'STAGE',
+        bottom: 'RELEGATION\nROUND 2',
+        isSpecial: true,
+      ),
+      -3 => const _WeekDisplayLabel(
+        top: 'STAGE',
+        bottom: 'FINAL 4\nPLAYOFF',
+        isSpecial: true,
+      ),
+      -4 => const _WeekDisplayLabel(
+        top: 'STAGE',
+        bottom: 'FINAL 4',
+        isSpecial: true,
+      ),
+      -5 => const _WeekDisplayLabel(
+        top: 'STAGE',
+        bottom: '3RD\nPLACE',
+        isSpecial: true,
+      ),
+      -6 => const _WeekDisplayLabel(
+        top: 'STAGE',
+        bottom: 'FINALS',
+        isSpecial: true,
+      ),
+      _ => _WeekDisplayLabel(top: 'WEEK', bottom: '$week', isSpecial: false),
+    };
   }
 }

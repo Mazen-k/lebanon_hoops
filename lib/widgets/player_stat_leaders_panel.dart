@@ -91,7 +91,7 @@ class PlayerStatLeadersPanel extends StatelessWidget {
               crossAxisCount: 2,
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 0.66,
+              childAspectRatio: 0.62,
             ),
             itemCount: s.stats.length,
             itemBuilder: (context, index) {
@@ -391,54 +391,56 @@ class _BigLeaderBlock extends StatelessWidget {
       height: 1.05,
       color: scheme.onSurface,
     );
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _AvatarWithTeamBadge(
-          headshotUrl: row.headshotUrl,
-          teamLogoUrl: row.teamLogo,
-          size: 64,
-          badgeSize: 22,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                row.playerName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                  height: 1.1,
-                  color: scheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                row.positionLabel,
-                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
-              ),
-            ],
-          ),
-        ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisAlignment: MainAxisAlignment.center,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(row.valueLabel, style: valueStyle),
-            Text(
-              'Per game',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: scheme.onSurfaceVariant,
-              ),
+            _AvatarWithTeamBadge(
+              headshotUrl: row.headshotUrl,
+              teamLogoUrl: row.teamLogo,
+              size: 60,
+              badgeSize: 22,
+            ),
+            const Spacer(),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(row.valueLabel, style: valueStyle),
+                Text(
+                  'Per game',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          row.playerName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.left,
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+            height: 1.12,
+            color: scheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          row.positionLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
         ),
       ],
     );
