@@ -3898,6 +3898,108 @@ app.post('/api/cards/squad', postCardsSquadHandler);
 app.patch('/cards/squad', patchCardsSquadHandler);
 app.patch('/api/cards/squad', patchCardsSquadHandler);
 
+// ─── Game period scores ──────────────────────────────────────────────────────
+
+function periodToIndex(period) {
+  const pm = period.match(/^P(\d+)$/);
+  if (pm) return parseInt(pm[1], 10);
+  const otm = period.match(/^OT(\d+)$/);
+  if (otm) return 4 + parseInt(otm[1], 10);
+  return 999;
+}
+
+async function rebuildPeriodScores(matchId) {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ON (period) period, score
+     FROM game_events
+     WHERE match_id = $1 AND score IS NOT NULL
+     ORDER BY period, created_at DESC`,
+    [matchId],
+  );
+
+  if (rows.length === 0) return [];
+
+  rows.sort((a, b) => periodToIndex(a.period) - periodToIndex(b.period));
+
+  let prevHome = 0;
+  let prevAway = 0;
+  const records = rows.map((row) => {
+    const [homeStr, awayStr] = row.score.split('-');
+    const homeRunning = parseInt(homeStr, 10);
+    const awayRunning = parseInt(awayStr, 10);
+    const rec = {
+      match_id: matchId,
+      period: row.period,
+      period_index: periodToIndex(row.period),
+      home_score: homeRunning - prevHome,
+      away_score: awayRunning - prevAway,
+      home_running_total: homeRunning,
+      away_running_total: awayRunning,
+    };
+    prevHome = homeRunning;
+    prevAway = awayRunning;
+    return rec;
+  });
+
+  for (const r of records) {
+    await pool.query(
+      `INSERT INTO game_period_scores
+         (match_id, period, period_index, home_score, away_score,
+          home_running_total, away_running_total, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+       ON CONFLICT (match_id, period) DO UPDATE SET
+         period_index         = EXCLUDED.period_index,
+         home_score           = EXCLUDED.home_score,
+         away_score           = EXCLUDED.away_score,
+         home_running_total   = EXCLUDED.home_running_total,
+         away_running_total   = EXCLUDED.away_running_total,
+         updated_at           = NOW()`,
+      [r.match_id, r.period, r.period_index, r.home_score, r.away_score,
+       r.home_running_total, r.away_running_total],
+    );
+  }
+
+  return records;
+}
+
+async function rebuildAllPeriodScores() {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT match_id FROM game_events ORDER BY match_id`,
+  );
+  const results = [];
+  for (const { match_id } of rows) {
+    const records = await rebuildPeriodScores(Number(match_id));
+    results.push({ match_id: Number(match_id), periods: records.length });
+  }
+  return results;
+}
+
+async function getPeriodScoresHandler(req, res) {
+  const matchId = Number(req.params.matchId);
+  if (Number.isNaN(matchId)) {
+    return res.status(400).json({ error: 'matchId must be an integer.' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT match_id, period, period_index, home_score, away_score,
+              home_running_total, away_running_total
+       FROM game_period_scores
+       WHERE match_id = $1
+       ORDER BY period_index ASC`,
+      [matchId],
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/games/:matchId/period-scores', getPeriodScoresHandler);
+app.get('/api/games/:matchId/period-scores', getPeriodScoresHandler);
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, '0.0.0.0', () => {
   console.log(`BasketballApp API listening on http://127.0.0.1:${port}`);
