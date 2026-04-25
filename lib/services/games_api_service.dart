@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/backend_config.dart';
+import '../models/team_season_stats.dart';
 
 class GamesApiException implements Exception {
   GamesApiException(this.message);
@@ -19,10 +20,14 @@ class GamesApiService {
 
   Uri _rootUri(String suffix, [Map<String, String>? query]) {
     final base = BackendConfig.apiBaseUrl.trim();
-    final normalized = base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    final normalized = base.endsWith('/')
+        ? base.substring(0, base.length - 1)
+        : base;
     final s = suffix.replaceAll(RegExp(r'^/+'), '');
     final u = Uri.parse('$normalized/$s');
-    return query == null ? u : u.replace(queryParameters: {...u.queryParameters, ...query});
+    return query == null
+        ? u
+        : u.replace(queryParameters: {...u.queryParameters, ...query});
   }
 
   List<String> _pair(String prefix) {
@@ -78,7 +83,10 @@ class GamesApiService {
     try {
       for (final p in paths) {
         final res = await own
-            .get(_rootUri(p, q.isEmpty ? null : q), headers: const {'Accept': 'application/json'})
+            .get(
+              _rootUri(p, q.isEmpty ? null : q),
+              headers: const {'Accept': 'application/json'},
+            )
             .timeout(const Duration(seconds: 25));
         if (res.statusCode == 404) continue;
         if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -118,6 +126,37 @@ class GamesApiService {
         throw GamesApiException('Invalid box score JSON');
       }
       throw GamesApiException('Box score route not found');
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
+
+  /// Per-team season totals from `team_boxscores` for [competitionId].
+  Future<List<TeamSeasonStats>> fetchTeamSeasonStats({
+    required int competitionId,
+  }) async {
+    final q = <String, String>{'competition_id': '$competitionId'};
+    final paths = _pair('games/team-stats');
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .get(_rootUri(p, q), headers: const {'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 30));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          throw GamesApiException('Team stats failed (${res.statusCode})');
+        }
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is! List) return [];
+        return d
+            .map(
+              (e) =>
+                  TeamSeasonStats.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
+            .toList();
+      }
+      throw GamesApiException('Team stats route not found');
     } finally {
       if (_client == null) own.close();
     }

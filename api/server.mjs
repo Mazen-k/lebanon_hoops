@@ -2813,6 +2813,184 @@ app.get('/api/games', listGamesHandler);
 app.get('/games/weeks', listGameWeeksHandler);
 app.get('/api/games/weeks', listGameWeeksHandler);
 
+/** GET /games/team-stats?competition_id=… — season totals from `team_boxscores` (final + live games). */
+function _parseTotalsJson(raw) {
+  if (raw == null) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const o = JSON.parse(raw);
+      return typeof o === 'object' && o != null && !Array.isArray(o) ? o : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function _totalsNum(totals, keys) {
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(totals, k)) {
+      const v = totals[k];
+      if (v != null && String(v).trim() !== '') {
+        const n = Number(String(v).replace(/[^\d.-]/g, ''));
+        if (Number.isFinite(n)) return Math.round(n);
+      }
+    }
+  }
+  const lowerMap = {};
+  for (const [k, v] of Object.entries(totals)) {
+    lowerMap[k.toLowerCase()] = v;
+  }
+  for (const k of keys) {
+    const v = lowerMap[k.toLowerCase()];
+    if (v != null && String(v).trim() !== '') {
+      const n = Number(String(v).replace(/[^\d.-]/g, ''));
+      if (Number.isFinite(n)) return Math.round(n);
+    }
+  }
+  return 0;
+}
+
+function _addTeamMinutes(sum, totals) {
+  const keys = ['Mins', 'MIN', 'Min', 'MP', 'Minutes'];
+  let raw;
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(totals, k) && totals[k] != null && String(totals[k]).trim() !== '') {
+      raw = String(totals[k]).trim();
+      break;
+    }
+  }
+  if (!raw) {
+    for (const [k, v] of Object.entries(totals)) {
+      for (const kk of keys) {
+        if (k.toLowerCase() === kk.toLowerCase() && v != null && String(v).trim() !== '') {
+          raw = String(v).trim();
+          break;
+        }
+      }
+      if (raw) break;
+    }
+  }
+  if (!raw) return;
+  const m = /^(\d+):(\d{1,2})$/.exec(raw);
+  if (m) {
+    sum.min += parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
+  } else {
+    const n = Number(raw.replace(/[^\d.]/g, ''));
+    if (Number.isFinite(n)) sum.min += n;
+  }
+}
+
+async function listTeamStatsHandler(req, res) {
+  try {
+    const rawComp = req.query.competition_id ?? req.query.competitionId;
+    const compId = rawComp != null && rawComp !== '' ? Number(rawComp) : null;
+    if (compId == null || Number.isNaN(compId)) {
+      return res.status(400).json({ error: 'competition_id is required' });
+    }
+
+    const [teamsRes, linesRes] = await Promise.all([
+      pool.query(
+        `SELECT t.team_id, t.team_name
+         FROM teams t
+         INNER JOIN competition_teams ct ON ct.team_id = t.team_id
+         WHERE ct.competition_id = $1::int
+         ORDER BY t.team_name ASC`,
+        [compId],
+      ),
+      pool.query(
+        `SELECT tb.team_id,
+                COALESCE(NULLIF(TRIM(t.team_name), ''), NULLIF(TRIM(tb.team_name), ''), '') AS line_team_name,
+                tb.totals
+         FROM team_boxscores tb
+         INNER JOIN games g ON g.match_id = tb.match_id
+         LEFT JOIN teams t ON t.team_id = tb.team_id
+         WHERE g.competition_id = $1::int
+           AND g.status IN ('final', 'live')
+           AND tb.team_id IS NOT NULL`,
+        [compId],
+      ),
+    ]);
+
+    const empty = () => ({
+      team_id: null,
+      team_name: '',
+      gp: 0,
+      pts: 0,
+      reb: 0,
+      ast: 0,
+      fgm: 0,
+      fga: 0,
+      three_pm: 0,
+      three_pa: 0,
+      ftm: 0,
+      fta: 0,
+      min: 0,
+      oreb: 0,
+      dreb: 0,
+      stl: 0,
+      blk: 0,
+    });
+
+    const byId = new Map();
+    for (const r of teamsRes.rows ?? []) {
+      const id = Number(r.team_id);
+      if (Number.isNaN(id)) continue;
+      const row = empty();
+      row.team_id = id;
+      row.team_name = (r.team_name ?? '').toString().trim() || `Team ${id}`;
+      byId.set(id, row);
+    }
+
+    for (const r of linesRes.rows ?? []) {
+      const id = Number(r.team_id);
+      if (Number.isNaN(id)) continue;
+      let row = byId.get(id);
+      if (!row) {
+        row = empty();
+        row.team_id = id;
+        row.team_name =
+          (r.line_team_name ?? '').toString().trim() || `Team ${id}`;
+        byId.set(id, row);
+      }
+      const t = _parseTotalsJson(r.totals);
+      row.gp += 1;
+      row.pts += _totalsNum(t, ['Pts', 'PTS', 'pts', 'Points']);
+      row.reb += _totalsNum(t, ['REB', 'Reb', 'reb', 'TRB']);
+      row.ast += _totalsNum(t, ['AST', 'Ast', 'ast']);
+      row.fgm += _totalsNum(t, ['FGM', 'Fgm', 'fgm']);
+      row.fga += _totalsNum(t, ['FGA', 'Fga', 'fga']);
+      row.three_pm += _totalsNum(t, ['3PM', '3pm', 'TPM']);
+      row.three_pa += _totalsNum(t, ['3PA', '3pa', 'TPA']);
+      row.ftm += _totalsNum(t, ['FTM', 'Ftm', 'ftm']);
+      row.fta += _totalsNum(t, ['FTA', 'Fta', 'fta']);
+      row.oreb += _totalsNum(t, ['OREB', 'ORB', 'OFF', 'Off', 'oreb', 'orb']);
+      row.dreb += _totalsNum(t, ['DREB', 'DRB', 'DEF', 'Def', 'dreb', 'drb']);
+      row.stl += _totalsNum(t, ['STL', 'Stl', 'stl']);
+      row.blk += _totalsNum(t, ['BLK', 'Blk', 'blk']);
+      _addTeamMinutes(row, t);
+    }
+
+    const out = [...byId.values()].sort((a, b) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      return String(a.team_name).localeCompare(String(b.team_name));
+    });
+
+    for (const row of out) {
+      row.min = Math.round(row.min * 10) / 10;
+    }
+
+    res.json(out);
+  } catch (err) {
+    console.error('[GET /games/team-stats]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/games/team-stats', listTeamStatsHandler);
+app.get('/api/games/team-stats', listTeamStatsHandler);
+
 /** GET /games/:matchId — single game row */
 async function getGameHandler(req, res) {
   const matchId = Number(req.params.matchId);
@@ -3466,7 +3644,7 @@ app.listen(port, '0.0.0.0', () => {
   console.log('  GET /public/courts  GET /public/courts/:id/playgrounds  GET /public/playgrounds/:id/availability?date=…');
   console.log('  POST /public/reservations { user_id, availability_id }');
   console.log(
-    '  GET /games  GET /games/weeks  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore',
+    '  GET /games  GET /games/weeks  GET /games/team-stats  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore',
   );
   console.log('  GET/POST/PATCH /cards/squad …user_id=… (1v1 lineups; POST creates, PATCH updates)');
   console.log('  1v1 friend: POST/GET /cards/one-v-one/rooms … squad-pick, lead, respond');

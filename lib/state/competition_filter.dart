@@ -4,7 +4,8 @@ import '../models/competition.dart';
 import '../services/competitions_api_service.dart';
 
 /// Global, app-wide selection of which competition (gender + season) the user
-/// is browsing. Screens that depend on this (Home, Games, Teams) listen to it
+/// is browsing. Screens that depend on this (Home, Games, Standings, Teams,
+/// Stats) listen to it
 /// via [ChangeNotifier] and reload when it changes.
 ///
 /// Defaults: gender `M`, season `2025/2026` (Men's Division 1).

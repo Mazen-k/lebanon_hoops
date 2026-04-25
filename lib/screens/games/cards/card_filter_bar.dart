@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/team.dart';
 import '../../../theme/colors.dart';
 import 'card_game_ui_theme.dart';
+import 'nationality_flag_emoji.dart';
 
 /// Bundled art for card type filter (`base` / `import` in DB).
 const String kCardTypeAssetBase = 'assets/images/card_type/base.png';
@@ -32,14 +33,6 @@ Widget _clubMenuLogo(Team t) {
     errorBuilder: (_, __, ___) =>
         Icon(Icons.groups_2_outlined, color: AppColors.primary),
   );
-}
-
-/// Flag for known codes; otherwise null (caller may use 🏳️).
-String? _nationalityFlagEmojiForValue(String raw) {
-  final u = raw.trim().toUpperCase();
-  if (const {'LB', 'LEB', 'LEBANON', 'LBN'}.contains(u)) return '🇱🇧';
-  if (const {'US', 'USA', 'UNITED STATES'}.contains(u)) return '🇺🇸';
-  return null;
 }
 
 String _cardTypeBarLabel(String? canonical) {
@@ -202,8 +195,9 @@ class CardCatalogFilterBar extends StatelessWidget {
                   icon: Icons.flag_outlined,
                   topOverride: nationalityFilter != null
                       ? Text(
-                          _nationalityFlagEmojiForValue(nationalityFilter!) ??
-                              '🏳️',
+                          nationalityValueToFlagEmojiOrFallback(
+                            nationalityFilter!,
+                          ),
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 22, height: 1.05),
                         )
@@ -332,7 +326,19 @@ class CardCatalogFilterBar extends StatelessWidget {
                   child: Text('All'),
                 ),
                 ...nationalityOptions.map(
-                  (n) => PopupMenuItem<String>(value: n, child: Text(n)),
+                  (n) => PopupMenuItem<String>(
+                    value: n,
+                    child: Row(
+                      children: [
+                        Text(
+                          nationalityValueToFlagEmojiOrFallback(n),
+                          style: const TextStyle(fontSize: 20, height: 1.1),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(n)),
+                      ],
+                    ),
+                  ),
                 ),
               ],
               onSelected: (v) {
@@ -452,7 +458,7 @@ Future<void> _showNationalityBoxPicker(
         (n) => _FilterBoxEntry<String>(
           value: n,
           label: n,
-          flagEmoji: _nationalityFlagEmojiForValue(n),
+          flagEmoji: nationalityValueToFlagEmojiOrFallback(n),
         ),
       )
       .toList();
@@ -485,6 +491,9 @@ Future<void> _showClubBoxPicker(
         networkImageUrl: (t.logoUrl != null && t.logoUrl!.trim().isNotEmpty)
             ? t.logoUrl!.trim()
             : null,
+        imageSize: 48,
+        cellWidth: 108,
+        cellHeight: 120,
         semanticsLabel: t.teamName,
       ),
   ];
@@ -510,6 +519,8 @@ class _FilterBoxEntry<T> {
     this.imageAsset,
     this.networkImageUrl,
     this.imageSize = 56,
+    this.cellWidth,
+    this.cellHeight,
     this.semanticsLabel,
   });
 
@@ -519,6 +530,8 @@ class _FilterBoxEntry<T> {
   final String? imageAsset;
   final String? networkImageUrl;
   final double imageSize;
+  final double? cellWidth;
+  final double? cellHeight;
   final String? semanticsLabel;
 }
 
@@ -620,6 +633,8 @@ Future<void> _showFilterBoxDialog<T>({
                               imageAsset: e.imageAsset,
                               networkImageUrl: e.networkImageUrl,
                               imageSize: e.imageSize,
+                              cellWidth: e.cellWidth,
+                              cellHeight: e.cellHeight,
                               semanticsLabel: e.semanticsLabel,
                               selected: sel,
                               onTap: () {
@@ -672,6 +687,8 @@ class _FilterOptionBox extends StatelessWidget {
     this.imageAsset,
     this.networkImageUrl,
     this.imageSize = 56,
+    this.cellWidth,
+    this.cellHeight,
     this.semanticsLabel,
     required this.selected,
     required this.onTap,
@@ -682,39 +699,50 @@ class _FilterOptionBox extends StatelessWidget {
   final String? imageAsset;
   final String? networkImageUrl;
   final double imageSize;
+  final double? cellWidth;
+  final double? cellHeight;
   final String? semanticsLabel;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final fixedCell = cellWidth != null && cellHeight != null;
     final nameStyle = TextStyle(
       color: selected
           ? CardGameUiTheme.onDark
           : CardGameUiTheme.onDark.withAlpha(210),
       fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-      fontSize: 13.5,
+      fontSize: fixedCell ? 12.5 : 13.5,
       height: 1.2,
     );
 
     final inner = AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
-      constraints: BoxConstraints(
-        minWidth:
-            (imageAsset != null || networkImageUrl != null) && label.isEmpty
-            ? imageSize + 16
-            : 96,
-        maxWidth:
-            (imageAsset != null || networkImageUrl != null) && label.isEmpty
-            ? imageSize + 24
-            : 160,
-      ),
+      width: fixedCell ? cellWidth : null,
+      height: fixedCell ? cellHeight : null,
+      constraints: fixedCell
+          ? null
+          : BoxConstraints(
+              minWidth:
+                  (imageAsset != null || networkImageUrl != null) &&
+                      label.isEmpty
+                  ? imageSize + 16
+                  : 96,
+              maxWidth:
+                  (imageAsset != null || networkImageUrl != null) &&
+                      label.isEmpty
+                  ? imageSize + 24
+                  : 160,
+            ),
       padding: EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: (imageAsset != null || networkImageUrl != null)
-            ? 10
-            : (flagEmoji != null ? 14 : 12),
+        horizontal: fixedCell ? 8 : 12,
+        vertical: fixedCell
+            ? 8
+            : ((imageAsset != null || networkImageUrl != null)
+                  ? 10
+                  : (flagEmoji != null ? 14 : 12)),
       ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -738,7 +766,10 @@ class _FilterOptionBox extends StatelessWidget {
             : null,
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: fixedCell
+            ? MainAxisAlignment.center
+            : MainAxisAlignment.start,
+        mainAxisSize: fixedCell ? MainAxisSize.max : MainAxisSize.min,
         children: [
           if (networkImageUrl != null) ...[
             SizedBox(
@@ -789,13 +820,24 @@ class _FilterOptionBox extends StatelessWidget {
             const SizedBox(height: 8),
           ],
           if (label.isNotEmpty)
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: nameStyle,
-            ),
+            fixedCell
+                ? SizedBox(
+                    width: cellWidth! - 16,
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: nameStyle,
+                    ),
+                  )
+                : Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: nameStyle,
+                  ),
         ],
       ),
     );

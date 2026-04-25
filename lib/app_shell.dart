@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'screens/fixtures_screen.dart';
 import 'screens/standings_screen.dart';
+import 'screens/team_stats_screen.dart';
 import 'screens/teams_grid_screen.dart';
 
 class AppNavigationShell extends StatefulWidget {
@@ -17,13 +18,14 @@ class AppNavigationShell extends StatefulWidget {
 class AppNavigationShellState extends State<AppNavigationShell> {
   int _currentIndex = 0;
 
-  static const _titles = ['Home', 'Games', 'Standings', 'Teams'];
+  static const _titles = ['Home', 'Games', 'Standings', 'Teams', 'Stats'];
 
   final List<Widget> _screens = [
     const HomeScreen(),
     const FixturesScreen(),
     const StandingsScreen(),
     const TeamsGridScreen(),
+    const TeamStatsScreen(),
   ];
 
   void goToTab(int index) {
@@ -97,6 +99,7 @@ class AppNavigationShellState extends State<AppNavigationShell> {
                     _buildNavItem(1, Icons.event_note_rounded, 'Games'),
                     _buildNavItem(2, Icons.leaderboard, 'Standings'),
                     _buildNavItem(3, Icons.group, 'Teams'),
+                    _buildNavItem(4, Icons.table_chart_outlined, 'Stats'),
                   ],
                 ),
               ),

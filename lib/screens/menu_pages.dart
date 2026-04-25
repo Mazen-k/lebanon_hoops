@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../navigation/app_nav_shell_key.dart';
 import 'court_booking_screen.dart';
+import 'games/games_shell.dart';
 import '../widgets/menu_placeholder_page.dart';
 
 class ShopBookingPage extends StatelessWidget {
@@ -22,13 +23,15 @@ class ShopBookingPage extends StatelessWidget {
         children: [
           Text(
             'Jump to league fixtures, the fan shop, or open court booking in a full screen.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: colorScheme.secondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: colorScheme.secondary),
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: () {
               Navigator.pop(context);
-              appNavShellKey.currentState?.goToTab(3);
+              appNavShellKey.currentState?.goToTab(1);
             },
             icon: const Icon(Icons.event_note_rounded),
             label: const Text('League fixtures'),
@@ -42,7 +45,14 @@ class ShopBookingPage extends StatelessWidget {
           FilledButton.icon(
             onPressed: () {
               Navigator.pop(context);
-              appNavShellKey.currentState?.goToTab(4);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final host = appNavShellKey.currentContext;
+                if (host != null && host.mounted) {
+                  Navigator.of(host).push<void>(
+                    MaterialPageRoute<void>(builder: (_) => const GamesShell()),
+                  );
+                }
+              });
             },
             icon: const Icon(Icons.shopping_bag),
             label: const Text('Fan shop'),
@@ -60,7 +70,9 @@ class ShopBookingPage extends StatelessWidget {
                 final host = appNavShellKey.currentContext;
                 if (host != null && host.mounted) {
                   Navigator.of(host).push<void>(
-                    MaterialPageRoute<void>(builder: (_) => const CourtBookingScreen()),
+                    MaterialPageRoute<void>(
+                      builder: (_) => const CourtBookingScreen(),
+                    ),
                   );
                 }
               });
