@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../layout/app_shell_bottom_inset.dart';
+import '../models/player_leaders.dart';
 import '../models/team_season_stats.dart';
 import '../services/games_api_service.dart';
 import '../state/competition_filter.dart';
+import '../widgets/player_stat_leaders_panel.dart';
 
 /// League team stats — visual style matches Lebanese Basketball reference:
 /// light header bar, grid lines, zebra rows, TOTAL switch, sticky TEAM column.
@@ -27,10 +29,16 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   int? _loadedForCompetitionId;
   int _loadSeq = 0;
 
+  PlayerLeadersSummary? _playerSummary;
+  bool _playerLoading = false;
+  String? _playerError;
+  int? _playerLoadedForCompetitionId;
+  int _playerLoadSeq = 0;
+
   /// `false` = season totals, `true` = per game (÷ GP).
   bool _perGame = false;
 
-  /// `true` = team stats table; `false` = player stats (placeholder for now).
+  /// `true` = team stats table; `false` = player leaders from box scores.
   bool _showTeamStats = true;
 
   // —— Reference palette (light table, independent of app dark/light) ——
@@ -82,8 +90,19 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
 
   void _onFilterChanged() {
     if (!mounted) return;
-    if (_loadedForCompetitionId == _filter.selected.competitionId) return;
-    _load();
+    final cid = _filter.selected.competitionId;
+    final teamStale = _loadedForCompetitionId != cid;
+    final playerStale = _playerLoadedForCompetitionId != cid;
+    if (!teamStale && !playerStale) return;
+    if (teamStale) _load();
+    if (playerStale) {
+      setState(() {
+        _playerSummary = null;
+        _playerLoadedForCompetitionId = null;
+        _playerError = null;
+      });
+      if (!_showTeamStats) _loadPlayerLeaders();
+    }
   }
 
   Future<void> _load() async {
@@ -111,6 +130,31 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     }
   }
 
+  Future<void> _loadPlayerLeaders() async {
+    final seq = ++_playerLoadSeq;
+    final cid = _filter.selected.competitionId;
+    setState(() {
+      _playerLoading = true;
+      _playerError = null;
+    });
+    try {
+      final s = await _api.fetchPlayerLeaders(competitionId: cid);
+      if (!mounted || seq != _playerLoadSeq) return;
+      setState(() {
+        _playerSummary = s;
+        _playerLoading = false;
+        _playerLoadedForCompetitionId = cid;
+      });
+    } catch (e) {
+      if (!mounted || seq != _playerLoadSeq) return;
+      setState(() {
+        _playerError = '$e';
+        _playerLoading = false;
+        _playerLoadedForCompetitionId = cid;
+      });
+    }
+  }
+
   static String _cell(
     TeamSeasonStats r,
     int Function(TeamSeasonStats) pick,
@@ -133,7 +177,17 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
 
     final Widget scrollChild;
     if (!_showTeamStats) {
-      scrollChild = _buildPlayerStatsPlaceholder(cs);
+      scrollChild = PlayerStatLeadersPanel(
+        scheme: cs,
+        api: _api,
+        competitionId: _filter.selected.competitionId,
+        summary: _playerSummary,
+        loading: _playerLoading,
+        error: _playerError,
+        onRetry: _loadPlayerLeaders,
+        subtitle:
+            '${_filter.selected.genderLabel} ${_filter.selected.competitionName} · ${_filter.selected.seasonLabel}',
+      );
     } else if (_loading) {
       scrollChild = const SizedBox(
         height: 420,
@@ -172,13 +226,27 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
             child: _StatsModePicker(
               scheme: cs,
               teamStatsSelected: _showTeamStats,
-              onTeamSelected: (team) => setState(() => _showTeamStats = team),
+              onTeamSelected: (team) {
+                setState(() => _showTeamStats = team);
+                if (!team &&
+                    (_playerSummary == null ||
+                        _playerLoadedForCompetitionId !=
+                            _filter.selected.competitionId)) {
+                  _loadPlayerLeaders();
+                }
+              },
             ),
           ),
           Expanded(
             child: RefreshIndicator(
               color: cs.primary,
-              onRefresh: _load,
+              onRefresh: () async {
+                if (_showTeamStats) {
+                  await _load();
+                } else {
+                  await _loadPlayerLeaders();
+                }
+              },
               child: ListView(
                 controller: _vScroll,
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -188,48 +256,6 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPlayerStatsPlaceholder(ColorScheme cs) {
-    return SizedBox(
-      height: 280,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.person_search_rounded,
-                size: 48,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.85),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Player stats',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Lexend',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                  color: cs.onSurface,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Coming soon — league player leaders and totals will appear here.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.35,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

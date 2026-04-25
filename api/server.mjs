@@ -2991,6 +2991,306 @@ async function listTeamStatsHandler(req, res) {
 app.get('/games/team-stats', listTeamStatsHandler);
 app.get('/api/games/team-stats', listTeamStatsHandler);
 
+// ─── Player leaders from player_boxscores (per competition) ─────────────────
+
+/** Single-game line: rebounds total + oreb/dreb for per-game splits. */
+function _playerLineRebounds(statsJson) {
+  const t = _parseTotalsJson(statsJson);
+  const oreb = _totalsNum(t, ['OREB', 'ORB', 'OFF', 'Off', 'oreb', 'orb']);
+  const dreb = _totalsNum(t, ['DREB', 'DRB', 'DEF', 'Def', 'dreb', 'drb']);
+  const trb = _totalsNum(t, ['REB', 'Reb', 'reb', 'TRB', 'Trb', 'Tot Reb']);
+  const reb = trb > 0 ? trb : oreb + dreb;
+  return { reb, oreb, dreb };
+}
+
+function _playerLineTurnovers(statsJson) {
+  const t = _parseTotalsJson(statsJson);
+  return _totalsNum(t, ['TO', 'TOV', 'Tov', 'to', 'Turnovers', 'From', 'FROM']);
+}
+
+async function aggregatePlayerBoxscoresForCompetition(compId) {
+  const { rows } = await pool.query(
+    `SELECT pb.player_id,
+            pb.player_name,
+            pb.player_number,
+            pb.side,
+            pb.stats,
+            g.home_team_id,
+            g.away_team_id,
+            g.home_team_name,
+            g.away_team_name,
+            g.home_team_logo,
+            g.away_team_logo
+     FROM player_boxscores pb
+     INNER JOIN games g ON g.match_id = pb.match_id
+     WHERE g.competition_id = $1::int
+       AND g.status IN ('final', 'live')`,
+    [compId],
+  );
+
+  const byKey = new Map();
+  for (const r of rows ?? []) {
+    const side = String(r.side ?? '').toLowerCase();
+    const homeId = Number(r.home_team_id);
+    const awayId = Number(r.away_team_id);
+    if (Number.isNaN(homeId) || Number.isNaN(awayId)) continue;
+    const teamId = side === 'home' ? homeId : awayId;
+    const teamName = (side === 'home' ? r.home_team_name : r.away_team_name) ?? '';
+    const rawLogo = side === 'home' ? r.home_team_logo : r.away_team_logo;
+    const teamLogo =
+      rawLogo != null && String(rawLogo).trim() !== '' ? String(rawLogo).trim() : null;
+
+    const pid = r.player_id != null ? Number(r.player_id) : null;
+    const pname = String(r.player_name ?? '').trim();
+    if (!pname) continue;
+    const key =
+      pid != null && !Number.isNaN(pid)
+        ? `id:${pid}:t${teamId}`
+        : `n:${teamId}:${pname.toLowerCase()}`;
+
+    const stats = r.stats;
+    const { reb, oreb, dreb } = _playerLineRebounds(stats);
+    const t = _parseTotalsJson(stats);
+    const pts = _totalsNum(t, ['Pts', 'PTS', 'pts', 'Points']);
+    const ast = _totalsNum(t, ['AST', 'Ast', 'ast']);
+    const stl = _totalsNum(t, ['STL', 'Stl', 'stl']);
+    const blk = _totalsNum(t, ['BLK', 'Blk', 'blk']);
+    const tpm = _totalsNum(t, ['3PM', '3pm', 'TPM', '3P']);
+    const tov = _playerLineTurnovers(stats);
+
+    let a = byKey.get(key);
+    if (!a) {
+      a = {
+        player_id: pid != null && !Number.isNaN(pid) ? pid : null,
+        player_name: pname,
+        player_number: r.player_number != null ? String(r.player_number) : '',
+        team_id: teamId,
+        team_name: String(teamName).trim() || `Team ${teamId}`,
+        team_logo: teamLogo,
+        gp: 0,
+        pts: 0,
+        reb: 0,
+        oreb: 0,
+        dreb: 0,
+        ast: 0,
+        stl: 0,
+        blk: 0,
+        tpm: 0,
+        tov: 0,
+        position: null,
+        headshot_url: null,
+      };
+      byKey.set(key, a);
+    }
+    a.gp += 1;
+    a.pts += pts;
+    a.reb += reb;
+    a.oreb += oreb;
+    a.dreb += dreb;
+    a.ast += ast;
+    a.stl += stl;
+    a.blk += blk;
+    a.tpm += tpm;
+    a.tov += tov;
+  }
+
+  const ids = [
+    ...new Set(
+      [...byKey.values()]
+        .map((x) => x.player_id)
+        .filter((x) => x != null && Number.isInteger(x) && x > 0),
+    ),
+  ];
+  if (ids.length > 0) {
+    const { rows: pr } = await pool.query(
+      `SELECT player_id::bigint AS player_id,
+              NULLIF(TRIM(position), '') AS position,
+              NULLIF(TRIM(picture_url), '') AS picture_url
+       FROM players
+       WHERE player_id = ANY($1::bigint[])`,
+      [ids],
+    );
+    const meta = new Map();
+    for (const p of pr ?? []) {
+      meta.set(Number(p.player_id), {
+        position: p.position ? normalizeDbBasketballPosition(p.position) : null,
+        headshot_url: p.picture_url ? String(p.picture_url).trim() : null,
+      });
+    }
+    for (const a of byKey.values()) {
+      if (a.player_id == null) continue;
+      const m = meta.get(a.player_id);
+      if (m) {
+        a.position = m.position;
+        a.headshot_url = m.headshot_url;
+      }
+    }
+  }
+
+  return [...byKey.values()];
+}
+
+const PLAYER_LEADER_STAT_DEFS = [
+  {
+    key: 'ppg',
+    title: 'POINTS PER GAME',
+    decimals: 1,
+    ascending: false,
+    value: (a) => a.pts / Math.max(1, a.gp),
+  },
+  {
+    key: 'rpg',
+    title: 'REBOUNDS PER GAME',
+    decimals: 1,
+    ascending: false,
+    value: (a) => a.reb / Math.max(1, a.gp),
+  },
+  {
+    key: 'apg',
+    title: 'ASSISTS PER GAME',
+    decimals: 1,
+    ascending: false,
+    value: (a) => a.ast / Math.max(1, a.gp),
+  },
+  {
+    key: 'spg',
+    title: 'STEALS PER GAME',
+    decimals: 1,
+    ascending: false,
+    value: (a) => a.stl / Math.max(1, a.gp),
+  },
+  {
+    key: 'bpg',
+    title: 'BLOCKS PER GAME',
+    decimals: 1,
+    ascending: false,
+    value: (a) => a.blk / Math.max(1, a.gp),
+  },
+  {
+    key: 'tpm_pg',
+    title: '3-POINTERS MADE / G',
+    decimals: 1,
+    ascending: false,
+    value: (a) => a.tpm / Math.max(1, a.gp),
+  },
+  {
+    key: 'oreb_pg',
+    title: 'OFFENSIVE REBOUNDS / G',
+    decimals: 1,
+    ascending: false,
+    value: (a) => a.oreb / Math.max(1, a.gp),
+  },
+  {
+    key: 'dreb_pg',
+    title: 'DEFENSIVE REBOUNDS / G',
+    decimals: 1,
+    ascending: false,
+    value: (a) => a.dreb / Math.max(1, a.gp),
+  },
+  {
+    key: 'to_pg',
+    title: 'TURNOVERS / G',
+    decimals: 1,
+    ascending: false,
+    value: (a) => a.tov / Math.max(1, a.gp),
+  },
+];
+
+function _sortedForStat(players, def, limit) {
+  const list = players.filter((a) => a.gp >= 1);
+  list.sort((a, b) => {
+    const va = def.value(a);
+    const vb = def.value(b);
+    if (def.ascending) {
+      if (va !== vb) return va - vb;
+    } else {
+      if (vb !== va) return vb - va;
+    }
+    return String(a.player_name).localeCompare(String(b.player_name));
+  });
+  return list.slice(0, limit);
+}
+
+function _leaderRowPayload(a, def, rank) {
+  const v = def.value(a);
+  return {
+    rank,
+    player_id: a.player_id,
+    player_name: a.player_name,
+    player_number: a.player_number,
+    position: a.position,
+    team_id: a.team_id,
+    team_name: a.team_name,
+    team_logo: a.team_logo,
+    headshot_url: a.headshot_url,
+    gp: a.gp,
+    value: Number.isFinite(v) ? v : 0,
+    decimals: def.decimals,
+  };
+}
+
+async function listPlayerLeadersHandler(req, res) {
+  try {
+    const rawComp = req.query.competition_id ?? req.query.competitionId;
+    const compId = rawComp != null && rawComp !== '' ? Number(rawComp) : null;
+    if (compId == null || Number.isNaN(compId)) {
+      return res.status(400).json({ error: 'competition_id is required' });
+    }
+    const players = await aggregatePlayerBoxscoresForCompetition(compId);
+    const stats = PLAYER_LEADER_STAT_DEFS.map((def) => {
+      const sorted = _sortedForStat(players, def, 3);
+      return {
+        key: def.key,
+        title: def.title,
+        decimals: def.decimals,
+        ascending: def.ascending,
+        top3: sorted.map((a, i) => _leaderRowPayload(a, def, i + 1)),
+      };
+    });
+    res.json({ competition_id: compId, stats });
+  } catch (err) {
+    console.error('[GET /games/player-leaders]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function listPlayerLeadersDetailHandler(req, res) {
+  try {
+    const rawComp = req.query.competition_id ?? req.query.competitionId;
+    const compId = rawComp != null && rawComp !== '' ? Number(rawComp) : null;
+    const statKey = String(req.query.stat ?? '').trim();
+    const limRaw = req.query.limit ?? '20';
+    const limit = Math.min(50, Math.max(1, Number(limRaw) || 20));
+    if (compId == null || Number.isNaN(compId)) {
+      return res.status(400).json({ error: 'competition_id is required' });
+    }
+    const def = PLAYER_LEADER_STAT_DEFS.find((d) => d.key === statKey);
+    if (!def) {
+      return res.status(400).json({
+        error: `Unknown stat. Use one of: ${PLAYER_LEADER_STAT_DEFS.map((d) => d.key).join(', ')}`,
+      });
+    }
+    const players = await aggregatePlayerBoxscoresForCompetition(compId);
+    const sorted = _sortedForStat(players, def, limit);
+    res.json({
+      competition_id: compId,
+      stat: def.key,
+      title: def.title,
+      decimals: def.decimals,
+      ascending: def.ascending,
+      rows: sorted.map((a, i) => _leaderRowPayload(a, def, i + 1)),
+    });
+  } catch (err) {
+    console.error('[GET /games/player-leaders/detail]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/games/player-leaders/detail', listPlayerLeadersDetailHandler);
+app.get('/api/games/player-leaders/detail', listPlayerLeadersDetailHandler);
+app.get('/games/player-leaders', listPlayerLeadersHandler);
+app.get('/api/games/player-leaders', listPlayerLeadersHandler);
+
 /** GET /games/:matchId — single game row */
 async function getGameHandler(req, res) {
   const matchId = Number(req.params.matchId);
@@ -3644,7 +3944,7 @@ app.listen(port, '0.0.0.0', () => {
   console.log('  GET /public/courts  GET /public/courts/:id/playgrounds  GET /public/playgrounds/:id/availability?date=…');
   console.log('  POST /public/reservations { user_id, availability_id }');
   console.log(
-    '  GET /games  GET /games/weeks  GET /games/team-stats  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore',
+    '  GET /games  GET /games/weeks  GET /games/team-stats  GET /games/player-leaders  GET /games/player-leaders/detail  GET /games/:matchId  GET /games/:matchId/events  GET /games/:matchId/boxscore',
   );
   console.log('  GET/POST/PATCH /cards/squad …user_id=… (1v1 lineups; POST creates, PATCH updates)');
   console.log('  1v1 friend: POST/GET /cards/one-v-one/rooms … squad-pick, lead, respond');

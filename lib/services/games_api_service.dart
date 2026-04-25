@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/backend_config.dart';
+import '../models/player_leaders.dart';
 import '../models/team_season_stats.dart';
 
 class GamesApiException implements Exception {
@@ -157,6 +158,73 @@ class GamesApiService {
             .toList();
       }
       throw GamesApiException('Team stats route not found');
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
+
+  /// Per-competition player leaders (top 3 each stat) from `player_boxscores`.
+  Future<PlayerLeadersSummary> fetchPlayerLeaders({
+    required int competitionId,
+  }) async {
+    final q = <String, String>{'competition_id': '$competitionId'};
+    final paths = _pair('games/player-leaders');
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .get(_rootUri(p, q), headers: const {'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 45));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          throw GamesApiException('Player leaders failed (${res.statusCode})');
+        }
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is! Map) {
+          throw GamesApiException('Invalid player leaders JSON');
+        }
+        return PlayerLeadersSummary.fromJson(Map<String, dynamic>.from(d));
+      }
+      throw GamesApiException('Player leaders route not found');
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
+
+  /// Top [limit] players for one stat (same ordering as summary cards).
+  Future<PlayerLeadersDetail> fetchPlayerLeadersDetail({
+    required int competitionId,
+    required String stat,
+    int limit = 20,
+  }) async {
+    final q = <String, String>{
+      'competition_id': '$competitionId',
+      'stat': stat,
+      'limit': '$limit',
+    };
+    final paths = _pair('games/player-leaders/detail');
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .get(_rootUri(p, q), headers: const {'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 45));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          var msg = 'Player leaders detail failed (${res.statusCode})';
+          try {
+            final m = jsonDecode(utf8.decode(res.bodyBytes));
+            if (m is Map && m['error'] != null) msg = m['error'].toString();
+          } catch (_) {}
+          throw GamesApiException(msg);
+        }
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is! Map) {
+          throw GamesApiException('Invalid player leaders detail JSON');
+        }
+        return PlayerLeadersDetail.fromJson(Map<String, dynamic>.from(d));
+      }
+      throw GamesApiException('Player leaders detail route not found');
     } finally {
       if (_client == null) own.close();
     }
