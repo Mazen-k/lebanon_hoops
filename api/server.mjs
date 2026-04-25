@@ -71,6 +71,79 @@ async function listCompetitions(_req, res) {
 app.get('/competitions', listCompetitions);
 app.get('/api/competitions', listCompetitions);
 
+/** GET /competitions/:competitionId/champion — top team by win record from final games */
+async function getCompetitionChampionHandler(req, res) {
+  const compId = Number(req.params.competitionId);
+  if (Number.isNaN(compId)) {
+    return res.status(400).json({ error: 'competitionId must be an integer' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `WITH win_records AS (
+        SELECT team_name, SUM(wins) AS wins, SUM(losses) AS losses
+        FROM (
+          SELECT home_team_name AS team_name,
+                 CASE WHEN home_score > away_score THEN 1 ELSE 0 END AS wins,
+                 CASE WHEN home_score < away_score THEN 1 ELSE 0 END AS losses
+          FROM games
+          WHERE competition_id = $1 AND status = 'final'
+            AND home_score IS NOT NULL AND away_score IS NOT NULL
+          UNION ALL
+          SELECT away_team_name,
+                 CASE WHEN away_score > home_score THEN 1 ELSE 0 END,
+                 CASE WHEN away_score < home_score THEN 1 ELSE 0 END
+          FROM games
+          WHERE competition_id = $1 AND status = 'final'
+            AND home_score IS NOT NULL AND away_score IS NOT NULL
+        ) sub
+        GROUP BY team_name
+        ORDER BY wins DESC LIMIT 1
+      )
+      SELECT
+        w.team_name,
+        w.wins::int AS wins,
+        w.losses::int AS losses,
+        c.competition_id,
+        c.competition_name,
+        c.gender,
+        c.start_year,
+        c.end_year,
+        (
+          SELECT CASE
+            WHEN g.home_team_name = w.team_name THEN g.home_team_logo
+            ELSE g.away_team_logo
+          END
+          FROM games g
+          WHERE g.competition_id = $1
+            AND (g.home_team_name = w.team_name OR g.away_team_name = w.team_name)
+            AND CASE
+              WHEN g.home_team_name = w.team_name THEN g.home_team_logo
+              ELSE g.away_team_logo
+            END IS NOT NULL
+            AND CASE
+              WHEN g.home_team_name = w.team_name THEN g.home_team_logo
+              ELSE g.away_team_logo
+            END != ''
+          LIMIT 1
+        ) AS logo_url
+      FROM win_records w
+      CROSS JOIN competitions c
+      WHERE c.competition_id = $1`,
+      [compId],
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'No champion found for this competition' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[GET /competitions/:id/champion]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/competitions/:competitionId/champion', getCompetitionChampionHandler);
+app.get('/api/competitions/:competitionId/champion', getCompetitionChampionHandler);
+
 async function getTeamDetails(req, res) {
   const teamId = Number(req.params.id);
   if (Number.isNaN(teamId)) {
@@ -2761,12 +2834,12 @@ async function listGamesHandler(req, res) {
       `
       SELECT ${GAME_ROW_SELECT_WITH_TEAM_LOGOS}
       ${GAME_ROW_FROM_WITH_TEAM_LOGOS}
-      WHERE g.status IN ('live', 'scheduled', 'final')
+      WHERE g.status IN ('live', 'scheduled', 'postponed', 'final')
       ${compClause}
       ${weekClause}
       ${teamClause}
       ORDER BY
-        CASE g.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
+        CASE g.status WHEN 'live' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'postponed' THEN 2 ELSE 3 END,
         g.updated_at DESC
       LIMIT 200
     `,
