@@ -4,7 +4,9 @@ import '../models/team_season_stats.dart';
 import '../services/games_api_service.dart';
 import '../state/competition_filter.dart';
 
-/// League-wide team totals from `team_boxscores` for the selected competition.
+/// League-wide team totals: every final/live game counts toward GP; missing
+/// box scores add 0 for that game. Stats columns scroll horizontally; team
+/// column stays fixed.
 class TeamStatsScreen extends StatefulWidget {
   const TeamStatsScreen({super.key});
 
@@ -16,11 +18,38 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   final GamesApiService _api = GamesApiService();
   final AppCompetitionFilter _filter = AppCompetitionFilter.instance;
 
+  final ScrollController _vScroll = ScrollController();
+  final ScrollController _hScroll = ScrollController();
+
   List<TeamSeasonStats> _rows = const [];
   bool _loading = true;
   String? _error;
   int? _loadedForCompetitionId;
   int _loadSeq = 0;
+
+  /// `false` = season totals (T), `true` = per game (PG).
+  bool _perGame = false;
+
+  static const double _hdrH = 46;
+  static const double _rowH = 52;
+  static const double _pinnedW = 168;
+
+  static final _statKeys = <(String label, int Function(TeamSeasonStats) pick)>[
+    ('GP', (TeamSeasonStats r) => r.gp),
+    ('PTS', (TeamSeasonStats r) => r.pts),
+    ('REB', (TeamSeasonStats r) => r.reb),
+    ('AST', (TeamSeasonStats r) => r.ast),
+    ('FGM', (TeamSeasonStats r) => r.fgm),
+    ('FGA', (TeamSeasonStats r) => r.fga),
+    ('3PM', (TeamSeasonStats r) => r.threePm),
+    ('3PA', (TeamSeasonStats r) => r.threePa),
+    ('FTM', (TeamSeasonStats r) => r.ftm),
+    ('FTA', (TeamSeasonStats r) => r.fta),
+    ('OREB', (TeamSeasonStats r) => r.oreb),
+    ('DREB', (TeamSeasonStats r) => r.dreb),
+    ('STL', (TeamSeasonStats r) => r.stl),
+    ('BLK', (TeamSeasonStats r) => r.blk),
+  ];
 
   @override
   void initState() {
@@ -32,6 +61,8 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   @override
   void dispose() {
     _filter.removeListener(_onFilterChanged);
+    _vScroll.dispose();
+    _hScroll.dispose();
     super.dispose();
   }
 
@@ -66,9 +97,17 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     }
   }
 
-  static String _fmtMin(double m) {
-    if (m == m.roundToDouble()) return '${m.round()}';
-    return m.toStringAsFixed(1);
+  static String _cell(
+    TeamSeasonStats r,
+    int Function(TeamSeasonStats) pick,
+    String label,
+    bool perGame,
+  ) {
+    final raw = pick(r);
+    if (label == 'GP') return '${r.gp}';
+    if (!perGame) return '$raw';
+    if (r.gp <= 0) return '0.0';
+    return (raw / r.gp).toStringAsFixed(1);
   }
 
   @override
@@ -78,72 +117,64 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
 
     return ColoredBox(
       color: cs.surface,
-      child: RefreshIndicator(
-        color: cs.primary,
-        onRefresh: _load,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(child: SizedBox(height: topInset + 4)),
-            if (_loading)
-              const SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_error != null)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: _ErrorBlock(message: _error!, onRetry: _load),
-              )
-            else if (_rows.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'No teams for this competition.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        color: cs.onSurfaceVariant,
+      child: Column(
+        children: [
+          SizedBox(height: topInset),
+          Expanded(
+            child: RefreshIndicator(
+              color: cs.primary,
+              onRefresh: _load,
+              child: CustomScrollView(
+                controller: _vScroll,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  const SliverToBoxAdapter(child: SizedBox(height: 4)),
+                  if (_loading)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _ErrorBlock(message: _error!, onRetry: _load),
+                    )
+                  else if (_rows.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'No teams for this competition.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
                       ),
+                    )
+                  else
+                    SliverFillRemaining(
+                      hasScrollBody: true,
+                      child: _buildBody(cs),
                     ),
-                  ),
-                ),
-              )
-            else
-              SliverToBoxAdapter(child: _buildTable(cs)),
-            const SliverToBoxAdapter(child: SizedBox(height: 128)),
-          ],
-        ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 96)),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildTable(ColorScheme cs) {
+  Widget _buildBody(ColorScheme cs) {
     final sel = _filter.selected;
-    const headers = [
-      'Team',
-      'GP',
-      'PTS',
-      'REB',
-      'AST',
-      'FGM',
-      'FGA',
-      '3PM',
-      '3PA',
-      'FTM',
-      'FTA',
-      'MIN',
-      'OREB',
-      'DREB',
-      'STL',
-      'BLK',
-    ];
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -156,83 +187,91 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
               color: cs.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
-            'Totals from team box scores (final & live games).',
+            'GP counts every final/live game. Missing box scores count as 0 for that game.',
             style: TextStyle(
               fontFamily: 'Inter',
-              fontSize: 12,
-              color: cs.onSurfaceVariant.withValues(alpha: 0.85),
+              fontSize: 11.5,
+              height: 1.35,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.88),
             ),
           ),
           const SizedBox(height: 12),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: cs.outlineVariant.withValues(alpha: 0.5),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment<bool>(
+                  value: false,
+                  label: Text('T'),
+                  tooltip: 'Season totals',
+                ),
+                ButtonSegment<bool>(
+                  value: true,
+                  label: Text('PG'),
+                  tooltip: 'Per game (÷ GP)',
+                ),
+              ],
+              selected: {_perGame},
+              onSelectionChanged: (s) {
+                if (s.isEmpty) return;
+                setState(() => _perGame = s.first);
+              },
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Scrollbar(
-                    thumbVisibility: true,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minWidth: constraints.maxWidth,
-                        ),
-                        child: Table(
-                          columnWidths: const {0: FixedColumnWidth(132)},
-                          defaultColumnWidth: const IntrinsicColumnWidth(),
-                          border: TableBorder(
-                            horizontalInside: BorderSide(
-                              color: cs.outlineVariant.withValues(alpha: 0.35),
-                            ),
-                            bottom: BorderSide(
-                              color: cs.outlineVariant.withValues(alpha: 0.5),
-                            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _perGame
+                ? 'Showing per-game averages (1 decimal). GP is still games played.'
+                : 'Showing season totals.',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 11,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.45),
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildPinnedTeamStrip(cs),
+                    Expanded(
+                      child: Scrollbar(
+                        controller: _hScroll,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _hScroll,
+                          scrollDirection: Axis.horizontal,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildStatsHeaderRow(cs),
+                              for (final r in _rows) _buildStatsDataRow(r, cs),
+                            ],
                           ),
-                          children: [
-                            TableRow(
-                              decoration: BoxDecoration(
-                                color: cs.surfaceContainerHighest,
-                              ),
-                              children: [
-                                for (final h in headers) _HeadCell(h, cs),
-                              ],
-                            ),
-                            for (final r in _rows)
-                              TableRow(
-                                children: [
-                                  _DataCell(r.teamName, cs, left: true),
-                                  _DataCell('${r.gp}', cs),
-                                  _DataCell('${r.pts}', cs, emphasize: true),
-                                  _DataCell('${r.reb}', cs),
-                                  _DataCell('${r.ast}', cs),
-                                  _DataCell('${r.fgm}', cs),
-                                  _DataCell('${r.fga}', cs),
-                                  _DataCell('${r.threePm}', cs),
-                                  _DataCell('${r.threePa}', cs),
-                                  _DataCell('${r.ftm}', cs),
-                                  _DataCell('${r.fta}', cs),
-                                  _DataCell(_fmtMin(r.min), cs),
-                                  _DataCell('${r.oreb}', cs),
-                                  _DataCell('${r.dreb}', cs),
-                                  _DataCell('${r.stl}', cs),
-                                  _DataCell('${r.blk}', cs),
-                                ],
-                              ),
-                          ],
                         ),
                       ),
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
             ),
           ),
@@ -240,59 +279,200 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
       ),
     );
   }
-}
 
-class _HeadCell extends StatelessWidget {
-  const _HeadCell(this.text, this.cs);
+  Widget _buildPinnedTeamStrip(ColorScheme cs) {
+    return Container(
+      width: _pinnedW,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        border: Border(
+          right: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.55)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 6,
+            offset: const Offset(2, 0),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: _hdrH,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 8, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Team',
+                  style: TextStyle(
+                    fontFamily: 'Lexend',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                    letterSpacing: 0.4,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.4)),
+          for (final r in _rows)
+            SizedBox(
+              height: _rowH,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                child: Row(
+                  children: [
+                    _TeamLogo(url: r.teamLogoUrl, scheme: cs),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        r.teamName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                          height: 1.15,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
-  final String text;
-  final ColorScheme cs;
+  Widget _buildStatsHeaderRow(ColorScheme cs) {
+    return SizedBox(
+      height: _hdrH,
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: cs.surfaceContainerHighest),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [for (final e in _statKeys) _buildStatHeadCell(e.$1, cs)],
+        ),
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Lexend',
-          fontWeight: FontWeight.w800,
-          fontSize: 10,
-          letterSpacing: 0.2,
-          color: cs.onSurface,
+  Widget _buildStatsDataRow(TeamSeasonStats r, ColorScheme cs) {
+    return Container(
+      height: _rowH,
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.25)),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final e in _statKeys)
+            _buildStatValueCell(
+              _cell(r, e.$2, e.$1, _perGame),
+              cs,
+              emphasize: e.$1 == 'PTS',
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatHeadCell(String label, ColorScheme cs) {
+    return SizedBox(
+      width: 52,
+      child: Center(
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Lexend',
+            fontWeight: FontWeight.w800,
+            fontSize: 10,
+            letterSpacing: 0.15,
+            color: cs.onSurface,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatValueCell(
+    String text,
+    ColorScheme cs, {
+    bool emphasize = false,
+  }) {
+    return SizedBox(
+      width: 52,
+      child: Center(
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: emphasize ? FontWeight.w800 : FontWeight.w500,
+            fontSize: 12,
+            color: emphasize ? cs.primary : cs.onSurface,
+          ),
         ),
       ),
     );
   }
 }
 
-class _DataCell extends StatelessWidget {
-  const _DataCell(
-    this.text,
-    this.cs, {
-    this.left = false,
-    this.emphasize = false,
-  });
+class _TeamLogo extends StatelessWidget {
+  const _TeamLogo({this.url, required this.scheme});
 
-  final String text;
-  final ColorScheme cs;
-  final bool left;
-  final bool emphasize;
+  final String? url;
+  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      child: Text(
-        text,
-        textAlign: left ? TextAlign.left : TextAlign.right,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
-          fontSize: left ? 12.5 : 12,
-          color: emphasize ? cs.primary : cs.onSurface,
+    const size = 34.0;
+    final border = Border.all(
+      color: scheme.outlineVariant.withValues(alpha: 0.5),
+    );
+    if (url == null || url!.isEmpty) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          shape: BoxShape.circle,
+          border: border,
+        ),
+        child: Icon(
+          Icons.shield_outlined,
+          size: 18,
+          color: scheme.onSurfaceVariant,
+        ),
+      );
+    }
+    return ClipOval(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          border: border,
+          shape: BoxShape.circle,
+        ),
+        child: Image.network(
+          url!,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => Icon(
+            Icons.shield_outlined,
+            size: 18,
+            color: scheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

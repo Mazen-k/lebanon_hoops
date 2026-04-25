@@ -2813,7 +2813,7 @@ app.get('/api/games', listGamesHandler);
 app.get('/games/weeks', listGameWeeksHandler);
 app.get('/api/games/weeks', listGameWeeksHandler);
 
-/** GET /games/team-stats?competition_id=… — season totals from `team_boxscores` (final + live games). */
+/** GET /games/team-stats?competition_id=… — per-team sums: GP = every final/live game; missing box score = 0 for that game. */
 function _parseTotalsJson(raw) {
   if (raw == null) return {};
   if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
@@ -2852,34 +2852,21 @@ function _totalsNum(totals, keys) {
   return 0;
 }
 
-function _addTeamMinutes(sum, totals) {
-  const keys = ['Mins', 'MIN', 'Min', 'MP', 'Minutes'];
-  let raw;
-  for (const k of keys) {
-    if (Object.prototype.hasOwnProperty.call(totals, k) && totals[k] != null && String(totals[k]).trim() !== '') {
-      raw = String(totals[k]).trim();
-      break;
-    }
-  }
-  if (!raw) {
-    for (const [k, v] of Object.entries(totals)) {
-      for (const kk of keys) {
-        if (k.toLowerCase() === kk.toLowerCase() && v != null && String(v).trim() !== '') {
-          raw = String(v).trim();
-          break;
-        }
-      }
-      if (raw) break;
-    }
-  }
-  if (!raw) return;
-  const m = /^(\d+):(\d{1,2})$/.exec(raw);
-  if (m) {
-    sum.min += parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
-  } else {
-    const n = Number(raw.replace(/[^\d.]/g, ''));
-    if (Number.isFinite(n)) sum.min += n;
-  }
+function _accumulateTotalsFromBox(row, totalsRaw) {
+  const t = _parseTotalsJson(totalsRaw);
+  row.pts += _totalsNum(t, ['Pts', 'PTS', 'pts', 'Points']);
+  row.reb += _totalsNum(t, ['REB', 'Reb', 'reb', 'TRB']);
+  row.ast += _totalsNum(t, ['AST', 'Ast', 'ast']);
+  row.fgm += _totalsNum(t, ['FGM', 'Fgm', 'fgm']);
+  row.fga += _totalsNum(t, ['FGA', 'Fga', 'fga']);
+  row.three_pm += _totalsNum(t, ['3PM', '3pm', 'TPM']);
+  row.three_pa += _totalsNum(t, ['3PA', '3pa', 'TPA']);
+  row.ftm += _totalsNum(t, ['FTM', 'Ftm', 'ftm']);
+  row.fta += _totalsNum(t, ['FTA', 'Fta', 'fta']);
+  row.oreb += _totalsNum(t, ['OREB', 'ORB', 'OFF', 'Off', 'oreb', 'orb']);
+  row.dreb += _totalsNum(t, ['DREB', 'DRB', 'DEF', 'Def', 'dreb', 'drb']);
+  row.stl += _totalsNum(t, ['STL', 'Stl', 'stl']);
+  row.blk += _totalsNum(t, ['BLK', 'Blk', 'blk']);
 }
 
 async function listTeamStatsHandler(req, res) {
@@ -2890,9 +2877,11 @@ async function listTeamStatsHandler(req, res) {
       return res.status(400).json({ error: 'competition_id is required' });
     }
 
-    const [teamsRes, linesRes] = await Promise.all([
+    const [teamsRes, gamesRes, boxRes] = await Promise.all([
       pool.query(
-        `SELECT t.team_id, t.team_name
+        `SELECT t.team_id,
+                t.team_name,
+                NULLIF(TRIM(t.team_logo), '') AS team_logo
          FROM teams t
          INNER JOIN competition_teams ct ON ct.team_id = t.team_id
          WHERE ct.competition_id = $1::int
@@ -2900,12 +2889,18 @@ async function listTeamStatsHandler(req, res) {
         [compId],
       ),
       pool.query(
-        `SELECT tb.team_id,
-                COALESCE(NULLIF(TRIM(t.team_name), ''), NULLIF(TRIM(tb.team_name), ''), '') AS line_team_name,
-                tb.totals
+        `SELECT g.match_id, g.home_team_id, g.away_team_id
+         FROM games g
+         WHERE g.competition_id = $1::int
+           AND g.status IN ('final', 'live')
+           AND g.home_team_id IS NOT NULL
+           AND g.away_team_id IS NOT NULL`,
+        [compId],
+      ),
+      pool.query(
+        `SELECT tb.match_id, tb.team_id, tb.totals
          FROM team_boxscores tb
          INNER JOIN games g ON g.match_id = tb.match_id
-         LEFT JOIN teams t ON t.team_id = tb.team_id
          WHERE g.competition_id = $1::int
            AND g.status IN ('final', 'live')
            AND tb.team_id IS NOT NULL`,
@@ -2916,6 +2911,7 @@ async function listTeamStatsHandler(req, res) {
     const empty = () => ({
       team_id: null,
       team_name: '',
+      team_logo: null,
       gp: 0,
       pts: 0,
       reb: 0,
@@ -2926,7 +2922,6 @@ async function listTeamStatsHandler(req, res) {
       three_pa: 0,
       ftm: 0,
       fta: 0,
-      min: 0,
       oreb: 0,
       dreb: 0,
       stl: 0,
@@ -2940,46 +2935,51 @@ async function listTeamStatsHandler(req, res) {
       const row = empty();
       row.team_id = id;
       row.team_name = (r.team_name ?? '').toString().trim() || `Team ${id}`;
+      const logo = r.team_logo;
+      row.team_logo =
+        logo != null && String(logo).trim() !== '' ? String(logo).trim() : null;
       byId.set(id, row);
     }
 
-    for (const r of linesRes.rows ?? []) {
-      const id = Number(r.team_id);
-      if (Number.isNaN(id)) continue;
-      let row = byId.get(id);
+    const boxMap = new Map();
+    for (const r of boxRes.rows ?? []) {
+      const mid = String(r.match_id);
+      const tid = Number(r.team_id);
+      if (Number.isNaN(tid)) continue;
+      boxMap.set(`${mid}:${tid}`, r.totals);
+    }
+
+    const ensureRow = (teamId) => {
+      let row = byId.get(teamId);
       if (!row) {
         row = empty();
-        row.team_id = id;
-        row.team_name =
-          (r.line_team_name ?? '').toString().trim() || `Team ${id}`;
-        byId.set(id, row);
+        row.team_id = teamId;
+        row.team_name = `Team ${teamId}`;
+        row.team_logo = null;
+        byId.set(teamId, row);
       }
-      const t = _parseTotalsJson(r.totals);
-      row.gp += 1;
-      row.pts += _totalsNum(t, ['Pts', 'PTS', 'pts', 'Points']);
-      row.reb += _totalsNum(t, ['REB', 'Reb', 'reb', 'TRB']);
-      row.ast += _totalsNum(t, ['AST', 'Ast', 'ast']);
-      row.fgm += _totalsNum(t, ['FGM', 'Fgm', 'fgm']);
-      row.fga += _totalsNum(t, ['FGA', 'Fga', 'fga']);
-      row.three_pm += _totalsNum(t, ['3PM', '3pm', 'TPM']);
-      row.three_pa += _totalsNum(t, ['3PA', '3pa', 'TPA']);
-      row.ftm += _totalsNum(t, ['FTM', 'Ftm', 'ftm']);
-      row.fta += _totalsNum(t, ['FTA', 'Fta', 'fta']);
-      row.oreb += _totalsNum(t, ['OREB', 'ORB', 'OFF', 'Off', 'oreb', 'orb']);
-      row.dreb += _totalsNum(t, ['DREB', 'DRB', 'DEF', 'Def', 'dreb', 'drb']);
-      row.stl += _totalsNum(t, ['STL', 'Stl', 'stl']);
-      row.blk += _totalsNum(t, ['BLK', 'Blk', 'blk']);
-      _addTeamMinutes(row, t);
+      return row;
+    };
+
+    for (const g of gamesRes.rows ?? []) {
+      const mid = String(g.match_id);
+      const homeId = Number(g.home_team_id);
+      const awayId = Number(g.away_team_id);
+      if (Number.isNaN(homeId) || Number.isNaN(awayId)) continue;
+
+      const rh = ensureRow(homeId);
+      rh.gp += 1;
+      _accumulateTotalsFromBox(rh, boxMap.get(`${mid}:${homeId}`));
+
+      const ra = ensureRow(awayId);
+      ra.gp += 1;
+      _accumulateTotalsFromBox(ra, boxMap.get(`${mid}:${awayId}`));
     }
 
     const out = [...byId.values()].sort((a, b) => {
       if (b.pts !== a.pts) return b.pts - a.pts;
       return String(a.team_name).localeCompare(String(b.team_name));
     });
-
-    for (const row of out) {
-      row.min = Math.round(row.min * 10) / 10;
-    }
 
     res.json(out);
   } catch (err) {

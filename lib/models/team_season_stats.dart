@@ -1,8 +1,9 @@
-/// One row from `GET /games/team-stats?competition_id=…` (aggregated `team_boxscores`).
+/// One row from `GET /games/team-stats?competition_id=…` (games + box scores).
 class TeamSeasonStats {
   const TeamSeasonStats({
     required this.teamId,
     required this.teamName,
+    this.teamLogoUrl,
     required this.gp,
     required this.pts,
     required this.reb,
@@ -13,7 +14,6 @@ class TeamSeasonStats {
     required this.threePa,
     required this.ftm,
     required this.fta,
-    required this.min,
     required this.oreb,
     required this.dreb,
     required this.stl,
@@ -22,6 +22,7 @@ class TeamSeasonStats {
 
   final int teamId;
   final String teamName;
+  final String? teamLogoUrl;
   final int gp;
   final int pts;
   final int reb;
@@ -32,7 +33,6 @@ class TeamSeasonStats {
   final int threePa;
   final int ftm;
   final int fta;
-  final double min;
   final int oreb;
   final int dreb;
   final int stl;
@@ -45,17 +45,13 @@ class TeamSeasonStats {
     return int.tryParse(v.toString().trim()) ?? d;
   }
 
-  static double _d(dynamic v, [double d = 0]) {
-    if (v == null) return d;
-    if (v is double) return v;
-    if (v is int) return v.toDouble();
-    return double.tryParse(v.toString().trim()) ?? d;
-  }
-
   factory TeamSeasonStats.fromJson(Map<String, dynamic> j) {
+    final logo = j['team_logo'] ?? j['teamLogo'] ?? j['team_logo_url'];
+    final logoStr = logo?.toString().trim();
     return TeamSeasonStats(
       teamId: _i(j['team_id'] ?? j['teamId']),
       teamName: (j['team_name'] ?? j['teamName'] ?? '').toString(),
+      teamLogoUrl: (logoStr != null && logoStr.isNotEmpty) ? logoStr : null,
       gp: _i(j['gp']),
       pts: _i(j['pts']),
       reb: _i(j['reb']),
@@ -66,7 +62,6 @@ class TeamSeasonStats {
       threePa: _i(j['three_pa'] ?? j['threePa']),
       ftm: _i(j['ftm']),
       fta: _i(j['fta']),
-      min: _d(j['min']),
       oreb: _i(j['oreb']),
       dreb: _i(j['dreb']),
       stl: _i(j['stl']),
