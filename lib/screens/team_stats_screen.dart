@@ -41,14 +41,11 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   /// `true` = team stats table; `false` = player leaders from box scores.
   bool _showTeamStats = true;
 
-  // —— Reference palette (light table, independent of app dark/light) ——
+  // —— Table chrome (rows use theme surface so it matches app background) ——
   static const Color _kHeaderBg = Color(0xFFE0E0E0);
   static const Color _kBorder = Color(0xFFCFCFCF);
-  static const Color _kRowWhite = Color(0xFFFFFFFF);
-  static const Color _kRowStripe = Color(0xFFF2F2F2);
   static const Color _kText = Color(0xFF000000);
   static const Color _kSubtext = Color(0xFF666666);
-  static const Color _kPageBg = Color(0xFFF5F5F5);
   static const Color _kSwitchGreen = Color(0xFF4CAF50);
 
   static const double _hdrH = 48;
@@ -168,7 +165,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     return (raw / r.gp).toStringAsFixed(1);
   }
 
-  Color _rowBg(int index) => index.isEven ? _kRowWhite : _kRowStripe;
+  Color _rowBg(ColorScheme scheme) => scheme.surface;
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +210,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
         ),
       );
     } else {
-      scrollChild = _buildBodyContent();
+      scrollChild = _buildBodyContent(cs);
     }
 
     return ColoredBox(
@@ -260,11 +257,11 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     );
   }
 
-  Widget _buildBodyContent() {
+  Widget _buildBodyContent(ColorScheme scheme) {
     final sel = _filter.selected;
     final tableH = _hdrH + _rows.length * _rowH;
     return ColoredBox(
-      color: _kPageBg,
+      color: scheme.surface,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
         child: Column(
@@ -319,7 +316,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
             // not rely on intrinsic cross-axis from the scroll view.
             DecoratedBox(
               decoration: BoxDecoration(
-                color: _kRowWhite,
+                color: scheme.surface,
                 border: Border.all(color: _kBorder),
                 borderRadius: BorderRadius.circular(2),
               ),
@@ -331,7 +328,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
                     SizedBox(
                       width: _pinnedW,
                       height: tableH,
-                      child: _buildPinnedTeamColumn(),
+                      child: _buildPinnedTeamColumn(scheme),
                     ),
                     Expanded(
                       child: SizedBox(
@@ -349,7 +346,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
                               children: [
                                 _buildStatsHeaderRow(),
                                 for (var i = 0; i < _rows.length; i++)
-                                  _buildStatsDataRow(_rows[i], i),
+                                  _buildStatsDataRow(_rows[i], i, scheme),
                               ],
                             ),
                           ),
@@ -367,14 +364,15 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   }
 
   /// Pinned TEAM: header + rows, zebra synced by index.
-  Widget _buildPinnedTeamColumn() {
+  Widget _buildPinnedTeamColumn(ColorScheme scheme) {
     return SizedBox(
       width: _pinnedW,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _pinnedHeaderCell(),
-          for (var i = 0; i < _rows.length; i++) _pinnedTeamRow(_rows[i], i),
+          for (var i = 0; i < _rows.length; i++)
+            _pinnedTeamRow(_rows[i], i, scheme),
         ],
       ),
     );
@@ -404,11 +402,11 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     );
   }
 
-  Widget _pinnedTeamRow(TeamSeasonStats r, int index) {
+  Widget _pinnedTeamRow(TeamSeasonStats r, int index, ColorScheme scheme) {
     return Container(
       height: _rowH,
       decoration: BoxDecoration(
-        color: _rowBg(index),
+        color: _rowBg(scheme),
         border: const Border(
           bottom: BorderSide(color: _kBorder, width: 1),
           right: BorderSide(color: _kBorder, width: 1),
@@ -473,11 +471,11 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     );
   }
 
-  Widget _buildStatsDataRow(TeamSeasonStats r, int index) {
+  Widget _buildStatsDataRow(TeamSeasonStats r, int index, ColorScheme scheme) {
     return Container(
       height: _rowH,
       decoration: BoxDecoration(
-        color: _rowBg(index),
+        color: _rowBg(scheme),
         border: const Border(bottom: BorderSide(color: _kBorder, width: 1)),
       ),
       child: Row(
@@ -616,8 +614,8 @@ class _TeamLogo extends StatelessWidget {
       return Container(
         width: _size,
         height: _size,
-        decoration: const BoxDecoration(
-          color: _TeamStatsScreenState._kRowStripe,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,
@@ -640,7 +638,7 @@ class _TeamLogo extends StatelessWidget {
         url!,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => Container(
-          color: _TeamStatsScreenState._kRowStripe,
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
           alignment: Alignment.center,
           child: const Icon(
             Icons.shield_outlined,

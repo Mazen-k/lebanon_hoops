@@ -3094,39 +3094,8 @@ async function aggregatePlayerBoxscoresForCompetition(compId) {
     a.tov += tov;
   }
 
-  const ids = [
-    ...new Set(
-      [...byKey.values()]
-        .map((x) => x.player_id)
-        .filter((x) => x != null && Number.isInteger(x) && x > 0),
-    ),
-  ];
-  if (ids.length > 0) {
-    const { rows: pr } = await pool.query(
-      `SELECT player_id::bigint AS player_id,
-              NULLIF(TRIM(position), '') AS position,
-              NULLIF(TRIM(picture_url), '') AS picture_url
-       FROM players
-       WHERE player_id = ANY($1::bigint[])`,
-      [ids],
-    );
-    const meta = new Map();
-    for (const p of pr ?? []) {
-      meta.set(Number(p.player_id), {
-        position: p.position ? normalizeDbBasketballPosition(p.position) : null,
-        headshot_url: p.picture_url ? String(p.picture_url).trim() : null,
-      });
-    }
-    for (const a of byKey.values()) {
-      if (a.player_id == null) continue;
-      const m = meta.get(a.player_id);
-      if (m) {
-        a.position = m.position;
-        a.headshot_url = m.headshot_url;
-      }
-    }
-  }
-
+  // Leaders use only `player_boxscores` + `games` (no `players` join — roster
+  // rows are not guaranteed to match box score player_id yet).
   return [...byKey.values()];
 }
 
