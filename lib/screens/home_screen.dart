@@ -108,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen>
       backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.only(top: kToolbarHeight, bottom: 128),
+          padding: const EdgeInsets.only(bottom: 128),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

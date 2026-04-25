@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../layout/app_shell_bottom_inset.dart';
 import '../models/game_fixture_view.dart';
 import '../services/games_api_service.dart';
 import '../state/competition_filter.dart';
@@ -260,36 +261,26 @@ class _FixturesScreenState extends State<FixturesScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
 
     if (_loadingBootstrap) {
       return ColoredBox(
         color: cs.surface,
-        child: Padding(
-          padding: EdgeInsets.only(top: topInset),
-          child: Center(child: CircularProgressIndicator(color: cs.primary)),
-        ),
+        child: Center(child: CircularProgressIndicator(color: cs.primary)),
       );
     }
     if (_errorBootstrap != null) {
       return ColoredBox(
         color: cs.surface,
-        child: Padding(
-          padding: EdgeInsets.only(top: topInset),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(_errorBootstrap!, textAlign: TextAlign.center),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _bootstrap,
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(_errorBootstrap!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(onPressed: _bootstrap, child: const Text('Retry')),
+              ],
             ),
           ),
         ),
@@ -300,13 +291,10 @@ class _FixturesScreenState extends State<FixturesScreen>
     if (_legacySingleList) {
       return ColoredBox(
         color: cs.surface,
-        child: Padding(
-          padding: EdgeInsets.only(top: topInset),
-          child: RefreshIndicator(
-            color: cs.primary,
-            onRefresh: _refreshVisible,
-            child: _buildFixtureList(cs, _legacyFixtures),
-          ),
+        child: RefreshIndicator(
+          color: cs.primary,
+          onRefresh: _refreshVisible,
+          child: _buildFixtureList(context, cs, _legacyFixtures),
         ),
       );
     }
@@ -315,13 +303,10 @@ class _FixturesScreenState extends State<FixturesScreen>
     if (pc == null || _weeks.isEmpty) {
       return ColoredBox(
         color: cs.surface,
-        child: Padding(
-          padding: EdgeInsets.only(top: topInset),
-          child: Center(
-            child: Text(
-              'No week data for this competition.',
-              style: TextStyle(color: cs.onSurfaceVariant),
-            ),
+        child: Center(
+          child: Text(
+            'No week data for this competition.',
+            style: TextStyle(color: cs.onSurfaceVariant),
           ),
         ),
       );
@@ -332,7 +317,6 @@ class _FixturesScreenState extends State<FixturesScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(height: topInset),
           _WeekNavigatorHeader(
             weeks: _weeks,
             focusedIndex: _pageIndex,
@@ -359,7 +343,7 @@ class _FixturesScreenState extends State<FixturesScreen>
                 return RefreshIndicator(
                   color: cs.primary,
                   onRefresh: () => _loadWeek(week, force: true),
-                  child: _buildFixtureList(cs, fixtures),
+                  child: _buildFixtureList(context, cs, fixtures),
                 );
               },
             ),
@@ -369,10 +353,16 @@ class _FixturesScreenState extends State<FixturesScreen>
     );
   }
 
-  Widget _buildFixtureList(ColorScheme cs, List<GameFixtureView> fixtures) {
+  Widget _buildFixtureList(
+    BuildContext context,
+    ColorScheme cs,
+    List<GameFixtureView> fixtures,
+  ) {
+    final bottomPad = appShellBottomBarOverlap(context);
     if (fixtures.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPad),
         children: [
           const SizedBox(height: 80),
           Text(
@@ -385,7 +375,7 @@ class _FixturesScreenState extends State<FixturesScreen>
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPad),
       physics: const AlwaysScrollableScrollPhysics(),
       itemCount: fixtures.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),

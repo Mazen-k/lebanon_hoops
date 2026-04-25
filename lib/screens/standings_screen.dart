@@ -91,7 +91,6 @@ class _StandingsScreenState extends State<StandingsScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
 
     return ColoredBox(
       color: cs.surface,
@@ -101,7 +100,6 @@ class _StandingsScreenState extends State<StandingsScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(child: SizedBox(height: topInset + 4)),
             if (_loading)
               const SliverFillRemaining(
                 hasScrollBody: false,
