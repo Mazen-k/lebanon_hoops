@@ -263,6 +263,22 @@ class _FixturesScreenState extends State<FixturesScreen>
     if (index > 0) _loadWeek(_weeks[index - 1]);
   }
 
+  void _goToWeekIndex(int index) {
+    if (_weeks.isEmpty || index == _pageIndex) return;
+    final target = index.clamp(0, _weeks.length - 1);
+    _loadWeek(_weeks[target]);
+    _pageController?.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _jumpWeekWindow(int delta) {
+    if (_weeks.isEmpty) return;
+    _goToWeekIndex((_pageIndex + delta).clamp(0, _weeks.length - 1));
+  }
+
   /// Briefly fades the label out and back in when the week changes.
   void _animateLabelChange(VoidCallback change) {
     _labelAnim.reverse().then((_) {
@@ -337,6 +353,8 @@ class _FixturesScreenState extends State<FixturesScreen>
             focusedIndex: _pageIndex,
             labelFade: _labelFade,
             colorScheme: cs,
+            onWeekSelected: _goToWeekIndex,
+            onWindowSwipe: _jumpWeekWindow,
           ),
           Expanded(
             child: PageView.builder(
@@ -417,54 +435,68 @@ class _WeekNavigatorHeader extends StatelessWidget {
     required this.focusedIndex,
     required this.labelFade,
     required this.colorScheme,
+    required this.onWeekSelected,
+    required this.onWindowSwipe,
   });
 
   final List<int> weeks;
   final int focusedIndex;
   final Animation<double> labelFade;
   final ColorScheme colorScheme;
+  final ValueChanged<int> onWeekSelected;
+  final ValueChanged<int> onWindowSwipe;
 
   @override
   Widget build(BuildContext context) {
     final cs = colorScheme;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      child: FadeTransition(
-        opacity: labelFade,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final visibleCount = width >= 430
-                ? 7
-                : width >= 340
-                ? 5
-                : 3;
-            final half = visibleCount ~/ 2;
-            final start = (focusedIndex - half).clamp(
-              0,
-              (weeks.length - visibleCount).clamp(0, weeks.length),
-            );
-            final end = (start + visibleCount).clamp(0, weeks.length);
-            final visibleWeeks = weeks.sublist(start, end);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final visibleCount = width >= 430
+            ? 7
+            : width >= 340
+            ? 5
+            : 3;
+        final half = visibleCount ~/ 2;
+        final start = (focusedIndex - half).clamp(
+          0,
+          (weeks.length - visibleCount).clamp(0, weeks.length),
+        );
+        final end = (start + visibleCount).clamp(0, weeks.length);
+        final visibleWeeks = weeks.sublist(start, end);
 
-            return Row(
-              children: [
-                for (var i = 0; i < visibleWeeks.length; i++) ...[
-                  Expanded(
-                    child: _WeekLabelChip(
-                      week: visibleWeeks[i],
-                      isFocused: start + i == focusedIndex,
-                      colorScheme: cs,
-                    ),
-                  ),
-                  if (i != visibleWeeks.length - 1) const SizedBox(width: 4),
-                ],
-              ],
-            );
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (velocity.abs() < 120) return;
+            final direction = velocity < 0 ? 1 : -1;
+            onWindowSwipe(direction * visibleCount);
           },
-        ),
-      ),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: FadeTransition(
+              opacity: labelFade,
+              child: Row(
+                children: [
+                  for (var i = 0; i < visibleWeeks.length; i++) ...[
+                    Expanded(
+                      child: _WeekLabelChip(
+                        week: visibleWeeks[i],
+                        isFocused: start + i == focusedIndex,
+                        colorScheme: cs,
+                        onTap: () => onWeekSelected(start + i),
+                      ),
+                    ),
+                    if (i != visibleWeeks.length - 1) const SizedBox(width: 4),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -474,79 +506,88 @@ class _WeekLabelChip extends StatelessWidget {
     required this.week,
     required this.isFocused,
     required this.colorScheme,
+    required this.onTap,
   });
 
   final int week;
   final bool isFocused;
   final ColorScheme colorScheme;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = colorScheme;
     final label = _WeekDisplayLabel.fromWeek(week);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      padding: EdgeInsets.symmetric(
-        horizontal: isFocused ? 6 : 4,
-        vertical: isFocused ? 10 : 12,
-      ),
-      decoration: BoxDecoration(
-        color: isFocused
-            ? cs.primary.withValues(alpha: 0.12)
-            : Colors.transparent,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label.top,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Lexend',
-              fontSize: isFocused ? 9 : 8,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.9,
-              color: isFocused
-                  ? cs.primary
-                  : cs.onSurfaceVariant.withValues(alpha: 0.6),
-            ),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            horizontal: isFocused ? 6 : 4,
+            vertical: isFocused ? 10 : 12,
           ),
-          const SizedBox(height: 2),
-          Text(
-            label.bottom,
-            maxLines: label.isSpecial ? 2 : 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Lexend',
-              fontSize: label.isSpecial
-                  ? (isFocused ? 12 : 9.5)
-                  : (isFocused ? 24 : 16),
-              fontWeight: isFocused ? FontWeight.w900 : FontWeight.w700,
-              fontStyle: isFocused ? FontStyle.italic : FontStyle.normal,
-              letterSpacing: label.isSpecial
-                  ? (isFocused ? -0.15 : 0)
-                  : (isFocused ? -0.7 : -0.2),
-              height: label.isSpecial ? 1.05 : null,
-              color: isFocused ? cs.onSurface : cs.onSurfaceVariant,
-            ),
+          decoration: BoxDecoration(
+            color: isFocused
+                ? cs.primary.withValues(alpha: 0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
           ),
-          const SizedBox(height: 6),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            width: isFocused ? 28 : 16,
-            height: 3,
-            decoration: BoxDecoration(
-              color: isFocused
-                  ? cs.primary
-                  : cs.outlineVariant.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(999),
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label.top,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontSize: isFocused ? 9 : 8,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.9,
+                  color: isFocused
+                      ? cs.primary
+                      : cs.onSurfaceVariant.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label.bottom,
+                maxLines: label.isSpecial ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontSize: label.isSpecial
+                      ? (isFocused ? 12 : 9.5)
+                      : (isFocused ? 24 : 16),
+                  fontWeight: isFocused ? FontWeight.w900 : FontWeight.w700,
+                  fontStyle: isFocused ? FontStyle.italic : FontStyle.normal,
+                  letterSpacing: label.isSpecial
+                      ? (isFocused ? -0.15 : 0)
+                      : (isFocused ? -0.7 : -0.2),
+                  height: label.isSpecial ? 1.05 : null,
+                  color: isFocused ? cs.onSurface : cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: isFocused ? 28 : 16,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: isFocused
+                      ? cs.primary
+                      : cs.outlineVariant.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
