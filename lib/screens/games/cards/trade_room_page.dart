@@ -928,9 +928,7 @@ class _TradeRoomPageState extends State<TradeRoomPage>
         _peerUserId() != null &&
         _mySummaryChoice() == 'accept' &&
         _peerSummaryChoice() != 'accept';
-    final showPulse = waitingPeerLock || waitingPeerAccept;
-
-    return PopScope(
+    final showPulse = waitingPeerLock || waitingPeerAccept;    return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
@@ -938,6 +936,50 @@ class _TradeRoomPageState extends State<TradeRoomPage>
       },
       child: Scaffold(
         backgroundColor: _TradeRoomVisual.bg,
+        appBar: AppBar(
+          backgroundColor: _TradeRoomVisual.bg,
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            onPressed: _handlePop,
+            icon: const Icon(Icons.close_rounded),
+            color: CardGameUiTheme.onDark,
+          ),
+          title: Text(
+            'ONLINE TRADING',
+            style: TextStyle(
+              color: CardGameUiTheme.onDark.withAlpha(230),
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              fontStyle: FontStyle.italic,
+              letterSpacing: 1.2,
+            ),
+          ),
+          actions: [
+            Icon(
+              Icons.monetization_on_rounded,
+              size: 20,
+              color: _TradeRoomVisual.gold,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              _walletLoading ? '…' : '${_cardCoins ?? 0}',
+              style: const TextStyle(
+                color: _TradeRoomVisual.gold,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
+            IconButton(
+              onPressed: () async {
+                await _refresh();
+                await _loadWallet();
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              color: CardGameUiTheme.onDark,
+            ),
+          ],
+        ),
         body: SafeArea(
           child: _error != null && _state == null
               ? Center(
@@ -953,76 +995,19 @@ class _TradeRoomPageState extends State<TradeRoomPage>
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(4, 2, 8, 2),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            onPressed: _handlePop,
-                            icon: const Icon(Icons.close_rounded),
-                            color: CardGameUiTheme.onDark,
-                          ),
-                          const Spacer(),
-                          Icon(
-                            Icons.monetization_on_rounded,
-                            size: 22,
-                            color: _TradeRoomVisual.gold,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _walletLoading ? '…' : '${_cardCoins ?? 0}',
-                            style: const TextStyle(
-                              color: _TradeRoomVisual.gold,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () async {
-                              await _refresh();
-                              await _loadWallet();
-                            },
-                            icon: const Icon(Icons.refresh_rounded),
-                            color: CardGameUiTheme.onDark,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      'ONLINE TRADING',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: CardGameUiTheme.onDark.withAlpha(230),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        fontStyle: FontStyle.italic,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.roomCode.toUpperCase(),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: _TradeRoomVisual.neonGreen,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 3,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                SingleChildScrollView(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(10, 4, 10, 4),
-                                  child: _TradePlayerColumn(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  _TradePlayerColumn(
                                     alignEnd: true,
                                     accentName: _TradeRoomVisual.cyan,
                                     playerName: peerName ?? 'Waiting…',
@@ -1038,50 +1023,42 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                                     sideConfirmed:
                                         peerName != null && _peerReady(),
                                   ),
-                                ),
-                                if (_bubblePreset != null &&
-                                    _bubbleFromUserId != null &&
-                                    _bubbleFromUserId == _peerUserId())
-                                  Positioned(
-                                    left: 8,
-                                    right: 8,
-                                    bottom: 6,
-                                    child: _TradeQuickChatBubble(
-                                      senderLabel:
-                                          '${_bubbleFromUsername ?? 'Player'} · quick message',
-                                      message: _TradeQuickPhrases.textFor(
-                                        _bubblePreset!,
+                                  if (_bubblePreset != null &&
+                                      _bubbleFromUserId != null &&
+                                      _bubbleFromUserId == _peerUserId())
+                                    Positioned(
+                                      left: 8,
+                                      right: 8,
+                                      bottom: 6,
+                                      child: _TradeQuickChatBubble(
+                                        senderLabel:
+                                            '${_bubbleFromUsername ?? 'Player'} · quick message',
+                                        message: _TradeQuickPhrases.textFor(
+                                          _bubblePreset!,
+                                        ),
+                                        accentPeerSide: true,
                                       ),
-                                      accentPeerSide: true,
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                          Container(
-                            height: 1,
-                            margin: const EdgeInsets.symmetric(horizontal: 12),
-                            color: _TradeRoomVisual.panelLine.withAlpha(140),
-                          ),
+                          const SizedBox(height: 2),
                           _TradeCenterRail(
-                            onWishlist: peerName == null
-                                ? null
-                                : _showPeerWishlist,
+                            onWishlist:
+                                peerName == null ? null : _showPeerWishlist,
                             onMessage: _showQuickMessagePicker,
                           ),
-                          Container(
-                            height: 1,
-                            margin: const EdgeInsets.symmetric(horizontal: 12),
-                            color: _TradeRoomVisual.panelLine.withAlpha(140),
-                          ),
+                          const SizedBox(height: 2),
+
                           Expanded(
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                SingleChildScrollView(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(10, 4, 10, 8),
-                                  child: _TradePlayerColumn(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  _TradePlayerColumn(
                                     alignEnd: false,
                                     accentName: _TradeRoomVisual.neonGreen,
                                     playerName: yourName,
@@ -1111,28 +1088,27 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                                       ),
                                     ),
                                     sideConfirmed: _iAmReady(),
-                                    onUnconfirm:
-                                        peerName != null && _iAmReady()
-                                            ? _unconfirmOffer
-                                            : null,
+                                    onUnconfirm: peerName != null && _iAmReady()
+                                        ? _unconfirmOffer
+                                        : null,
                                   ),
-                                ),
-                                if (_bubblePreset != null &&
-                                    _bubbleFromUserId != null &&
-                                    _bubbleFromUserId == _myUid)
-                                  Positioned(
-                                    left: 8,
-                                    right: 8,
-                                    top: 4,
-                                    child: _TradeQuickChatBubble(
-                                      senderLabel: 'You · quick message',
-                                      message: _TradeQuickPhrases.textFor(
-                                        _bubblePreset!,
+                                  if (_bubblePreset != null &&
+                                      _bubbleFromUserId != null &&
+                                      _bubbleFromUserId == _myUid)
+                                    Positioned(
+                                      left: 8,
+                                      right: 8,
+                                      top: 4,
+                                      child: _TradeQuickChatBubble(
+                                        senderLabel: 'You · quick message',
+                                        message: _TradeQuickPhrases.textFor(
+                                          _bubblePreset!,
+                                        ),
+                                        accentPeerSide: false,
                                       ),
-                                      accentPeerSide: false,
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -1188,7 +1164,8 @@ class _TradeRoomPageState extends State<TradeRoomPage>
                         ),
                       ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+
                       child: _TradeConfirmBar(
                         bothLocked: _bothLockedIn(),
                         readyBusy: _readyBusy,
@@ -1216,6 +1193,7 @@ class _TradeRoomPageState extends State<TradeRoomPage>
       ),
     );
   }
+
 
   InputDecoration _tradeCoinInputDecoration() {
     return InputDecoration(
@@ -1283,7 +1261,8 @@ class _TradePlayerColumn extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+
           decoration: BoxDecoration(
             color: _TradeRoomVisual.panel.withAlpha(200),
             borderRadius: BorderRadius.circular(16),
@@ -1294,23 +1273,24 @@ class _TradePlayerColumn extends StatelessWidget {
                 ? CrossAxisAlignment.end
                 : CrossAxisAlignment.start,
             children: [
-          Text(
-            playerName.toUpperCase(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: accentName,
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
-              fontStyle: FontStyle.italic,
-              letterSpacing: 0.4,
+            Text(
+              playerName.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: accentName,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                letterSpacing: 0.4,
+              ),
+              textAlign: alignEnd ? TextAlign.right : TextAlign.left,
             ),
-            textAlign: alignEnd ? TextAlign.right : TextAlign.left,
-          ),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            const SizedBox(height: 2),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+
             decoration: BoxDecoration(
               color: Colors.black.withAlpha(90),
               borderRadius: BorderRadius.circular(10),
@@ -1320,17 +1300,18 @@ class _TradePlayerColumn extends StatelessWidget {
             ),
             child: Text(
               message,
-              maxLines: 3,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: CardGameUiTheme.onDark.withAlpha(210),
-                fontSize: 11.5,
-                height: 1.25,
+                fontSize: 11,
+                height: 1.2,
               ),
               textAlign: alignEnd ? TextAlign.right : TextAlign.left,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 3),
+
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1359,7 +1340,8 @@ class _TradePlayerColumn extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
+
           Text(
             coinLabel,
             style: TextStyle(
@@ -1370,13 +1352,15 @@ class _TradePlayerColumn extends StatelessWidget {
             ),
             textAlign: alignEnd ? TextAlign.right : TextAlign.left,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
+
           if (coinsEditor != null)
             coinsEditor!
           else
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+
               decoration: BoxDecoration(
                 color: Colors.black.withAlpha(100),
                 borderRadius: BorderRadius.circular(10),
@@ -1475,7 +1459,7 @@ class _TradeSlotRow extends StatelessWidget {
     final slot = LayoutBuilder(
       builder: (context, c) {
         final w = c.maxWidth;
-        final h = w / 0.72;
+        final h = w * 1.4;
         return SizedBox(
           width: w,
           height: h,
@@ -1509,9 +1493,10 @@ class _TradeSlotRow extends StatelessWidget {
                             ),
                           ),
                         )
-                      : BundledPlayCardImage(
-                          cardId: cardId,
-                          fit: BoxFit.cover,
+                        : BundledPlayCardImage(
+                            cardId: cardId,
+                            fit: BoxFit.contain,
+
                           errorPlaceholder: Center(
                             child: Text(
                               '#$cardId',
@@ -1545,7 +1530,8 @@ class _TradeSlotRow extends StatelessWidget {
       children: [
         slot,
         if (hasCard) ...[
-          const SizedBox(height: 5),
+          const SizedBox(height: 2),
+
           Center(child: reactionRow),
         ],
       ],
@@ -1657,7 +1643,7 @@ class _TradeCenterRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -2081,7 +2067,7 @@ class _TradeConfirmBar extends StatelessWidget {
       child: TextButton(
         onPressed: _onPressed(),
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           foregroundColor: _TradeRoomVisual.neonGreen,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),

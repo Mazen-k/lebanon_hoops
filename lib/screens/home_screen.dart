@@ -162,23 +162,10 @@ class _HomeScreenState extends State<HomeScreen>
               const SizedBox(height: 32),
               _buildBreakingNewsSection(context),
               const SizedBox(height: 40),
-              _buildUpcomingBattlesSection(context),
-              const SizedBox(height: 40),
               _buildTopPerformersSection(context),
             ],
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const TicketSelectionScreen()),
-        ),
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
-        shape: const CircleBorder(),
-        elevation: 8,
-        child: const Icon(Icons.confirmation_number),
       ),
     );
   }
@@ -407,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen>
         if (hasUpcoming) ...[
           _buildSectionHeader(
             context,
-            'UPCOMING D1 GAMES',
+            'UPCOMING GAMES',
             trailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -437,7 +424,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           const SizedBox(height: 16),
           SizedBox(
-            height: 156,
+            height: 220,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -517,21 +504,21 @@ class _HomeScreenState extends State<HomeScreen>
     final team2Img = g['away_team_logo']?.toString() ?? '';
 
     return GestureDetector(
-      onTap: matchId > 0
-          ? () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => GameBoxscoreScreen(matchId: matchId),
-                ),
-              )
-          : null,
+      onTap: null,
       child: Container(
-        width: 280,
-        padding: const EdgeInsets.all(20),
+        width: 240,
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withAlpha(13)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha((255 * 0.08).round()),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
+          ],
+          border: Border.all(color: Colors.black.withAlpha(10)),
         ),
         child: Column(
           children: [
@@ -545,7 +532,7 @@ class _HomeScreenState extends State<HomeScreen>
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
-                    color: colorScheme.onSurface.withAlpha(179),
+                    color: const Color(0xFF151B2A).withAlpha(179),
                   ),
                 ),
                 Container(
@@ -564,7 +551,7 @@ class _HomeScreenState extends State<HomeScreen>
                     st == 'postponed' ? 'POSTPONED' : 'UPCOMING',
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: colorScheme.onSurfaceVariant,
+                      color: const Color(0xFF151B2A).withAlpha(160),
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
@@ -572,14 +559,14 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _buildTeamColumn(
                   context,
                   team1Code,
-                  colorScheme.onSurface,
+                  const Color(0xFF151B2A),
                   team1Img,
                 ),
                 Text(
@@ -596,10 +583,48 @@ class _HomeScreenState extends State<HomeScreen>
                 _buildTeamColumn(
                   context,
                   team2Code,
-                  colorScheme.onSurface,
+                  const Color(0xFF151B2A),
                   team2Img,
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 38,
+              child: ElevatedButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const TicketSelectionScreen(),
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.zero,
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.confirmation_number_outlined, size: 16),
+                    SizedBox(width: 8),
+                    Text(
+                      'BUY TICKETS',
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -1029,311 +1054,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildUpcomingBattlesSection(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(
-          context,
-          'UPCOMING BATTLES',
-          trailing: TextButton(
-            onPressed: () {
-              // Navigate to Standings/Schedule tab
-              final state = context.findAncestorStateOfType<State>();
-              // This is a bit hacky, but let's assume the user wants to see more.
-              // We'll just show a snackbar for now or navigate if we can find the shell state.
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Opening Full Schedule...'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            },
-            child: Text(
-              'VIEW SCHEDULE',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: colorScheme.primary,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                decoration: TextDecoration.underline,
-                decorationColor: colorScheme.primary,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        if (_gamesLoading)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (_upcomingGames.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              'No upcoming games scheduled.',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          )
-        else
-          SizedBox(
-            height: 260,
-            child: ListView.separated(
-              padding: const EdgeInsets.only(left: 24, right: 24, bottom: 4),
-              scrollDirection: Axis.horizontal,
-              itemCount: _upcomingGames.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 16),
-              itemBuilder: (context, index) {
-                final g = _upcomingGames[index];
-                final matchId =
-                    int.tryParse(g['match_id'].toString()) ?? 0;
-                return _buildTicketCard(
-                  context: context,
-                  matchId: matchId,
-                  date: (() {
-                    final dt = (g['date_time_text'] ?? '').toString().trim();
-                    final st = (g['status'] ?? '').toString().toLowerCase();
-                    return dt.isNotEmpty
-                        ? dt.toUpperCase()
-                        : (st == 'postponed' ? 'POSTPONED' : 'TBD');
-                  })(),
-                  venue: (g['venue'] ?? '').toString().toUpperCase(),
-                  team1Code: _abbr(
-                    (g['home_team_name'] ?? 'Home').toString(),
-                  ),
-                  team2Code: _abbr(
-                    (g['away_team_name'] ?? 'Away').toString(),
-                  ),
-                  team1Img: g['home_team_logo']?.toString() ?? '',
-                  team2Img: g['away_team_logo']?.toString() ?? '',
-                );
-              },
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildTicketCard({
-    required BuildContext context,
-    required int matchId,
-    required String date,
-    required String venue,
-    required String team1Code,
-    required String team2Code,
-    required String team1Img,
-    required String team2Img,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isReminded = _remindedMatchIds.contains(matchId);
-
-    return Container(
-      width: 300,
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withAlpha(13)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLow,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-              border: Border(
-                bottom: BorderSide(color: Colors.white.withAlpha(13)),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    date,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      if (isReminded) {
-                        _remindedMatchIds.remove(matchId);
-                      } else {
-                        _remindedMatchIds.add(matchId);
-                      }
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          isReminded
-                              ? 'Reminder removed'
-                              : 'Reminder set for this game!',
-                        ),
-                        duration: const Duration(seconds: 1),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  icon: Icon(
-                    isReminded
-                        ? Icons.notifications_active_rounded
-                        : Icons.notifications_none_rounded,
-                    color: isReminded
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-                    size: 18,
-                  ),
-                  constraints: const BoxConstraints(),
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    venue,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildTicketTeam(context, team1Code, team1Img),
-                  Text(
-                    'VS',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 20,
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w900,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                  _buildTicketTeam(context, team2Code, team2Img),
-                ],
-              ),
-            ),
-          ),
-          Material(
-            color: colorScheme.primary,
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(12),
-            ),
-            child: InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const TicketSelectionScreen(),
-                ),
-              ),
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(12),
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                alignment: Alignment.center,
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.confirmation_number,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'BUY TICKETS',
-                      style: TextStyle(
-                        fontFamily: 'Lexend',
-                        fontSize: 14,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTicketTeam(BuildContext context, String code, String imgUrl) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-          ),
-          padding: const EdgeInsets.all(8),
-          margin: const EdgeInsets.only(bottom: 8),
-          child: Image.network(
-            imgUrl,
-            fit: BoxFit.contain,
-            errorBuilder: (c, e, s) =>
-                Icon(Icons.shield, color: colorScheme.secondary, size: 28),
-          ),
-        ),
-        Text(
-          code.toUpperCase(),
-          style: TextStyle(
-            fontFamily: 'Lexend',
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: colorScheme.onSurface,
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildTopPerformersSection(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;

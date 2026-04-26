@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../navigation/app_nav_shell_key.dart';
-import 'court_booking_screen.dart';
+import 'fan_shop_screen.dart';
+import 'court_reservation_page.dart';
 import 'games/games_shell.dart';
 import '../widgets/menu_placeholder_page.dart';
 
@@ -49,7 +50,7 @@ class ShopBookingPage extends StatelessWidget {
                 final host = appNavShellKey.currentContext;
                 if (host != null && host.mounted) {
                   Navigator.of(host).push<void>(
-                    MaterialPageRoute<void>(builder: (_) => const GamesShell()),
+                    MaterialPageRoute<void>(builder: (_) => const FanShopScreen()),
                   );
                 }
               });
@@ -71,7 +72,7 @@ class ShopBookingPage extends StatelessWidget {
                 if (host != null && host.mounted) {
                   Navigator.of(host).push<void>(
                     MaterialPageRoute<void>(
-                      builder: (_) => const CourtBookingScreen(),
+                      builder: (_) => const CourtReservationPage(),
                     ),
                   );
                 }

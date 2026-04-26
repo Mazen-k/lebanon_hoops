@@ -44,7 +44,6 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   // —— Table chrome (rows use theme surface so it matches app background) ——
   static const Color _kAccentRed = Color(0xFFBB0013);
   static const Color _kHeaderBg = _kAccentRed;
-  static const Color _kPlayerStatsBg = Color(0xFFEDEDED);
   static const Color _kBorder = Color(0xFFCFCFCF);
   static const Color _kText = Color(0xFF000000);
   static const Color _kSubtext = Color(0xFF666666);
@@ -172,7 +171,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bottomPad = appShellBottomBarOverlap(context);
-    final pageBg = _showTeamStats ? cs.surface : _kPlayerStatsBg;
+    final pageBg = cs.surface;
 
     final Widget scrollChild;
     if (!_showTeamStats) {

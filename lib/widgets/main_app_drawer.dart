@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../navigation/app_nav_shell_key.dart';
 import '../navigation/card_collection_section_route.dart';
+import '../screens/fan_shop_screen.dart';
 import '../screens/court_reservation_page.dart';
 import '../screens/menu_pages.dart';
 import '../screens/games/games_shell.dart';
@@ -93,8 +94,8 @@ class MainAppDrawer extends StatelessWidget {
                     },
                   ),
                   _DrawerTile(
-                    icon: Icons.collections_bookmark_outlined,
-                    label: 'Card collection',
+                    icon: Icons.sports_esports_outlined,
+                    label: 'Games',
                     selected: variant == MainDrawerVariant.gamesSection,
                     onTap: () {
                       if (variant == MainDrawerVariant.gamesSection) {
@@ -109,24 +110,23 @@ class MainAppDrawer extends StatelessWidget {
                     },
                   ),
                   _DrawerTile(
-                    icon: Icons.storefront_outlined,
-                    label: 'Shop & shortcuts',
+                    icon: Icons.shopping_bag_outlined,
+                    label: 'Fan shop',
                     onTap: () => _closeDrawerThen(context, () {
                       Navigator.of(hostContext).push(
-                        MaterialPageRoute<void>(builder: (_) => const ShopBookingPage()),
+                        MaterialPageRoute<void>(builder: (_) => const FanShopScreen()),
                       );
                     }),
                   ),
-                  if (variant == MainDrawerVariant.mainApp)
-                    _DrawerTile(
-                      icon: Icons.event_available_outlined,
-                      label: 'Court reservation',
-                      onTap: () => _closeDrawerThen(context, () {
-                        Navigator.of(hostContext).push(
-                          MaterialPageRoute<void>(builder: (_) => const CourtReservationPage()),
-                        );
-                      }),
-                    ),
+                  _DrawerTile(
+                    icon: Icons.event_available_outlined,
+                    label: 'Court booking',
+                    onTap: () => _closeDrawerThen(context, () {
+                      Navigator.of(hostContext).push(
+                        MaterialPageRoute<void>(builder: (_) => const CourtReservationPage()),
+                      );
+                    }),
+                  ),
                   _DrawerTile(
                     icon: Icons.settings_outlined,
                     label: 'Settings',

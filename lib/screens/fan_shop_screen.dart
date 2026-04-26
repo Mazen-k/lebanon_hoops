@@ -52,6 +52,21 @@ class _FanShopScreenState extends State<FanShopScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        title: const Text(
+          'FAN SHOP',
+          style: TextStyle(
+            fontFamily: 'Lexend',
+            fontWeight: FontWeight.w900,
+            fontStyle: FontStyle.italic,
+            fontSize: 20,
+          ),
+        ),
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(top: 16, bottom: 128, left: 24, right: 24), // pt-20 pb-32 px-6
@@ -95,8 +110,8 @@ class _FanShopScreenState extends State<FanShopScreen> {
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                   colors: [
-                    colorScheme.onSurface,
-                    colorScheme.onSurface.withAlpha((255 * 0.4).round()),
+                    colorScheme.surface,
+                    colorScheme.surface.withAlpha((255 * 0.4).round()),
                     Colors.transparent,
                   ],
                 ),
@@ -119,14 +134,14 @@ class _FanShopScreenState extends State<FanShopScreen> {
                     ),
                   ),
                   const SizedBox(height: 16), // mb-4
-                  const Text(
+                  Text(
                     'REPRESENT THE LEGACY',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white, fontStyle: FontStyle.italic, height: 1.0), // text-4xl font-black italic leading-none
+                    style: TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: colorScheme.onSurface, fontStyle: FontStyle.italic, height: 1.0), // text-4xl font-black italic leading-none
                   ),
                   const SizedBox(height: 16), // mb-4
                   Text(
                     'Explore the official 2024 Lebanese League collection. Authentic gear for the ultimate fan.',
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: Colors.white.withAlpha((255 * 0.8).round()), height: 1.4), // text-sm text-white/80
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: colorScheme.onSurface.withAlpha((255 * 0.8).round()), height: 1.4), // text-sm text-white/80
                   ),
                   const SizedBox(height: 24), // mb-6
                   ElevatedButton(
@@ -395,7 +410,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
     return Container(
       padding: const EdgeInsets.all(40), // p-10
       decoration: BoxDecoration(
-        color: colorScheme.inverseSurface, // bg-inverse-surface (#2A303F)
+        color: const Color(0xFF151B2A), // Fixed dark background for premium "limited" feel
         borderRadius: BorderRadius.circular(16), // rounded-2xl
       ),
       clipBehavior: Clip.hardEdge,
@@ -404,12 +419,25 @@ class _FanShopScreenState extends State<FanShopScreen> {
         children: [
           const Text(
             'LIMITED EDITION MVP PACK',
-            style: TextStyle(fontFamily: 'Lexend', fontSize: 30, fontWeight: FontWeight.w900, color: Colors.white, fontStyle: FontStyle.italic, letterSpacing: -2.0, height: 1.1), // text-3xl font-black italic uppercase tracking-tighter
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+              fontStyle: FontStyle.italic,
+              letterSpacing: -2.0,
+              height: 1.1,
+            ), // text-3xl font-black italic uppercase tracking-tighter
           ),
           const SizedBox(height: 16), // mb-4
           Text(
             'Get the exclusive MVP bundle including the limited edition game day jersey, signed photo, and a commemorative ring box.',
-            style: TextStyle(fontFamily: 'Inter', fontSize: 16, color: colorScheme.onInverseSurface.withAlpha((255 * 0.8).round()), height: 1.5), // text-inverse-on-surface/80
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 16,
+              color: Colors.white.withAlpha((255 * 0.8).round()),
+              height: 1.5,
+            ), // text-white/80
           ),
           const SizedBox(height: 32), // mb-8
           // Pricing row
@@ -420,27 +448,51 @@ class _FanShopScreenState extends State<FanShopScreen> {
                 children: [
                   Text(
                     '\$399.00',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.primaryContainer), // text-2xl font-black text-primary-fixed-dim
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: colorScheme.primaryContainer,
+                    ), // text-2xl font-black text-primary-container
                   ),
                   Text(
                     '\$550.00',
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: Colors.white.withAlpha((255 * 0.4).round()), decoration: TextDecoration.lineThrough), // text-sm line-through text-white/40
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      color: Colors.white.withAlpha((255 * 0.4).round()),
+                      decoration: TextDecoration.lineThrough,
+                    ), // text-sm line-through text-white/40
                   ),
                 ],
               ),
               const SizedBox(width: 24), // gap-6
-              Container(height: 40, width: 1, color: Colors.white.withAlpha((255 * 0.2).round())), // h-10 w-[1px] bg-white/20
+              Container(
+                height: 40,
+                width: 1,
+                color: Colors.white.withAlpha((255 * 0.2).round()),
+              ), // h-10 w-[1px] bg-white/20
               const SizedBox(width: 24), // gap-6
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Only 50',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white), // text-xl font-bold
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ), // text-xl font-bold
                   ),
                   Text(
                     'PACKS LEFT',
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.white.withAlpha((255 * 0.6).round()), letterSpacing: 2.0), // text-xs uppercase text-white/60 tracking-widest
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: Colors.white.withAlpha((255 * 0.6).round()),
+                      letterSpacing: 2.0,
+                    ), // text-xs uppercase text-white/60 tracking-widest
                   ),
                 ],
               ),

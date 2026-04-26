@@ -26,6 +26,7 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
   Map<String, dynamic>? _state;
   String? _error;
   int? _myUid;
+  String? _myUsername;
   late final AnimationController _revealPulse;
 
   @override
@@ -51,7 +52,10 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
   Future<void> _loadUser() async {
     final s = await SessionStore.instance.load();
     if (!mounted) return;
-    setState(() => _myUid = s?.userId ?? BackendConfig.devUserId);
+    setState(() {
+      _myUid = s?.userId ?? BackendConfig.devUserId;
+      _myUsername = s?.username;
+    });
   }
 
   Future<int> _userId() async {
@@ -241,6 +245,11 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
       return const Center(child: CircularProgressIndicator(color: CardGameUiTheme.gold));
     }
     final phase = s['phase']?.toString() ?? '';
+    final myName = s['your_username']?.toString() ?? _myUsername ?? 'Me';
+    final peer = s['peer_user_id'];
+    final peerId = peer is int ? peer : int.tryParse(peer?.toString() ?? '');
+    final peerName = s['peer_username']?.toString() ?? 'Opponent';
+
     return Stack(
       children: [
         SingleChildScrollView(
@@ -264,10 +273,10 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
                 ],
               ],
               if (phase == 'battle' || phase == 'match_over') ...[
-                _scoreboard(s, uid),
+                _scoreboard(s, uid, myName, peerName, peerId),
                 const SizedBox(height: 12),
-                if (phase == 'battle') _battleChrome(s, uid),
-                if (phase == 'match_over') _matchOverBody(s, uid),
+                if (phase == 'battle') _battleChrome(s, uid, peerName),
+                if (phase == 'match_over') _matchOverBody(s, uid, myName),
                 const SizedBox(height: 8),
                 if (_parseMySquad() != null)
                   SquadHalfcourtBoard(
@@ -281,14 +290,13 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
             ],
           ),
         ),
-        if (s['reveal'] is Map<String, dynamic>) _revealOverlay(Map<String, dynamic>.from(s['reveal'] as Map), uid),
+        if (s['reveal'] is Map<String, dynamic>)
+          _revealOverlay(Map<String, dynamic>.from(s['reveal'] as Map), uid, myName, peerName),
       ],
     );
   }
 
-  Widget _scoreboard(Map<String, dynamic> s, int uid) {
-    final peer = s['peer_user_id'];
-    final peerId = peer is int ? peer : int.tryParse(peer?.toString() ?? '');
+  Widget _scoreboard(Map<String, dynamic> s, int uid, String myName, String peerName, int? peerId) {
     final mrw = s['match_round_wins'];
     final rpwRaw = s['round_play_wins'] ?? s['round_point_wins'];
     final mrMap = mrw is Map ? Map<dynamic, dynamic>.from(mrw) : null;
@@ -297,69 +305,91 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
     final peerRounds = peerId != null ? _intMap(mrMap, peerId) : 0;
     final myPts = _intMap(rpMap, uid);
     final peerPts = peerId != null ? _intMap(rpMap, peerId) : 0;
-    final done = int.tryParse(s['plays_completed_this_round']?.toString() ?? '') ?? 0;
-    final maxPlays = int.tryParse(s['plays_per_round']?.toString() ?? '') ?? 5;
-    final names = s['usernames'];
-    final nameMap = names is Map ? Map<dynamic, dynamic>.from(names) : const {};
-    final myName = nameMap[uid]?.toString() ?? 'You';
-    final peerName = peerId != null ? (nameMap[peerId]?.toString() ?? 'Opponent') : '…';
 
-    return Column(
-      children: [
-        Text(
-          'Match (best of 3 rounds) — first to 2 round wins',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(160), fontSize: 11, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: _scorePill('$myName · rounds', '$myRounds', true)),
-            const SizedBox(width: 10),
-            Expanded(child: _scorePill('$peerName · rounds', '$peerRounds', false)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'This round — $maxPlays plays, each lineup card once · Plays done: $done / $maxPlays',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(160), fontSize: 11, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: _scorePill('$myName · play wins', '$myPts', true)),
-            const SizedBox(width: 10),
-            Expanded(child: _scorePill('$peerName · play wins', '$peerPts', false)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _scorePill(String title, String value, bool mine) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
         color: CardGameUiTheme.panel.withAlpha(240),
-        border: Border.all(color: CardGameUiTheme.gold.withAlpha(mine ? 120 : 55)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CardGameUiTheme.gold.withAlpha(90)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(80),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(title, style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(150), fontSize: 11)),
-          const SizedBox(height: 4),
+          Expanded(
+            child: Text(
+              myName.toUpperCase(),
+              style: const TextStyle(
+                color: CardGameUiTheme.onDark,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+                letterSpacing: 0.5,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(
-            value,
-            style: const TextStyle(color: CardGameUiTheme.onDark, fontSize: 22, fontWeight: FontWeight.w900),
+            '$myPts',
+            style: const TextStyle(
+              color: CardGameUiTheme.gold,
+              fontWeight: FontWeight.w900,
+              fontSize: 22,
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black.withAlpha(100),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$myRounds - $peerRounds',
+              style: const TextStyle(
+                color: CardGameUiTheme.onDark,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            '$peerPts',
+            style: const TextStyle(
+              color: CardGameUiTheme.gold,
+              fontWeight: FontWeight.w900,
+              fontSize: 22,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              peerName.toUpperCase(),
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                color: CardGameUiTheme.onDark,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+                letterSpacing: 0.5,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _battleChrome(Map<String, dynamic> s, int uid) {
+
+  Widget _battleChrome(Map<String, dynamic> s, int uid, String peerName) {
     final step = s['battle_step']?.toString() ?? '';
     final ri = s['round_index'];
     final roundLabel = ri != null ? 'Round $ri' : '';
@@ -372,7 +402,7 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
       final mode = hint['mode']?.toString() ?? '';
       final pos = hint['position']?.toString() ?? '';
       final verb = mode == 'attack' ? 'attacked' : 'defended';
-      hintLine = 'Opponent chose to $verb with a $pos — pick a card to ${mode == 'attack' ? 'defend' : 'attack'}.';
+      hintLine = '$peerName chose to $verb with a $pos — pick a card to ${mode == 'attack' ? 'defend' : 'attack'}.';
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -383,10 +413,8 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
           style: const TextStyle(color: CardGameUiTheme.gold, fontWeight: FontWeight.w800, fontSize: 14),
         ),
         const SizedBox(height: 8),
-        if (waitLead)
-          _banner('Waiting for opponent to pick a card', Icons.hourglass_top_rounded),
-        if (waitResp)
-          _banner('Waiting for opponent to answer your pick', Icons.hourglass_top_rounded),
+        if (waitLead) _banner('Waiting for $peerName to pick a card', Icons.hourglass_top_rounded),
+        if (waitResp) _banner('Waiting for $peerName to answer your pick', Icons.hourglass_top_rounded),
         if (hintLine != null && (s['is_my_respond_turn'] == true)) _banner(hintLine, Icons.visibility_rounded),
         if (s['is_my_lead_turn'] == true)
           _banner(
@@ -425,7 +453,7 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
     );
   }
 
-  Widget _revealOverlay(Map<String, dynamic> rev, int uid) {
+  Widget _revealOverlay(Map<String, dynamic> rev, int uid, String myName, String peerName) {
     final leadUid = int.tryParse(rev['lead_uid']?.toString() ?? '') ?? 0;
     final respUid = int.tryParse(rev['respond_uid']?.toString() ?? '') ?? 0;
     final winner = rev['winner_uid'] != null ? int.tryParse(rev['winner_uid'].toString()) : null;
@@ -441,9 +469,9 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
     if (tie) {
       headline = 'Tie — no point';
     } else if (winner == uid) {
-      headline = 'You win the point!';
+      headline = '$myName wins the point!';
     } else {
-      headline = 'Opponent wins the point';
+      headline = '$peerName wins the point';
     }
 
     return Positioned.fill(
@@ -488,7 +516,7 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _revealCardColumn(
-                            label: leadUid == uid ? 'You ($lm)' : 'Opponent ($lm)',
+                            label: leadUid == uid ? '$myName ($lm)' : '$peerName ($lm)',
                             cardId: leadCard,
                             score: ls?.toString() ?? '—',
                           ),
@@ -497,7 +525,7 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
                             child: Text('VS', style: TextStyle(color: CardGameUiTheme.onDark, fontWeight: FontWeight.w900)),
                           ),
                           _revealCardColumn(
-                            label: respUid == uid ? 'You ($rm)' : 'Opponent ($rm)',
+                            label: respUid == uid ? '$myName ($rm)' : '$peerName ($rm)',
                             cardId: respCard,
                             score: rs?.toString() ?? '—',
                           ),
@@ -672,7 +700,7 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
     );
   }
 
-  Widget _matchOverBody(Map<String, dynamic> s, int uid) {
+  Widget _matchOverBody(Map<String, dynamic> s, int uid, String myName) {
     final w = s['match_winner'];
     final wid = w != null ? int.tryParse(w.toString()) : null;
     final won = wid == uid;
@@ -681,7 +709,7 @@ class _OneVOneRoomPageState extends State<OneVOneRoomPage> with SingleTickerProv
       child: Column(
         children: [
           Text(
-            won ? 'You won the match!' : 'You lost the match.',
+            won ? '$myName won the match!' : '$myName lost the match.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: won ? CardGameUiTheme.gold : CardGameUiTheme.onDark,

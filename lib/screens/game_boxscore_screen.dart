@@ -203,8 +203,9 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
 
     return Scaffold(
       backgroundColor: scheme.surface,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: scheme.inverseSurface,
+        backgroundColor: Colors.transparent,
         foregroundColor: scheme.onInverseSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -284,31 +285,46 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
           homeLogo: gameMap?['home_team_logo']?.toString(),
           awayLogo: gameMap?['away_team_logo']?.toString(),
         ),
-        TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          labelColor: scheme.primary,
-          unselectedLabelColor: scheme.onSurfaceVariant,
-          indicatorColor: scheme.primary,
-          indicatorWeight: 3,
-          tabAlignment: TabAlignment.start,
-          labelStyle: const TextStyle(
-            fontFamily: 'Lexend',
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-            letterSpacing: 0.6,
+        Container(
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: Border(
+              bottom: BorderSide(
+                color: scheme.outlineVariant.withAlpha(60),
+                width: 1,
+              ),
+            ),
           ),
-          unselectedLabelStyle: const TextStyle(
-            fontFamily: 'Lexend',
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-            letterSpacing: 0.6,
+          child: TabBar(
+            controller: _tabController,
+            isScrollable: false,
+            labelColor: scheme.primary,
+            unselectedLabelColor: scheme.onSurfaceVariant.withAlpha(160),
+            indicatorColor: scheme.primary,
+            indicatorSize: TabBarIndicatorSize.label,
+            dividerColor: Colors.transparent,
+            indicator: UnderlineTabIndicator(
+              borderSide: BorderSide(color: scheme.primary, width: 3),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+            ),
+            labelStyle: const TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w800,
+              fontSize: 11.5,
+              letterSpacing: 0.5,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w700,
+              fontSize: 11.5,
+              letterSpacing: 0.5,
+            ),
+            tabs: const [
+              Tab(text: 'INFO'),
+              Tab(text: 'BOX SCORE'),
+              Tab(text: 'PLAY-BY-PLAY'),
+            ],
           ),
-          tabs: const [
-            Tab(text: 'INFO'),
-            Tab(text: 'BOX SCORE'),
-            Tab(text: 'PLAY-BY-PLAY'),
-          ],
         ),
         Expanded(
           child: TabBarView(
@@ -381,124 +397,211 @@ class _GameHeader extends StatelessWidget {
     final hasScore = homeScore != null && awayScore != null;
 
     return Container(
-      color: scheme.inverseSurface,
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      clipBehavior: Clip.hardEdge,
+      decoration: BoxDecoration(
+        color: scheme.inverseSurface,
+        gradient: LinearGradient(
+          colors: [
+            scheme.inverseSurface,
+            Color.alphaBlend(Colors.black.withAlpha(40), scheme.inverseSurface),
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Stack(
         children: [
-          // Status row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (dateText != null && dateText!.isNotEmpty)
-                Flexible(
-                  child: Text(
-                    dateText!,
-                    style: TextStyle(
-                      color: scheme.onInverseSurface.withValues(alpha: 0.6),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Inter',
-                      letterSpacing: 0.3,
-                    ),
+          // Translucent Home Logo Background
+          if (homeLogo != null && homeLogo!.isNotEmpty)
+            Positioned(
+              left: -50,
+              bottom: -30,
+              child: Opacity(
+                opacity: 0.08,
+                child: Transform.rotate(
+                  angle: -0.25,
+                  child: Image.network(
+                    homeLogo!,
+                    width: 220,
+                    height: 220,
+                    fit: BoxFit.contain,
                   ),
-                )
-              else
-                const SizedBox.shrink(),
-              if (isLive)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                ),
+              ),
+            ),
+          // Translucent Away Logo Background
+          if (awayLogo != null && awayLogo!.isNotEmpty)
+            Positioned(
+              right: -50,
+              bottom: -30,
+              child: Opacity(
+                opacity: 0.08,
+                child: Transform.rotate(
+                  angle: 0.25,
+                  child: Image.network(
+                    awayLogo!,
+                    width: 220,
+                    height: 220,
+                    fit: BoxFit.contain,
                   ),
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: scheme.onPrimary,
-                          shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          // Gradient overlay for better text readability on edges
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    scheme.inverseSurface.withAlpha(150),
+                    Colors.transparent,
+                    scheme.inverseSurface.withAlpha(150),
+                  ],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  stops: const [0.0, 0.5, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // Main content
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Status row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (dateText != null && dateText!.isNotEmpty)
+                      Flexible(
+                        child: Text(
+                          dateText!,
+                          style: TextStyle(
+                            color: scheme.onInverseSurface.withAlpha(153),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'Inter',
+                            letterSpacing: 0.3,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    if (isLive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.primary,
+                          borderRadius: BorderRadius.circular(4),
+                          boxShadow: [
+                            BoxShadow(
+                              color: scheme.primary.withAlpha(100),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: scheme.onPrimary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'LIVE',
+                              style: TextStyle(
+                                color: scheme.onPrimary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                                fontFamily: 'Lexend',
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (status.isNotEmpty)
                       Text(
-                        'LIVE',
+                        status.toUpperCase(),
                         style: TextStyle(
-                          color: scheme.onPrimary,
+                          color: scheme.onInverseSurface.withAlpha(115),
                           fontSize: 10,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           letterSpacing: 1.2,
                           fontFamily: 'Lexend',
                         ),
                       ),
-                    ],
-                  ),
-                )
-              else if (status.isNotEmpty)
-                Text(
-                  status.toUpperCase(),
-                  style: TextStyle(
-                    color: scheme.onInverseSurface.withValues(alpha: 0.45),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    fontFamily: 'Lexend',
-                  ),
+                  ],
                 ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          // Teams and score
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: _TeamColumn(
-                  scheme: scheme,
-                  name: titleHome,
-                  logoUrl: homeLogo,
-                  align: CrossAxisAlignment.start,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: hasScore
-                    ? Text(
-                        '$homeScore — $awayScore',
-                        style: TextStyle(
-                          color: scheme.onInverseSurface,
-                          fontSize: 30,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -1,
-                          fontFamily: 'Lexend',
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      )
-                    : Text(
-                        'vs',
-                        style: TextStyle(
-                          color: scheme.onInverseSurface.withValues(alpha: 0.4),
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          fontFamily: 'Lexend',
-                        ),
+                const SizedBox(height: 18),
+                // Teams and score
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: _TeamColumn(
+                        scheme: scheme,
+                        name: titleHome,
+                        logoUrl: homeLogo,
+                        align: CrossAxisAlignment.start,
                       ),
-              ),
-              Expanded(
-                child: _TeamColumn(
-                  scheme: scheme,
-                  name: titleAway,
-                  logoUrl: awayLogo,
-                  align: CrossAxisAlignment.end,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: hasScore
+                          ? Text(
+                              '$homeScore — $awayScore',
+                              style: TextStyle(
+                                color: scheme.onInverseSurface,
+                                fontSize: 34,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -1,
+                                fontFamily: 'Lexend',
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withAlpha(50),
+                                    offset: const Offset(0, 2),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Text(
+                              'vs',
+                              style: TextStyle(
+                                color: scheme.onInverseSurface.withAlpha(102),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'Lexend',
+                              ),
+                            ),
+                    ),
+                    Expanded(
+                      child: _TeamColumn(
+                        scheme: scheme,
+                        name: titleAway,
+                        logoUrl: awayLogo,
+                        align: CrossAxisAlignment.end,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -1769,6 +1872,19 @@ class _TeamPickerChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? scheme.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? scheme.primary.withAlpha(80) : Colors.transparent,
+              width: 1.5,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             children: [
@@ -1784,7 +1900,7 @@ class _TeamPickerChip extends StatelessWidget {
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                     fontSize: 13,
                     color: selected
-                        ? scheme.onSurface
+                        ? scheme.primary
                         : scheme.onSurfaceVariant,
                   ),
                 ),
@@ -2690,7 +2806,8 @@ class _PbpEventTile extends StatelessWidget {
     if (team.isNotEmpty && team == titleAway.toLowerCase()) {
       return scheme.secondary;
     }
-    return scheme.onSurfaceVariant;
+    // Neutral events (e.g. Game/Period end) — Use a distinct highlight Gold
+    return const Color(0xFFF2C94C);
   }
 
   @override
@@ -2731,6 +2848,14 @@ class _PbpEventTile extends StatelessWidget {
         ? scheme.primary.withValues(alpha: 0.09)
         : scheme.surfaceContainer;
 
+    final side = _str(row['team_side']).toLowerCase();
+    final teamNameLower = teamName.toLowerCase();
+    final isHome = side == 'home' || (teamNameLower.isNotEmpty && teamNameLower == titleHome.toLowerCase());
+    final isAway = side == 'away' || (teamNameLower.isNotEmpty && teamNameLower == titleAway.toLowerCase());
+    final isNeutral = !isHome && !isAway;
+
+    final accentColor = accent.withValues(alpha: scoring ? 1.0 : 0.55);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2752,7 +2877,7 @@ class _PbpEventTile extends StatelessWidget {
             ),
           ),
         ),
-        // Event card — left accent via border, no stretch Row
+        // Event card
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
@@ -2760,24 +2885,32 @@ class _PbpEventTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: tileBg,
                 border: Border(
-                  left: BorderSide(
-                    color: accent.withValues(alpha: scoring ? 1.0 : 0.55),
-                    width: 3,
-                  ),
+                  left: (isHome || isNeutral)
+                      ? BorderSide(color: accentColor, width: 3.5)
+                      : BorderSide.none,
+                  right: (isAway || isNeutral)
+                      ? BorderSide(color: accentColor, width: 3.5)
+                      : BorderSide.none,
                 ),
               ),
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: isAway ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Player/team headline + score badge
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: isAway ? MainAxisAlignment.end : MainAxisAlignment.start,
                     children: [
+                      if (isAway && score.isNotEmpty) ...[
+                        _ScoreBadge(score: score, scheme: scheme),
+                        const SizedBox(width: 8),
+                      ],
                       Expanded(
                         child: Text(
                           head.isEmpty ? '—' : head,
+                          textAlign: isAway ? TextAlign.right : TextAlign.start,
                           style: TextStyle(
                             fontFamily: 'Lexend',
                             fontWeight: FontWeight.w800,
@@ -2788,31 +2921,9 @@ class _PbpEventTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (score.isNotEmpty) ...[
+                      if (!isAway && score.isNotEmpty) ...[
                         const SizedBox(width: 8),
-                        // Score badge — surfaceContainerHighest (Level 3), no border
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: scheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            score,
-                            style: TextStyle(
-                              fontFamily: 'Lexend',
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                              color: scheme.onSurface,
-                            ),
-                          ),
-                        ),
+                        _ScoreBadge(score: score, scheme: scheme),
                       ],
                     ],
                   ),
@@ -2820,6 +2931,7 @@ class _PbpEventTile extends StatelessWidget {
                     const SizedBox(height: 5),
                     Text(
                       action,
+                      textAlign: isAway ? TextAlign.right : TextAlign.start,
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 13,
@@ -2843,6 +2955,33 @@ class _PbpEventTile extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ScoreBadge extends StatelessWidget {
+  const _ScoreBadge({required this.score, required this.scheme});
+  final String score;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        score,
+        style: TextStyle(
+          fontFamily: 'Lexend',
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+          fontFeatures: const [FontFeature.tabularFigures()],
+          color: scheme.onSurface,
+        ),
+      ),
     );
   }
 }

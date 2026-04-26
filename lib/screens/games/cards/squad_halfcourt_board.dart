@@ -45,11 +45,11 @@ class SquadHalfcourtBoard extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               Positioned.fill(child: CustomPaint(painter: _HalfCourtPainter())),
-              _slotAt(w, h, 'pg', 0.5, 0.065),
-              _slotAt(w, h, 'sg', 0.82, 0.24),
-              _slotAt(w, h, 'sf', 0.18, 0.24),
-              _slotAt(w, h, 'pf', 0.2, 0.52),
-              _slotAt(w, h, 'c', 0.5, 0.69),
+              _slotAt(w, h, 'pg', 0.5, 0.18),
+              _slotAt(w, h, 'sg', 0.88, 0.42),
+              _slotAt(w, h, 'sf', 0.12, 0.42),
+              _slotAt(w, h, 'pf', 0.32, 0.78),
+              _slotAt(w, h, 'c', 0.68, 0.78),
             ],
           );
         },
@@ -227,54 +227,93 @@ class _HalfCourtPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    final floor = Paint()..color = const Color(0xFF2A1D14);
-    final line = Paint()
-      ..color = Colors.white.withAlpha(95)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
 
-    final r = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(14));
+    // 1. Floor Background (Warm Wood)
+    final floor = Paint()..color = const Color(0xFF2D1D14);
+    final r = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(16));
     canvas.drawRRect(r, floor);
 
     canvas.save();
     canvas.clipRRect(r);
 
+    // Subtle wood grain lines
+    final grain = Paint()
+      ..color = Colors.white.withAlpha(8)
+      ..strokeWidth = 1;
+    for (double x = 0; x < w; x += 14) {
+      canvas.drawLine(Offset(x, 0), Offset(x, h), grain);
+    }
+
+    final line = Paint()
+      ..color = Colors.white.withAlpha(110)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+
     final midX = w / 2;
-    final hoopY = h - 14;
-    canvas.drawLine(Offset(0, hoopY), Offset(w, hoopY), line..strokeWidth = 1.2);
+    // The court is viewed from the top, basket is at the bottom
+    final baselineY = h - 12;
+    final basketY = baselineY - 24;
 
-    final keyPaint = Paint()..color = const Color(0xFF3D2818).withAlpha(220);
-    final keyPath = Path()
-      ..moveTo(midX - w * 0.19, hoopY)
-      ..lineTo(midX + w * 0.19, hoopY)
-      ..lineTo(midX + w * 0.14, hoopY - h * 0.32)
-      ..lineTo(midX - w * 0.14, hoopY - h * 0.32)
-      ..close();
-    canvas.drawPath(keyPath, keyPaint);
-    canvas.drawPath(keyPath, line..strokeWidth = 1.8);
+    // 2. Outer Boundary
+    canvas.drawRect(Rect.fromLTWH(4, 4, w - 8, h - 8), line..strokeWidth = 1.2);
 
-    final paintArc = Paint()
-      ..color = Colors.white.withAlpha(85)
+    // 3. The Key (Rectangular)
+    final keyW = w * 0.38;
+    final keyH = h * 0.34;
+    final keyRect = Rect.fromLTWH(midX - keyW / 2, baselineY - keyH, keyW, keyH);
+    
+    final keyFill = Paint()..color = const Color(0xFF3E2B1E).withAlpha(180);
+    canvas.drawRect(keyRect, keyFill);
+    canvas.drawRect(keyRect, line..strokeWidth = 1.8);
+
+    // 4. Free Throw Circle
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(midX, baselineY - keyH), width: keyW, height: keyW),
+      3.1415,
+      3.1415,
+      false,
+      line,
+    );
+
+    // 5. 3-Point Line
+    // Straight sides from baseline
+    final sideDist = 18.0;
+    final sideY = baselineY - h * 0.18;
+    canvas.drawLine(Offset(sideDist, baselineY), Offset(sideDist, sideY), line);
+    canvas.drawLine(Offset(w - sideDist, baselineY), Offset(w - sideDist, sideY), line);
+    
+    // Top Arc
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(midX, basketY), width: w * 0.92, height: h * 0.65),
+      3.1415 + 0.3,
+      2.55,
+      false,
+      line,
+    );
+
+    // 6. Restricted Area (No-charge semi-circle)
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(midX, basketY), radius: 22),
+      3.1415,
+      3.1415,
+      false,
+      line..color = Colors.white.withAlpha(60),
+    );
+
+    // 7. Backboard and Hoop
+    final boardW = 44.0;
+    canvas.drawLine(
+      Offset(midX - boardW / 2, basketY + 4), 
+      Offset(midX + boardW / 2, basketY + 4), 
+      line..color = Colors.white.withAlpha(200)..strokeWidth = 2.5
+    );
+    
+    final hoopPaint = Paint()
+      ..color = const Color(0xFFFF8C00).withAlpha(200)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    canvas.drawArc(
-      Rect.fromCenter(center: Offset(midX, hoopY), width: w * 0.78, height: h * 0.42),
-      3.35,
-      0.55,
-      false,
-      paintArc,
-    );
+    canvas.drawCircle(Offset(midX, basketY + 2), 7, hoopPaint);
 
-    canvas.drawCircle(Offset(midX, hoopY - h * 0.12), w * 0.055, line..strokeWidth = 1.5);
-
-    final board = Paint()..color = const Color(0xFF8B7355);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(midX, hoopY + 4), width: 42, height: 6),
-        const Radius.circular(2),
-      ),
-      board,
-    );
     canvas.restore();
   }
 

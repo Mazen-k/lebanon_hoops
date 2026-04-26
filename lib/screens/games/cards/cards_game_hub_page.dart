@@ -108,6 +108,7 @@ class _OneVOneCta extends StatelessWidget {
       height: 76,
       borderRadius: 20,
       strongBorder: true,
+      alignment: const Alignment(0, -0.15),
     );
   }
 }
@@ -141,6 +142,7 @@ class _SecondaryGrid extends StatelessWidget {
                   imageAsset: CardsHubImagePaths.collection,
                   onTap: onCollection,
                   borderRadius: 18,
+                  alignment: const Alignment(0, -0.3),
                 ),
               ),
               const SizedBox(width: _gap),
@@ -149,6 +151,7 @@ class _SecondaryGrid extends StatelessWidget {
                   imageAsset: CardsHubImagePaths.duplicates,
                   onTap: onDuplicates,
                   borderRadius: 18,
+                  alignment: const Alignment(0, -0.3),
                 ),
               ),
             ],
@@ -164,6 +167,7 @@ class _SecondaryGrid extends StatelessWidget {
                   imageAsset: CardsHubImagePaths.trading,
                   onTap: onTrading,
                   borderRadius: 18,
+                  alignment: const Alignment(0, -0.3),
                 ),
               ),
               const SizedBox(width: _gap),
@@ -172,6 +176,7 @@ class _SecondaryGrid extends StatelessWidget {
                   imageAsset: CardsHubImagePaths.sbc,
                   onTap: onSbc,
                   borderRadius: 18,
+                  alignment: const Alignment(0, -0.3),
                 ),
               ),
             ],
@@ -190,6 +195,7 @@ class _HubTappableImage extends StatelessWidget {
     this.height,
     this.borderRadius = 20,
     this.strongBorder = false,
+    this.alignment = Alignment.center,
   });
 
   final String imageAsset;
@@ -197,6 +203,7 @@ class _HubTappableImage extends StatelessWidget {
   final double? height;
   final double borderRadius;
   final bool strongBorder;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +226,7 @@ class _HubTappableImage extends StatelessWidget {
     Widget imageFill() => Image.asset(
           imageAsset,
           fit: BoxFit.cover,
-          alignment: Alignment.center,
+          alignment: alignment,
           errorBuilder: (context, error, stackTrace) => const SizedBox.expand(),
         );
 

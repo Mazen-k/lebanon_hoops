@@ -89,9 +89,9 @@ class PlayerStatLeadersPanel extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 0.62,
+              mainAxisSpacing: 24,
+              crossAxisSpacing: 18,
+              childAspectRatio: 0.64,
             ),
             itemCount: s.stats.length,
             itemBuilder: (context, index) {
@@ -287,89 +287,88 @@ class _StatLeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.11),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: scheme.primary,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(14),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                  ),
+                  child: Text(
+                    group.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10.5,
+                      letterSpacing: 0.3,
+                      height: 1.15,
+                    ),
                   ),
                 ),
-                child: Text(
-                  group.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 10.5,
-                    letterSpacing: 0.3,
-                    height: 1.15,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-                  child: group.top3.isEmpty
-                      ? Center(
-                          child: Text(
-                            '—',
-                            style: TextStyle(color: scheme.onSurfaceVariant),
-                          ),
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Expanded(
-                              child: _BigLeaderBlock(
-                                scheme: scheme,
-                                row: group.top3.first,
-                              ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                    child: group.top3.isEmpty
+                        ? Center(
+                            child: Text(
+                              '—',
+                              style: TextStyle(color: scheme.onSurfaceVariant),
                             ),
-                            if (group.top3.length > 1) ...[
-                              const Divider(height: 1),
-                              _CompactLeaderRow(
-                                scheme: scheme,
-                                row: group.top3[1],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: _BigLeaderBlock(
+                                  scheme: scheme,
+                                  row: group.top3.first,
+                                ),
                               ),
+                              if (group.top3.length > 1) ...[
+                                const Divider(height: 1),
+                                _CompactLeaderRow(
+                                  scheme: scheme,
+                                  row: group.top3[1],
+                                ),
+                              ],
+                              if (group.top3.length > 2) ...[
+                                const Divider(height: 1),
+                                _CompactLeaderRow(
+                                  scheme: scheme,
+                                  row: group.top3[2],
+                                ),
+                              ],
                             ],
-                            if (group.top3.length > 2) ...[
-                              const Divider(height: 1),
-                              _CompactLeaderRow(
-                                scheme: scheme,
-                                row: group.top3[2],
-                              ),
-                            ],
-                          ],
-                        ),
+                          ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
