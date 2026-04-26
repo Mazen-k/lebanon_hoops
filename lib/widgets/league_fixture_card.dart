@@ -16,13 +16,17 @@ class LeagueFixtureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isLive = fixture.centerLabel == 'LIVE';
     final interactive = onCardTap != null;
 
     final cardBody = Ink(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
+        border: isDark 
+          ? Border.all(color: cs.outlineVariant.withValues(alpha: 0.5), width: 0.5)
+          : null,
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -58,14 +62,14 @@ class LeagueFixtureCard extends StatelessWidget {
       ),
     );
 
-    const _kShadow = BoxDecoration(
-      borderRadius: BorderRadius.all(Radius.circular(12)),
+    final _kShadow = BoxDecoration(
+      borderRadius: const BorderRadius.all(Radius.circular(12)),
       boxShadow: [
         BoxShadow(
-          color: Color(0x18000000), // ~9 % black — subtle in light & dark
-          blurRadius: 10,
+          color: isDark ? Colors.black.withValues(alpha: 0.4) : const Color(0x18000000),
+          blurRadius: isDark ? 12 : 10,
           spreadRadius: 0,
-          offset: Offset(0, 3),
+          offset: const Offset(0, 4),
         ),
       ],
     );

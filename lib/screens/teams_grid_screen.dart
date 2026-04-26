@@ -112,12 +112,12 @@ class _TeamsGridScreenState extends State<TeamsGridScreen> {
               ),
             )
           : GridView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 120),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 1.4,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+                childAspectRatio: 1.0,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
               ),
               itemCount: _teams!.length,
               itemBuilder: (context, index) {
@@ -138,6 +138,8 @@ class _TeamCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    final isDark = colorScheme.brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -150,67 +152,63 @@ class _TeamCard extends StatelessWidget {
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.withAlpha(40)),
+          border: Border.all(
+            color: isDark
+                ? colorScheme.outlineVariant.withValues(alpha: 0.5)
+                : Colors.grey.withAlpha(40),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.4)
+                  : Colors.black.withValues(alpha: 0.12),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
           ],
         ),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(8),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (team.logoUrl == null || team.logoUrl!.isEmpty)
               Icon(
                 Icons.shield,
-                size: 56,
-                color: colorScheme.primary.withAlpha(80),
+                size: 64,
+                color: colorScheme.primary.withValues(alpha: 0.3),
               )
             else
               SizedBox(
-                height: 56,
-                width: 56,
+                height: 64,
+                width: 64,
                 child: Image.network(
                   team.logoUrl!,
                   fit: BoxFit.contain,
-                  alignment: Alignment.centerLeft,
+                  alignment: Alignment.center,
                   errorBuilder: (context, error, stackTrace) => Icon(
                     Icons.shield,
-                    size: 56,
-                    color: colorScheme.primary.withAlpha(80),
+                    size: 64,
+                    color: colorScheme.primary.withValues(alpha: 0.3),
                   ),
                 ),
               ),
-            const Spacer(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text(
-                    team.teamName.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF151b2a),
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.more_vert_rounded,
-                  size: 20,
-                  color: colorScheme.secondary,
-                ),
-              ],
+            const SizedBox(height: 16),
+            Text(
+              team.teamName.toUpperCase(),
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Lexend',
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: colorScheme.onSurface,
+                letterSpacing: -0.2,
+                height: 1.1,
+              ),
             ),
           ],
         ),

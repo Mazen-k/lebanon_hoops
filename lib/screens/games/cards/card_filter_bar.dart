@@ -578,7 +578,7 @@ Future<void> _showFilterBoxDialog<T>({
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
                 child: Text(
                   title,
                   textAlign: TextAlign.center,
@@ -590,22 +590,7 @@ Future<void> _showFilterBoxDialog<T>({
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text(
-                  'Tap a box to filter',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: CardGameUiTheme.onDark.withAlpha(140),
-                    fontSize: 12.5,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: (maxH - 150).clamp(160.0, 520.0),
-                ),
+              Flexible(
                 child: entries.isEmpty
                     ? Padding(
                         padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),

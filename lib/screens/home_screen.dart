@@ -509,7 +509,7 @@ class _HomeScreenState extends State<HomeScreen>
         width: 240,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -518,7 +518,7 @@ class _HomeScreenState extends State<HomeScreen>
               offset: const Offset(0, 8),
             ),
           ],
-          border: Border.all(color: Colors.black.withAlpha(10)),
+          border: Border.all(color: colorScheme.outline.withAlpha(60)),
         ),
         child: Column(
           children: [
@@ -532,7 +532,7 @@ class _HomeScreenState extends State<HomeScreen>
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
-                    color: const Color(0xFF151B2A).withAlpha(179),
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
                 Container(
@@ -551,7 +551,7 @@ class _HomeScreenState extends State<HomeScreen>
                     st == 'postponed' ? 'POSTPONED' : 'UPCOMING',
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: const Color(0xFF151B2A).withAlpha(160),
+                      color: colorScheme.onSurface,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
@@ -566,7 +566,7 @@ class _HomeScreenState extends State<HomeScreen>
                 _buildTeamColumn(
                   context,
                   team1Code,
-                  const Color(0xFF151B2A),
+                  colorScheme.onSurface,
                   team1Img,
                 ),
                 Text(
@@ -583,7 +583,7 @@ class _HomeScreenState extends State<HomeScreen>
                 _buildTeamColumn(
                   context,
                   team2Code,
-                  const Color(0xFF151B2A),
+                  colorScheme.onSurface,
                   team2Img,
                 ),
               ],
@@ -896,8 +896,8 @@ class _HomeScreenState extends State<HomeScreen>
         Container(
           width: 48,
           height: 48,
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             shape: BoxShape.circle,
           ),
           padding: const EdgeInsets.all(8),
@@ -914,7 +914,8 @@ class _HomeScreenState extends State<HomeScreen>
         const SizedBox(height: 8),
         Text(
           code,
-          style: const TextStyle(
+          style: TextStyle(
+            color: textColor,
             fontFamily: 'Lexend',
             fontSize: 12,
             fontWeight: FontWeight.bold,

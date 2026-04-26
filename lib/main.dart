@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth/auth_gate.dart';
+import 'config/supabase_config.dart';
 import 'theme/theme.dart';
-
 import 'theme/theme_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
+  );
+
   final themeController = ThemeController();
   await themeController.init();
   runApp(const LebanonHoopsApp());

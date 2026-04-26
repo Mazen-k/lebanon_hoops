@@ -44,9 +44,9 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   // —— Table chrome (rows use theme surface so it matches app background) ——
   static const Color _kAccentRed = Color(0xFFBB0013);
   static const Color _kHeaderBg = _kAccentRed;
-  static const Color _kBorder = Color(0xFFCFCFCF);
-  static const Color _kText = Color(0xFF000000);
-  static const Color _kSubtext = Color(0xFF666666);
+  Color get _kBorder => Theme.of(context).colorScheme.outlineVariant;
+  Color get _kText => Theme.of(context).colorScheme.onSurface;
+  Color get _kSubtext => Theme.of(context).colorScheme.onSurfaceVariant;
 
   static const double _hdrH = 48;
   static const double _rowH = 56;
@@ -270,7 +270,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
           children: [
             Text(
               '${sel.genderLabel} ${sel.competitionName} · ${sel.seasonLabel}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: _kSubtext,
@@ -292,7 +292,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
                 const SizedBox(width: 6),
                 Text(
                   _perGame ? 'PER GAME' : 'TOTAL',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 13,
                     letterSpacing: 0.8,
@@ -306,7 +306,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
               _perGame
                   ? 'Averages per game (1 decimal). GP = games played.'
                   : 'Season totals. GP counts every final/live game.',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10.5,
                 height: 1.25,
                 color: _kSubtext,
@@ -382,7 +382,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
   Widget _pinnedHeaderCell() {
     return Container(
       height: _hdrH,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _kHeaderBg,
         border: Border(
           bottom: BorderSide(color: _kBorder, width: 1),
@@ -408,7 +408,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
       height: _rowH,
       decoration: BoxDecoration(
         color: _rowBg(scheme),
-        border: const Border(
+        border: Border(
           bottom: BorderSide(color: _kBorder, width: 1),
           right: BorderSide(color: _kBorder, width: 1),
         ),
@@ -423,7 +423,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
               r.teamName,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w800,
                 fontSize: 13,
                 height: 1.12,
@@ -440,7 +440,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     return SizedBox(
       height: _hdrH,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: _kHeaderBg,
           border: Border(bottom: BorderSide(color: _kBorder, width: 1)),
         ),
@@ -456,7 +456,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     return Container(
       width: _statColW,
       height: _hdrH,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(right: BorderSide(color: _kBorder, width: 1)),
       ),
       alignment: Alignment.center,
@@ -477,7 +477,7 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
       height: _rowH,
       decoration: BoxDecoration(
         color: _rowBg(scheme),
-        border: const Border(bottom: BorderSide(color: _kBorder, width: 1)),
+        border: Border(bottom: BorderSide(color: _kBorder, width: 1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -493,14 +493,14 @@ class _TeamStatsScreenState extends State<TeamStatsScreen> {
     return Container(
       width: _statColW,
       height: _rowH,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(right: BorderSide(color: _kBorder, width: 1)),
       ),
       alignment: Alignment.center,
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w800,
           fontSize: 13,
           color: _kText,
@@ -622,10 +622,10 @@ class _TeamLogo extends StatelessWidget {
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,
-        child: const Icon(
+        child: Icon(
           Icons.shield_outlined,
           size: 20,
-          color: _TeamStatsScreenState._kSubtext,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
       );
     }
@@ -634,7 +634,7 @@ class _TeamLogo extends StatelessWidget {
       height: _size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: _TeamStatsScreenState._kBorder),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
       child: Image.network(
@@ -643,10 +643,10 @@ class _TeamLogo extends StatelessWidget {
         errorBuilder: (_, _, _) => Container(
           color: Theme.of(context).colorScheme.surfaceContainerLow,
           alignment: Alignment.center,
-          child: const Icon(
+          child: Icon(
             Icons.shield_outlined,
             size: 20,
-            color: _TeamStatsScreenState._kSubtext,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
       ),

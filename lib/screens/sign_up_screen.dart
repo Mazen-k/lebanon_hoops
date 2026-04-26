@@ -4,10 +4,8 @@ import '../widgets/glass_card.dart';
 import '../widgets/gradient_button.dart';
 import '../widgets/auth_text_field.dart';
 import '../data/team_repository.dart';
-import '../models/sign_up_data.dart';
 import '../models/team.dart';
-import '../services/auth_api_service.dart';
-import '../services/auth_service.dart';
+import '../services/supabase_auth_service.dart';
 import '../services/session_store.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -26,7 +24,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _phone = TextEditingController();
 
   final _teamsRepo = const TeamRepository();
-  final _auth = AuthApiService();
+  final _auth = SupabaseAuthService();
 
   List<Team> _teams = [];
   bool _teamsLoading = true;
@@ -43,35 +41,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _loadTeams() async {
-    setState(() {
-      _teamsLoading = true;
-      _teamsError = null;
-    });
+    setState(() { _teamsLoading = true; _teamsError = null; });
     try {
       final list = await _teamsRepo.fetchTeams();
-      if (mounted) {
-        setState(() {
-          _teams = list;
-          _teamsLoading = false;
-          _teamsError = null;
-        });
-      }
+      if (mounted) setState(() { _teams = list; _teamsLoading = false; });
     } on TeamRepositoryException catch (e) {
-      if (mounted) {
-        setState(() {
-          _teams = [];
-          _teamsLoading = false;
-          _teamsError = e.message;
-        });
-      }
+      if (mounted) setState(() { _teams = []; _teamsLoading = false; _teamsError = e.message; });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _teams = [];
-          _teamsLoading = false;
-          _teamsError = 'Failed to load teams: $e';
-        });
-      }
+      if (mounted) setState(() { _teams = []; _teamsLoading = false; _teamsError = 'Failed to load teams: $e'; });
     }
   }
 
@@ -91,28 +68,31 @@ class _SignUpScreenState extends State<SignUpScreen> {
     try {
       final phone = _phone.text.trim();
       final session = await _auth.signUp(
-        SignUpData(
-          username: _username.text.trim(),
-          email: _email.text.trim(),
-          password: _password.text,
-          phoneNumber: phone.isEmpty ? null : phone,
-          favoriteTeamId: _favoriteTeamId,
-        ),
+        email: _email.text.trim(),
+        password: _password.text,
+        username: _username.text.trim(),
+        phoneNumber: phone.isEmpty ? null : phone,
+        favoriteTeamId: _favoriteTeamId,
       );
       await SessionStore.instance.save(session);
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } on AuthException catch (e) {
+    } on SupabaseAuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.message), behavior: SnackBarBehavior.floating),
         );
+        // If it's an email-confirmation message, pop back to login so the
+        // user can sign in after confirming.
+        if (e.message.contains('confirmation link')) {
+          Navigator.of(context).pop(false);
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not reach the server. Check API_BASE_URL and that the API is running.\n$e'),
+          const SnackBar(
+            content: Text('Network error. Check your connection and try again.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -319,15 +299,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
               ),
             ),
             items: [
-              const DropdownMenuItem<int?>(
-                value: null,
-                child: Text('No favorite team'),
-              ),
+              const DropdownMenuItem<int?>(value: null, child: Text('No favorite team')),
               ..._teams.map(
-                (t) => DropdownMenuItem<int?>(
-                  value: t.teamId,
-                  child: Text(t.teamName),
-                ),
+                (t) => DropdownMenuItem<int?>(value: t.teamId, child: Text(t.teamName)),
               ),
             ],
             onChanged: _teams.isEmpty ? null : (v) => setState(() => _favoriteTeamId = v),
