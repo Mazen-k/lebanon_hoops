@@ -115,6 +115,11 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 28),
               _buildSectionTitle(context, 'SIGN IN'),
               const SizedBox(height: 20),
+
+              // Email + password inside GlassCard only.
+              // Google button lives OUTSIDE the GlassCard so it is never
+              // inside a BackdropFilter compositing layer — which can silently
+              // clip content on iOS with the Impeller renderer.
               GlassCard(
                 borderRadius: 12,
                 padding: const EdgeInsets.all(20),
@@ -169,114 +174,127 @@ class _LoginScreenState extends State<LoginScreen> {
                         )
                       else
                         GradientButton(text: 'Sign in', onPressed: _submit),
-                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
 
-                      // ── OR divider ──────────────────────────────────────
-                      Row(
-                        children: [
-                          const Expanded(child: Divider()),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              'OR',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
+              const SizedBox(height: 20),
+
+              // ── OR divider ────────────────────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: Divider(
+                      color: colorScheme.outlineVariant,
+                      thickness: 1,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'OR',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
                           ),
-                          const Expanded(child: Divider()),
-                        ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Divider(
+                      color: colorScheme.outlineVariant,
+                      thickness: 1,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // ── Google sign-in button ─────────────────────────────────────
+              _googleLoading
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: CircularProgressIndicator(color: colorScheme.primary),
                       ),
-                      const SizedBox(height: 16),
-
-                      // ── Google sign-in button ───────────────────────────
-                      _googleLoading
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                child: CircularProgressIndicator(color: colorScheme.primary),
-                              ),
-                            )
-                          : OutlinedButton.icon(
-                              onPressed: _loading ? null : _signInWithGoogle,
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: BorderSide(color: colorScheme.outline),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              icon: const _GoogleLogo(),
-                              label: Text(
-                                'Continue with Google',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                      const SizedBox(height: 20),
-
-                      // ── Create account link ─────────────────────────────
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'New here? ',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                          TextButton(
-                            onPressed: () async {
-                              final signedUp = await Navigator.of(context).push<bool>(
-                                MaterialPageRoute<bool>(
-                                  builder: (_) => const SignUpScreen(),
-                                ),
-                              );
-                              if (signedUp == true && context.mounted) {
-                                await widget.onAuthSuccess?.call();
-                              }
-                            },
-                            child: Text(
-                              'Create account',
-                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      // ── Vendor link ─────────────────────────────────────
-                      Center(
-                        child: TextButton(
-                          onPressed: (_loading || _googleLoading)
-                              ? null
-                              : () async {
-                                  final ok = await Navigator.of(context).push<bool>(
-                                    MaterialPageRoute<bool>(
-                                      builder: (_) => const VendorLoginScreen(),
-                                    ),
-                                  );
-                                  if (ok == true && context.mounted) {
-                                    await widget.onVendorSignedIn?.call();
-                                  }
-                                },
-                          child: Text(
-                            'Sign in as vendor',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                  color: AppColors.secondary,
-                                  fontWeight: FontWeight.w700,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: AppColors.secondary,
-                                ),
-                          ),
+                    )
+                  : OutlinedButton.icon(
+                      onPressed: _loading ? null : _signInWithGoogle,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: colorScheme.outline),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                    ],
+                      icon: const _GoogleLogo(),
+                      label: Text(
+                        'Continue with Google',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+
+              const SizedBox(height: 20),
+
+              // ── Create account link ───────────────────────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'New here? ',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final signedUp = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute<bool>(
+                          builder: (_) => const SignUpScreen(),
+                        ),
+                      );
+                      if (signedUp == true && context.mounted) {
+                        await widget.onAuthSuccess?.call();
+                      }
+                    },
+                    child: Text(
+                      'Create account',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // ── Vendor link ───────────────────────────────────────────────
+              Center(
+                child: TextButton(
+                  onPressed: (_loading || _googleLoading)
+                      ? null
+                      : () async {
+                          final ok = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute<bool>(
+                              builder: (_) => const VendorLoginScreen(),
+                            ),
+                          );
+                          if (ok == true && context.mounted) {
+                            await widget.onVendorSignedIn?.call();
+                          }
+                        },
+                  child: Text(
+                    'Sign in as vendor',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.secondary,
+                          fontWeight: FontWeight.w700,
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppColors.secondary,
+                        ),
                   ),
                 ),
               ),
