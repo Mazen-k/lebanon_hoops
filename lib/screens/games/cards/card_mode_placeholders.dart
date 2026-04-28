@@ -311,7 +311,7 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
     setState(() => _loadingCollection = true);
     try {
       final uid = await _userId();
-      final cards = await _collectionApi.fetchCollection(userId: uid);
+      final cards = await _collectionApi.fetchCollectionDuplicates(userId: uid);
       final map = <int, CollectionCard>{for (final c in cards) c.cardId: c};
       if (!mounted) return;
       setState(() {
@@ -360,7 +360,7 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
 
   String _requirementName(SbcRequirement req) {
     final text = (req.requiredText ?? '').trim();
-    if (text.isNotEmpty) return text;
+    if (text.isNotEmpty && !RegExp(r'^\d+$').hasMatch(text)) return text;
     final type = req.requirementType.trim().toUpperCase();
     if (type == 'PLAYER_REQUIRED') return 'Player #${req.requiredValue ?? '?'}';
     if (type == 'TEAM') return 'Team #${req.requiredValue ?? '?'}';

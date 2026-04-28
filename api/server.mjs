@@ -3529,6 +3529,27 @@ function evaluateSbcRequirement(req, selectedCards) {
   };
 }
 
+async function validateSbcUsesDuplicatesOnly(client, userId, cardIds) {
+  const uniq = [...new Set(cardIds.filter((x) => Number.isInteger(x) && x > 0))];
+  if (uniq.length === 0) return;
+  const { rows } = await client.query(
+    `SELECT card_id, COUNT(*)::int AS cnt
+     FROM card_instances
+     WHERE user_id = $1::int AND card_id = ANY($2::int[])
+     GROUP BY card_id`,
+    [userId, uniq],
+  );
+  const counts = new Map(rows.map((r) => [Number(r.card_id), Number(r.cnt)]));
+  for (const cardId of uniq) {
+    const have = counts.get(cardId) ?? 0;
+    if (have < 2) {
+      const err = new Error(`Card ${cardId} is not a duplicate. SBC requires at least 2 copies of every submitted card.`);
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+}
+
 async function sbcChallengesHandler(req, res) {
   try {
     const { rows: challenges } = await pool.query(
@@ -3602,8 +3623,10 @@ async function sbcChallengesHandler(req, res) {
       const r = { ...rawReq };
       const reqType = String(r.requirement_type ?? '').toUpperCase();
       const reqValue = parsePositiveInt(r.required_value);
-      const hasText = String(r.required_text ?? '').trim().length > 0;
-      if (!hasText && reqValue != null) {
+      const rawText = String(r.required_text ?? '').trim();
+      const textLooksLikeId = reqValue != null && (rawText === String(reqValue) || /^\d+$/.test(rawText));
+      const shouldReplaceText = rawText.isEmpty || textLooksLikeId;
+      if (shouldReplaceText && reqValue != null) {
         if (reqType === 'PLAYER_REQUIRED') {
           r.required_text = playerNameById.get(reqValue) ?? `Player #${reqValue}`;
         } else if (reqType === 'TEAM') {
@@ -3699,6 +3722,7 @@ async function sbcSubmitHandler(req, res) {
     );
 
     await validateUserOwnsSquadMultiset(client, userId, slots.pg, slots.sg, slots.sf, slots.pf, slots.c);
+    await validateSbcUsesDuplicatesOnly(client, userId, [slots.pg, slots.sg, slots.sf, slots.pf, slots.c]);
     await validateSquadLineupPositions(client, slots.pg, slots.sg, slots.sf, slots.pf, slots.c);
 
     const selectedMap = await fetchPlayCardSummariesForSquad(client, [slots.pg, slots.sg, slots.sf, slots.pf, slots.c]);
