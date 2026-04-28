@@ -31,6 +31,10 @@ class TradeApiService {
     return [prefix, 'api/$prefix'];
   }
 
+  String _normalizeRoomCode(String code) {
+    return code.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  }
+
   Future<String> createRoom({required int userId}) async {
     final paths = _pair('trade/rooms');
     final own = _client ?? http.Client();
@@ -58,7 +62,7 @@ class TradeApiService {
   }
 
   Future<void> joinRoom({required String code, required int userId}) async {
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c/join');
     final own = _client ?? http.Client();
     try {
@@ -86,7 +90,7 @@ class TradeApiService {
   }
 
   Future<Map<String, dynamic>> getRoomState({required String code, required int userId}) async {
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c');
     final own = _client ?? http.Client();
     try {
@@ -109,7 +113,7 @@ class TradeApiService {
   }
 
   Future<void> putTradeCoins({required String code, required int userId, required int coins}) async {
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c/coins');
     final body = jsonEncode({'user_id': userId, 'coins': coins});
     final own = _client ?? http.Client();
@@ -146,7 +150,7 @@ class TradeApiService {
     required String reaction,
   }) async {
     if (slotIndex < 0 || slotIndex > 2) throw TradeApiException('Invalid slot');
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c/slot-reaction');
     final body = jsonEncode({
       'user_id': userId,
@@ -185,7 +189,7 @@ class TradeApiService {
     required int userId,
     required String preset,
   }) async {
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c/quick-message');
     final body = jsonEncode({'user_id': userId, 'preset': preset});
     final own = _client ?? http.Client();
@@ -217,7 +221,7 @@ class TradeApiService {
 
   Future<void> putOffer({required String code, required int userId, required List<int?> slots}) async {
     if (slots.length != 3) throw TradeApiException('Need exactly 3 slots');
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c/offer');
     final body = jsonEncode({
       'user_id': userId,
@@ -251,7 +255,7 @@ class TradeApiService {
   }
 
   Future<void> leaveRoom({required String code, required int userId}) async {
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c/leave');
     final own = _client ?? http.Client();
     try {
@@ -297,7 +301,7 @@ class TradeApiService {
     if (choice != 'accept' && choice != 'modify') {
       throw TradeApiException('choice must be accept or modify');
     }
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c/summary-choice');
     final body = jsonEncode({'user_id': userId, 'choice': choice});
     final own = _client ?? http.Client();
@@ -330,7 +334,7 @@ class TradeApiService {
   }
 
   Future<void> _postTradeJson(String code, int userId, String segment, Map<String, dynamic> extra) async {
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c/$segment');
     final body = jsonEncode({'user_id': userId, ...extra});
     final own = _client ?? http.Client();
@@ -366,7 +370,7 @@ class TradeApiService {
     String segment, {
     Duration timeout = const Duration(seconds: 25),
   }) async {
-    final c = code.trim().toUpperCase();
+    final c = _normalizeRoomCode(code);
     final paths = _pair('trade/rooms/$c/$segment');
     final own = _client ?? http.Client();
     try {

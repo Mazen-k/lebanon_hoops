@@ -1427,6 +1427,13 @@ function genTradeCode() {
   return s;
 }
 
+function normalizeTradeRoomCode(raw) {
+  return String(raw ?? '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 12);
+}
+
 function pruneStaleRooms() {
   const now = Date.now();
   for (const [code, room] of tradeRooms) {
@@ -1463,7 +1470,7 @@ async function tradeCreateHandler(req, res) {
 
 async function tradeJoinHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const userId = req.body?.user_id ?? req.body?.userId;
   if (!code || userId == null || Number.isNaN(Number(userId))) {
     return res.status(400).json({ error: 'code and user_id are required' });
@@ -1555,7 +1562,7 @@ async function loadWishlistCardRows(client, userId) {
 
 async function tradeStateHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const raw = req.query.user_id ?? req.query.userId;
   if (!code || raw == null || Number.isNaN(Number(raw))) {
     return res.status(400).json({ error: 'code and user_id are required' });
@@ -1667,7 +1674,7 @@ const TRADE_QUICK_MSG_PRESETS = new Set([
 
 async function tradeQuickMessageHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const userId = req.body?.user_id ?? req.body?.userId;
   const presetRaw = req.body?.preset ?? req.body?.message_key ?? req.body?.key;
   if (!code || userId == null || Number.isNaN(Number(userId))) {
@@ -1693,7 +1700,7 @@ async function tradeQuickMessageHandler(req, res) {
 
 async function tradeOfferHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const userId = req.body?.user_id ?? req.body?.userId;
   const slots = req.body?.slots ?? req.body?.card_instance_ids;
   if (!code || userId == null || Number.isNaN(Number(userId))) {
@@ -1758,7 +1765,7 @@ async function tradeOfferHandler(req, res) {
 /** Any member leaving closes the room for everyone. */
 async function tradeLeaveHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const userId = req.body?.user_id ?? req.body?.userId;
   if (!code || userId == null || Number.isNaN(Number(userId))) {
     return res.status(400).json({ error: 'code and user_id are required' });
@@ -1776,7 +1783,7 @@ async function tradeLeaveHandler(req, res) {
 /** Set coins this user offers in the trade (display / future settlement). Resets lock-in. */
 async function tradeCoinsHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const userId = req.body?.user_id ?? req.body?.userId;
   const rawCoins = req.body?.coins ?? req.body?.card_coins;
   if (!code || userId == null || Number.isNaN(Number(userId))) {
@@ -1810,7 +1817,7 @@ async function tradeCoinsHandler(req, res) {
 /** Viewer rates peer's card in slot_index: reaction `up` | `down` | `clear`. */
 async function tradeSlotReactionHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const userId = req.body?.user_id ?? req.body?.userId;
   const slotRaw = req.body?.slot_index ?? req.body?.slotIndex;
   const rawReaction = req.body?.reaction ?? req.body?.vote;
@@ -1847,7 +1854,7 @@ async function tradeSlotReactionHandler(req, res) {
 /** Phase 1: lock in current offer (0–3 cards). Both must do this before finalize. */
 async function tradeConfirmReadyHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const userId = req.body?.user_id ?? req.body?.userId;
   if (!code || userId == null || Number.isNaN(Number(userId))) {
     return res.status(400).json({ error: 'code and user_id are required' });
@@ -1874,7 +1881,7 @@ async function tradeConfirmReadyHandler(req, res) {
 /** Clear lock-in for this user (and summary flags) so they can edit offer/coins again. */
 async function tradeUnconfirmHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const userId = req.body?.user_id ?? req.body?.userId;
   if (!code || userId == null || Number.isNaN(Number(userId))) {
     return res.status(400).json({ error: 'code and user_id are required' });
@@ -1979,7 +1986,7 @@ async function runTradeExchange(client, room) {
 /** After both locked in: accept (execute when both accept) or modify (both return to trading). */
 async function tradeSummaryChoiceHandler(req, res) {
   pruneStaleRooms();
-  const code = (req.params.code ?? '').toUpperCase();
+  const code = normalizeTradeRoomCode(req.params.code);
   const userId = req.body?.user_id ?? req.body?.userId;
   const choice = req.body?.choice;
   if (!code || userId == null || Number.isNaN(Number(userId))) {
@@ -2579,11 +2586,27 @@ async function oneVOneStateHandler(req, res) {
     const now = Date.now();
     await ovoAdvanceRoom(client, room, now);
     const peerId = room.users.find((u) => u !== userId) ?? null;
+    async function ensureRoomUsername(uid) {
+      if (uid == null) return null;
+      const existing = room.usernames?.[uid];
+      if (existing != null && String(existing).trim().isNotEmpty) return String(existing);
+      const { rows } = await client.query(`SELECT username FROM users WHERE user_id = $1::int`, [uid]);
+      if (rows.length > 0) {
+        if (!room.usernames) room.usernames = {};
+        room.usernames[uid] = rows[0].username;
+        return String(rows[0].username);
+      }
+      return null;
+    }
+    const yourUsername = (await ensureRoomUsername(userId)) ?? 'Player';
+    const peerUsername = peerId != null ? (await ensureRoomUsername(peerId)) : null;
     const out = {
       code: room.code,
       phase: room.phase,
       usernames: room.usernames,
       peer_user_id: peerId,
+      peer_username: peerUsername,
+      your_username: yourUsername,
       squad_pick_deadline: room.squad_pick_deadline ?? null,
       squad_pick: room.squad_pick ?? {},
       squad_ready: room.squad_ready ?? null,
