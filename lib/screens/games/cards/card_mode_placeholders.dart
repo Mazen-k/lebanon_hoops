@@ -145,7 +145,9 @@ class _SbcPageState extends State<SbcPage> {
         final challenge = _challenges[index];
         return _SbcChallengeRow(
           challenge: challenge,
-          onTap: () async {
+          onTap: challenge.completed
+              ? null
+              : () async {
             await Navigator.of(context).push<void>(
             MaterialPageRoute<void>(
               builder: (_) => _SbcChallengeDetailPage(challenge: challenge),
@@ -166,14 +168,16 @@ class _SbcChallengeRow extends StatelessWidget {
   });
 
   final SbcChallenge challenge;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+    return Opacity(
+      opacity: challenge.completed ? 0.72 : 1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Ink(
           decoration: BoxDecoration(
@@ -276,6 +280,7 @@ class _SbcChallengeRow extends StatelessWidget {
               ),
             ),
           ),
+        ),
         ),
       ),
     );
@@ -773,7 +778,7 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
   }
 }
 
-class _SbcRewardRevealPage extends StatelessWidget {
+class _SbcRewardRevealPage extends StatefulWidget {
   const _SbcRewardRevealPage({
     required this.rewardCard,
     required this.rewardCardId,
@@ -781,6 +786,41 @@ class _SbcRewardRevealPage extends StatelessWidget {
 
   final SbcRewardCard rewardCard;
   final int rewardCardId;
+
+  @override
+  State<_SbcRewardRevealPage> createState() => _SbcRewardRevealPageState();
+}
+
+class _SbcRewardRevealPageState extends State<_SbcRewardRevealPage> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _spin;
+  late final Animation<double> _scale;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _spin = Tween<double>(begin: 3.6 * 3.1415926535897932, end: 0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+    _scale = Tween<double>(begin: 0.55, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    );
+    _fade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -803,7 +843,7 @@ class _SbcRewardRevealPage extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'You unlocked ${rewardCard.playerLabel}',
+                'You unlocked ${widget.rewardCard.playerLabel}',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: CardGameUiTheme.onDark.withAlpha(220),
@@ -812,14 +852,20 @@ class _SbcRewardRevealPage extends StatelessWidget {
               ),
               const Spacer(),
               Center(
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.7, end: 1.0),
-                  duration: const Duration(milliseconds: 550),
-                  curve: Curves.easeOutBack,
-                  builder: (context, value, child) => Transform.scale(
-                    scale: value,
-                    child: Opacity(opacity: value.clamp(0.0, 1.0), child: child),
-                  ),
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, child) {
+                    return Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.identity()
+                        ..setEntry(3, 2, 0.0012)
+                        ..rotateY(_spin.value),
+                      child: Transform.scale(
+                        scale: _scale.value,
+                        child: Opacity(opacity: _fade.value, child: child),
+                      ),
+                    );
+                  },
                   child: Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(18),
@@ -837,14 +883,14 @@ class _SbcRewardRevealPage extends StatelessWidget {
                         width: 240,
                         height: 320,
                         child: BundledPlayCardImage(
-                          cardId: rewardCardId,
+                          cardId: widget.rewardCardId,
                           fit: BoxFit.cover,
-                          fallbackImageUrl: rewardCard.cardImage,
+                          fallbackImageUrl: widget.rewardCard.cardImage,
                           errorPlaceholder: ColoredBox(
                             color: CardGameUiTheme.panel,
                             child: Center(
                               child: Text(
-                                rewardCard.playerLabel,
+                                widget.rewardCard.playerLabel,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: CardGameUiTheme.onDark,
