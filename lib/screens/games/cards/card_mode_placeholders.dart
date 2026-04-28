@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math';
 
 import '../../../config/backend_config.dart';
 import '../../../models/cards_squad.dart';
@@ -316,6 +317,7 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
   List<CollectionCard> _collection = const [];
   Map<int, CollectionCard> _collectionByCardId = const {};
   CardsSquadPayload _lineup = CardsSquadPayload.draft(0);
+  final Random _random = Random();
 
   @override
   void initState() {
@@ -618,6 +620,148 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
     }
   }
 
+  Future<void> _autoCompleteSquad() async {
+    if (_loadingCollection || _submitting || widget.challenge.completed) return;
+
+    final slots = CardsSquadPayload.slotOrder;
+    final slotCandidates = <String, List<CollectionCard>>{};
+    for (final slot in slots) {
+      final candidates = _collection.where((c) => _collectionCardFitsSbcSlot(c, slot)).toList();
+      candidates.shuffle(_random);
+      slotCandidates[slot] = candidates;
+    }
+    if (slots.any((s) => (slotCandidates[s] ?? const []).isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Auto-complete failed: some positions have no eligible duplicate cards.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final reqs = widget.challenge.requirements.where((r) {
+      final t = r.requirementType.trim().toUpperCase();
+      return (t == 'PLAYER_REQUIRED' || t == 'TEAM') && r.requiredValue != null && r.minCount > 0;
+    }).toList();
+
+    int scoreCard(CollectionCard c, Map<int, CollectionCard> assignedBySlotIndex) {
+      var score = 0;
+      for (final r in reqs) {
+        final t = r.requirementType.trim().toUpperCase();
+        final need = r.minCount;
+        var matched = 0;
+        for (final a in assignedBySlotIndex.values) {
+          if (t == 'PLAYER_REQUIRED' && a.playerId == r.requiredValue) matched++;
+          if (t == 'TEAM' && a.teamId == r.requiredValue) matched++;
+        }
+        final stillNeeded = need - matched;
+        if (stillNeeded <= 0) continue;
+        if (t == 'PLAYER_REQUIRED' && c.playerId == r.requiredValue) score += 10;
+        if (t == 'TEAM' && c.teamId == r.requiredValue) score += 6;
+      }
+      return score;
+    }
+
+    bool canStillMeetRequirements(Map<int, CollectionCard> assignedBySlotIndex, int nextSlotIdx) {
+      for (final r in reqs) {
+        final t = r.requirementType.trim().toUpperCase();
+        final need = r.minCount;
+        var matched = 0;
+        for (final a in assignedBySlotIndex.values) {
+          if (t == 'PLAYER_REQUIRED' && a.playerId == r.requiredValue) matched++;
+          if (t == 'TEAM' && a.teamId == r.requiredValue) matched++;
+        }
+        var possibleFuture = 0;
+        for (var i = nextSlotIdx; i < slots.length; i++) {
+          final sc = slotCandidates[slots[i]] ?? const <CollectionCard>[];
+          final canMatch = sc.any((c) {
+            if (t == 'PLAYER_REQUIRED') return c.playerId == r.requiredValue;
+            if (t == 'TEAM') return c.teamId == r.requiredValue;
+            return false;
+          });
+          if (canMatch) possibleFuture++;
+        }
+        if (matched + possibleFuture < need) return false;
+      }
+      return true;
+    }
+
+    bool allRequirementsMet(Map<int, CollectionCard> assignedBySlotIndex) {
+      for (final r in reqs) {
+        final t = r.requirementType.trim().toUpperCase();
+        final need = r.minCount;
+        var matched = 0;
+        for (final a in assignedBySlotIndex.values) {
+          if (t == 'PLAYER_REQUIRED' && a.playerId == r.requiredValue) matched++;
+          if (t == 'TEAM' && a.teamId == r.requiredValue) matched++;
+        }
+        if (matched < need) return false;
+      }
+      return true;
+    }
+
+    final assignedBySlotIndex = <int, CollectionCard>{};
+
+    bool dfs(int idx) {
+      if (idx >= slots.length) {
+        return allRequirementsMet(assignedBySlotIndex);
+      }
+      final slot = slots[idx];
+      final candidates = [...(slotCandidates[slot] ?? const <CollectionCard>[])];
+      candidates.sort((a, b) => scoreCard(b, assignedBySlotIndex).compareTo(scoreCard(a, assignedBySlotIndex)));
+      for (final c in candidates) {
+        assignedBySlotIndex[idx] = c;
+        if (!canStillMeetRequirements(assignedBySlotIndex, idx + 1)) {
+          assignedBySlotIndex.remove(idx);
+          continue;
+        }
+        if (dfs(idx + 1)) return true;
+        assignedBySlotIndex.remove(idx);
+      }
+      return false;
+    }
+
+    final ok = dfs(0);
+    if (!ok) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No valid auto-complete lineup found for current requirements.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final newSlots = <String, CardsSquadSlotCard>{};
+    for (var i = 0; i < slots.length; i++) {
+      final slotKey = slots[i];
+      final c = assignedBySlotIndex[i]!;
+      newSlots[slotKey] = CardsSquadSlotCard(
+        cardId: c.cardId,
+        position: c.position,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        overall: c.overall,
+        attack: c.attack,
+        defend: c.defend,
+        teamName: c.teamName,
+        cardImage: c.cardImage,
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _lineup = _lineup.copyWith(slots: newSlots);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('SBC lineup auto-completed.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final reward = widget.challenge.rewardCard;
@@ -761,6 +905,17 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
                 readOnly: _submitting,
                 onSlotTap: _pickSlot,
               ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: (_loadingCollection || _submitting || widget.challenge.completed) ? null : _autoCompleteSquad,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: CardGameUiTheme.gold,
+                side: BorderSide(color: CardGameUiTheme.gold.withAlpha(180)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              icon: const Icon(Icons.auto_fix_high_rounded),
+              label: const Text('Auto-complete'),
+            ),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: canSubmit ? _submitSbc : null,
