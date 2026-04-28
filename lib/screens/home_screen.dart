@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../models/player_leaders.dart';
 import '../services/games_api_service.dart';
 import '../state/competition_filter.dart';
 import '../widgets/competition_selector_bar.dart';
@@ -28,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<Map<String, dynamic>> _upcomingGames = const [];
   List<Map<String, dynamic>> _activeUpcomingGames = const [];
   List<Map<String, dynamic>> _completedChampions = const [];
+  PlayerLeadersSummary? _leadersSummary;
 
   // Competitions that are fully over — show their champion instead of live section.
   static const List<int> _completedCompIds = [39158, 39159];
@@ -97,11 +99,17 @@ class _HomeScreenState extends State<HomeScreen>
       final championF = isCompleted
           ? _api
               .fetchCompetitionChampion(competitionId: selectedId)
-              .onError((_, __) => null)
+              .onError((error, stackTrace) => null)
           : Future<Map<String, dynamic>?>.value(null);
 
       final games = await gamesF;
       final champion = await championF;
+      PlayerLeadersSummary? leaders;
+      try {
+        leaders = await _api.fetchPlayerLeaders(competitionId: selectedId);
+      } catch (_) {
+        leaders = null;
+      }
 
       if (!mounted) return;
       setState(() {
@@ -120,6 +128,7 @@ class _HomeScreenState extends State<HomeScreen>
         _activeUpcomingGames = isCompleted ? const [] : _upcomingGames;
         _completedChampions =
             champion != null ? [champion] : const [];
+        _leadersSummary = leaders;
         _gamesLoading = false;
       });
     } catch (_) {
@@ -1055,9 +1064,45 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  PlayerStatLeaderGroup? _leaderGroup(String key) {
+    final stats = _leadersSummary?.stats ?? const <PlayerStatLeaderGroup>[];
+    for (final g in stats) {
+      if (g.key == key) return g;
+    }
+    return null;
+  }
+
+  String _statValueForPlayer(
+    PlayerLeaderRow leader,
+    String key, {
+    String fallback = '—',
+  }) {
+    final g = _leaderGroup(key);
+    if (g == null) return fallback;
+    for (final row in g.top3) {
+      if (leader.playerId != null && row.playerId == leader.playerId) {
+        return row.valueLabel;
+      }
+      if (row.playerName.toLowerCase().trim() ==
+          leader.playerName.toLowerCase().trim()) {
+        return row.valueLabel;
+      }
+    }
+    return fallback;
+  }
 
   Widget _buildTopPerformersSection(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final pointsGroup = _leaderGroup('ppg');
+    final reboundsGroup = _leaderGroup('rpg');
+    final assistsGroup = _leaderGroup('apg');
+    final pointsLeader =
+        (pointsGroup?.top3.isNotEmpty ?? false) ? pointsGroup!.top3.first : null;
+    final reboundsLeader =
+        (reboundsGroup?.top3.isNotEmpty ?? false) ? reboundsGroup!.top3.first : null;
+    final assistsLeader =
+        (assistsGroup?.top3.isNotEmpty ?? false) ? assistsGroup!.top3.first : null;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
@@ -1065,138 +1110,174 @@ class _HomeScreenState extends State<HomeScreen>
         children: [
           _buildSectionHeader(context, 'TOP PERFORMERS'),
           const SizedBox(height: 24),
-          // Main Performer Card
-          Container(
-            height: 224,
-            width: double.infinity,
-            clipBehavior: Clip.hardEdge,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              color: colorScheme.surfaceContainer,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 32,
-                  offset: const Offset(0, 16),
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  right: -10,
-                  bottom: -40,
-                  child: Text(
-                    '23',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 120,
-                      fontWeight: FontWeight.w900,
-                      fontStyle: FontStyle.italic,
-                      color: colorScheme.primary.withAlpha(26), // primary/10
-                      height: 1.0,
-                    ),
+          if (pointsLeader == null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Text(
+                'Top performers will appear once enough games are available.',
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              ),
+            )
+          else
+            Container(
+              height: 224,
+              width: double.infinity,
+              clipBehavior: Clip.hardEdge,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                color: colorScheme.surfaceContainer,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 32,
+                    offset: const Offset(0, 16),
                   ),
-                ),
-                Positioned(
-                  right: -20,
-                  top: 0,
-                  bottom: 0,
-                  width: 200,
-                  child: Opacity(
-                    opacity: 0.8,
-                    child: Image.network(
-                      'https://lh3.googleusercontent.com/aida-public/AB6AXuDIzsjzrOvYPWBDZsnhO7BpxSHRAC90apP10GjUVN1_Mkbt7YR5RjeENChGJ1AdDwL7Qzs0lqnHX7gvrxV5ERKZj6sXSG0zdKhNbP1GuUHxGWGTInKmMm1hG3txybGHc3Qw3cnrfsTnMNaNjf_08KiF2HWdLMTvXpzGch-yhVPA373AbEZr3F9qJwFz2NAIXOEbPwCwa5AFC3uuWr9KRMrH_tkNJXF9AFo7iyCSYSOspDHYFClQsA0YqTCkDHHLAoaoh-QSDLzPEun2',
-                      fit: BoxFit.cover,
-                      alignment: Alignment.centerLeft,
-                      errorBuilder: (c, e, s) => Icon(
-                        Icons.person,
-                        size: 100,
-                        color: colorScheme.secondary,
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -10,
+                    bottom: -40,
+                    child: Text(
+                      pointsLeader.playerNumber.trim().isEmpty
+                          ? '#1'
+                          : pointsLeader.playerNumber,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontSize: 120,
+                        fontWeight: FontWeight.w900,
+                        fontStyle: FontStyle.italic,
+                        color: colorScheme.primary.withAlpha(26),
+                        height: 1.0,
                       ),
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'PLAYER OF THE WEEK',
-                            style: TextStyle(
-                              fontFamily: 'Lexend',
-                              fontSize: 12,
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w900,
-                              fontStyle: FontStyle.italic,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'SERGIO\nEL DARWICH',
-                            style: TextStyle(
-                              fontFamily: 'Lexend',
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              color: colorScheme.onSurface,
-                              height: 1.0,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'BEIRUT CLUB • GUARD',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                  Positioned(
+                    right: -20,
+                    top: 0,
+                    bottom: 0,
+                    width: 200,
+                    child: Opacity(
+                      opacity: 0.8,
+                      child: (pointsLeader.headshotUrl ?? '').trim().isEmpty
+                          ? Icon(
+                              Icons.person,
+                              size: 100,
                               color: colorScheme.secondary,
+                            )
+                          : Image.network(
+                              pointsLeader.headshotUrl!,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.centerLeft,
+                              errorBuilder: (c, e, s) => Icon(
+                                Icons.person,
+                                size: 100,
+                                color: colorScheme.secondary,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          _buildStat(context, 'PTS', '28.4', false),
-                          const SizedBox(width: 16),
-                          _buildStat(context, 'AST', '6.2', true),
-                          const SizedBox(width: 16),
-                          _buildStat(context, 'REB', '5.8', true),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'POINTS LEADER',
+                              style: TextStyle(
+                                fontFamily: 'Lexend',
+                                fontSize: 12,
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w900,
+                                fontStyle: FontStyle.italic,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              pointsLeader.playerName.toUpperCase(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Lexend',
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: colorScheme.onSurface,
+                                height: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${pointsLeader.teamName.toUpperCase()} • ${pointsLeader.positionLabel.toUpperCase()}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.secondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            _buildStat(
+                              context,
+                              'PTS',
+                              pointsLeader.valueLabel,
+                              false,
+                            ),
+                            const SizedBox(width: 16),
+                            _buildStat(
+                              context,
+                              'AST',
+                              _statValueForPlayer(pointsLeader, 'apg'),
+                              true,
+                            ),
+                            const SizedBox(width: 16),
+                            _buildStat(
+                              context,
+                              'REB',
+                              _statValueForPlayer(pointsLeader, 'rpg'),
+                              true,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: _buildSecondaryPerformer(
                   context,
-                  'Omari Spellman',
+                  reboundsLeader,
                   'Rebounds Leader',
-                  '14.3',
                   'RPG',
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuBGkL957XYsrycUmC-N_7vejj9y4jFXS9pXb74WJSNyMW3VSm8GRtIse6uSng_hWepCONIh80CLfQE54WmUDJ-_nbnKegpHBlHkv_t9RByTCG0FGC4vxfx89SRQdPNOYmeOg-RlVZDi5IbOZkFeGNFroj4-N1vxLwu0l_GCXNb80Dw69Ubmt2r25UTt7-rMtlYvdLbFRLo_HjXuz6BE2Rnz-oXEbkrp7Rni_6fQI0SCpIkIoz3IOncehQ71xlZr8KDqn4uLTFk-zD2p',
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _buildSecondaryPerformer(
                   context,
-                  'Ali Mezher',
+                  assistsLeader,
                   'Assists Leader',
-                  '8.9',
                   'APG',
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuCRr_ol2LJioV3KhfH-1HZc3hw7nBKIaEptbKc9l3bFSLHsTKRZtCmwxNBLhiII57FBTReMI_V9HeJjha7rXZ-PZxcbFZki6ddl5RFSiSROTkUHrCeuRvDDuCOjIQ4AgmzJR1qieUQX7xBz-SJUXRS0otz35g90wggZU4UmaBMKe427lP3qMe7QkSkYlGnZvXi8lnXKkkUFS1IVkop7yKYKdmvsWRohaVOVzvKJmGfR_WBETAeOv5PQEjJhfF6y5vpt7EQg6S__9k35',
                 ),
               ),
             ],
@@ -1249,13 +1330,14 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildSecondaryPerformer(
     BuildContext context,
-    String name,
+    PlayerLeaderRow? leader,
     String sublabel,
-    String stat,
     String statLabel,
-    String imgUrl,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final name = leader?.playerName ?? '—';
+    final stat = leader?.valueLabel ?? '—';
+    final imgUrl = leader?.headshotUrl ?? '';
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(

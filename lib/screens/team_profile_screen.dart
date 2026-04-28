@@ -44,8 +44,8 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     'Overview',
     'Fixtures',
     'Roster',
-    'Trophies',
     'Stats',
+    'Trophies',
   ];
 
   @override
@@ -265,12 +265,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       gamesApi: _gamesApi,
                       competitionId: _filter.selected.competitionId,
                     ),
-                    _TrophiesTab(trophies: data.trophies),
                     _TeamStatsTab(
                       team: data.team,
                       competitionId: _filter.selected.competitionId,
                       gamesApi: _gamesApi,
                     ),
+                    _TrophiesTab(trophies: data.trophies),
                   ],
                 ),
               ),

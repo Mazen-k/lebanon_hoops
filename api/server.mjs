@@ -3306,9 +3306,44 @@ async function aggregatePlayerBoxscoresForCompetition(compId) {
     a.tov += tov;
   }
 
-  // Leaders use only `player_boxscores` + `games` (no `players` join — roster
-  // rows are not guaranteed to match box score player_id yet).
-  return [...byKey.values()];
+  const out = [...byKey.values()];
+  const playerIds = out
+    .map((a) => a.player_id)
+    .filter((id) => typeof id === 'number' && Number.isFinite(id) && id > 0);
+  if (playerIds.length > 0) {
+    const uniq = [...new Set(playerIds)];
+    try {
+      const { rows: pRows } = await pool.query(
+        `SELECT p.player_id,
+                NULLIF(TRIM(p.position), '') AS position,
+                NULLIF(TRIM(p.picture_url), '') AS picture_url
+         FROM players p
+         WHERE p.player_id = ANY($1::bigint[])`,
+        [uniq],
+      );
+      const byPid = new Map();
+      for (const p of pRows ?? []) {
+        const pid = Number(p.player_id);
+        if (Number.isNaN(pid)) continue;
+        byPid.set(pid, {
+          position: p.position != null ? String(p.position).trim() : null,
+          headshot_url:
+            p.picture_url != null ? String(p.picture_url).trim() : null,
+        });
+      }
+      for (const a of out) {
+        if (a.player_id == null) continue;
+        const p = byPid.get(Number(a.player_id));
+        if (!p) continue;
+        if (!a.position && p.position) a.position = p.position;
+        if (!a.headshot_url && p.headshot_url) a.headshot_url = p.headshot_url;
+      }
+    } catch (err) {
+      console.warn('[player leaders] players enrichment skipped:', err?.message ?? err);
+    }
+  }
+
+  return out;
 }
 
 const PLAYER_LEADER_STAT_DEFS = [
