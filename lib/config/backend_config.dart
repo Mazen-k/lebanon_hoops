@@ -115,7 +115,6 @@ abstract final class BackendConfig {
     return 'user/wallet';
   }
 
-<<<<<<< Updated upstream
   /// `GET` active SBC challenges + requirements + reward card info.
   static String get sbcChallengesPath {
     const fromEnv = String.fromEnvironment('API_SBC_CHALLENGES_PATH', defaultValue: '');
@@ -128,12 +127,12 @@ abstract final class BackendConfig {
     const fromEnv = String.fromEnvironment('API_SBC_SUBMIT_PATH', defaultValue: '');
     if (fromEnv.isNotEmpty) return fromEnv.trim().replaceAll(RegExp(r'^/+'), '');
     return 'sbc/submit';
-=======
+  }
+
   /// GET `?category=…` — fan-shop items list; returns array of shop_items rows.
   static String get shopItemsPath {
     const fromEnv = String.fromEnvironment('API_SHOP_ITEMS_PATH', defaultValue: '');
     if (fromEnv.isNotEmpty) return fromEnv.trim().replaceAll(RegExp(r'^/+'), '');
     return 'shop/items';
->>>>>>> Stashed changes
   }
 }
