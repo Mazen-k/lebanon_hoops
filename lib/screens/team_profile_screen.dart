@@ -12,6 +12,7 @@ import '../services/players_api_service.dart';
 import '../state/competition_filter.dart';
 import '../widgets/league_fixture_card.dart';
 import 'game_boxscore_screen.dart';
+import 'player_competition_profile_screen.dart';
 import 'ticket_selection_screen.dart';
 
 class TeamProfileScreen extends StatefulWidget {
@@ -252,6 +253,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       onRetry: _loadFixtures,
                     ),
                     _RosterTab(
+                      team: data.team,
                       players: data.players,
                       gamesApi: _gamesApi,
                       competitionId: _filter.selected.competitionId,
@@ -1233,19 +1235,6 @@ String _rosterCategoryTitle(int category) {
   }
 }
 
-String _abbrevPosition(String position) {
-  final raw = position.trim().toUpperCase();
-  if (raw.isEmpty) return '—';
-  if (raw == 'PG' || raw == 'SG' || raw == 'SF' || raw == 'PF' || raw == 'C')
-    return raw;
-  if (raw.contains('POINT')) return 'PG';
-  if (raw.contains('SHOOTING')) return 'SG';
-  if (raw.contains('SMALL')) return 'SF';
-  if (raw.contains('POWER')) return 'PF';
-  if (raw.contains('CENTER')) return 'C';
-  return raw.length <= 3 ? raw : raw.substring(0, 3);
-}
-
 String _exactPositionLabel(String position) {
   final raw = position.trim().toUpperCase();
   if (raw.isEmpty) return 'Position TBD';
@@ -1269,11 +1258,13 @@ String _exactPositionLabel(String position) {
 
 class _RosterTab extends StatelessWidget {
   const _RosterTab({
+    required this.team,
     required this.players,
     required this.gamesApi,
     required this.competitionId,
   });
 
+  final Team team;
   final List<Player> players;
   final GamesApiService gamesApi;
   final int competitionId;
@@ -1329,12 +1320,18 @@ class _RosterTab extends StatelessWidget {
                       width: w,
                       child: _PlayerBox(
                         player: p,
-                        onTap: () => _openPlayerPopup(
-                          context,
-                          player: p,
-                          gamesApi: gamesApi,
-                          competitionId: competitionId,
-                        ),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => PlayerCompetitionProfileScreen(
+                                player: p,
+                                team: team,
+                                competitionId: competitionId,
+                                gamesApi: gamesApi,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                 ],
@@ -1521,259 +1518,6 @@ class _PlayerBox extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-Future<void> _openPlayerPopup(
-  BuildContext context, {
-  required Player player,
-  required GamesApiService gamesApi,
-  required int competitionId,
-}) {
-  final colorScheme = Theme.of(context).colorScheme;
-  return showDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    builder: (ctx) {
-      return Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 540, maxHeight: 640),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        player.fullName,
-                        style: TextStyle(
-                          fontFamily: 'Lexend',
-                          fontWeight: FontWeight.w900,
-                          fontSize: 20,
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _PlayerProfileHeader(player: player),
-                        const SizedBox(height: 14),
-                        FutureBuilder<Map<String, dynamic>>(
-                          future: gamesApi.fetchPlayerCompetitionStats(
-                            competitionId: competitionId,
-                            playerId: player.playerId,
-                          ),
-                          builder: (context, snap) {
-                            if (snap.connectionState != ConnectionState.done) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 24),
-                                child: Center(child: CircularProgressIndicator()),
-                              );
-                            }
-                            if (snap.hasError) {
-                              return Text(
-                                '${snap.error}',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: colorScheme.error),
-                              );
-                            }
-                            final data = snap.data ?? const <String, dynamic>{};
-                            final gp = (data['gp'] as num?)?.toInt() ?? 0;
-                            final per = Map<String, dynamic>.from(
-                              (data['per_game'] as Map?)?.cast<String, dynamic>() ?? const {},
-                            );
-                            return _PlayerCompetitionStatsSection(
-                              gp: gp,
-                              ppg: per['ppg'],
-                              rpg: per['rpg'],
-                              apg: per['apg'],
-                              spg: per['spg'],
-                              bpg: per['bpg'],
-                              mpg: per['mpg'],
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    },
-  );
-}
-
-class _PlayerProfileHeader extends StatelessWidget {
-  const _PlayerProfileHeader({required this.player});
-
-  final Player player;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          _PlayerPhotoSlot(player: player),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _infoChip(context, 'No. ${player.jerseyNumber}'),
-                _infoChip(context, _exactPositionLabel(player.position)),
-                if (player.nationality.trim().isNotEmpty) _infoChip(context, player.nationality),
-                if ((player.dateOfBirth ?? '').trim().isNotEmpty) _infoChip(context, 'DOB ${player.dateOfBirth!.trim()}'),
-                if ((player.height ?? '').trim().isNotEmpty) _infoChip(context, 'Height ${player.height!.trim()}'),
-                if ((player.dominantHand ?? '').trim().isNotEmpty) _infoChip(context, 'Hand ${player.dominantHand!.trim()}'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoChip(BuildContext context, String text) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w700,
-          color: cs.onSurface,
-        ),
-      ),
-    );
-  }
-}
-
-class _PlayerCompetitionStatsSection extends StatelessWidget {
-  const _PlayerCompetitionStatsSection({
-    required this.gp,
-    required this.ppg,
-    required this.rpg,
-    required this.apg,
-    required this.spg,
-    required this.bpg,
-    required this.mpg,
-  });
-
-  final int gp;
-  final dynamic ppg;
-  final dynamic rpg;
-  final dynamic apg;
-  final dynamic spg;
-  final dynamic bpg;
-  final dynamic mpg;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    String fmt(dynamic v) {
-      if (v == null) return '0.0';
-      if (v is num) return v.toStringAsFixed(1);
-      return v.toString();
-    }
-
-    Widget tile(String label, String value) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'Lexend',
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                color: cs.onSurface,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: cs.onSurfaceVariant,
-                letterSpacing: 0.4,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Current competition stats',
-          style: TextStyle(
-            fontFamily: 'Lexend',
-            fontWeight: FontWeight.w900,
-            fontSize: 15,
-            color: cs.onSurface,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'From player_boxscores in selected competition • GP $gp',
-          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-        ),
-        const SizedBox(height: 10),
-        GridView.count(
-          crossAxisCount: 3,
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          childAspectRatio: 1.15,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            tile('PPG', fmt(ppg)),
-            tile('RPG', fmt(rpg)),
-            tile('APG', fmt(apg)),
-            tile('SPG', fmt(spg)),
-            tile('BPG', fmt(bpg)),
-            tile('MPG', fmt(mpg)),
-          ],
-        ),
-      ],
     );
   }
 }

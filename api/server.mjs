@@ -3147,6 +3147,54 @@ function _playerLineTurnovers(statsJson) {
   return _totalsNum(t, ['TO', 'TOV', 'Tov', 'to', 'Turnovers', 'From', 'FROM']);
 }
 
+/** One game's parsed line from `player_boxscores.stats` JSON (for game log + aggregates). */
+function _playerLineBox(statsRaw) {
+  const t = _parseTotalsJson(statsRaw);
+  const rr = _playerLineRebounds(statsRaw);
+  const pts = _totalsNum(t, ['Pts', 'PTS', 'pts', 'Points']);
+  const ast = _totalsNum(t, ['AST', 'Ast', 'ast']);
+  const stl = _totalsNum(t, ['STL', 'Stl', 'stl']);
+  const blk = _totalsNum(t, ['BLK', 'Blk', 'blk']);
+  const tpm = _totalsNum(t, ['3PM', '3pm', 'TPM', '3P']);
+  const tpa = _totalsNum(t, ['3PA', '3pa', 'TPA']);
+  const fgm = _totalsNum(t, ['FGM', 'Fgm', 'fgm', 'FG Made', 'FG']);
+  const fga = _totalsNum(t, ['FGA', 'Fga', 'fga', 'FG Attempted', 'FGA']);
+  const ftm = _totalsNum(t, ['FTM', 'Ftm', 'ftm', 'FT Made']);
+  const fta = _totalsNum(t, ['FTA', 'Fta', 'fta', 'FT Attempted']);
+  const min = _totalsNum(t, ['MIN', 'Min', 'minutes', 'Minutes']);
+  const tov = _playerLineTurnovers(statsRaw);
+  const pf = _totalsNum(t, ['PF', 'Pf', 'pf', 'PERSONAL', 'Fouls', 'Personal Fouls']);
+  const twoM = Math.max(0, fgm - tpm);
+  const twoA = Math.max(0, fga - tpa);
+  const eff = pts + rr.reb + ast + stl + blk - (fga - fgm) - (fta - ftm) - tov;
+  return {
+    pts,
+    reb: rr.reb,
+    oreb: rr.oreb,
+    dreb: rr.dreb,
+    ast,
+    stl,
+    blk,
+    tpm,
+    tpa,
+    fgm,
+    fga,
+    ftm,
+    fta,
+    min,
+    tov,
+    pf,
+    two_m: twoM,
+    two_a: twoA,
+    eff,
+  };
+}
+
+function _shootingPct(made, att) {
+  if (att <= 0) return 0;
+  return Math.round((1000 * made) / att) / 10;
+}
+
 async function aggregatePlayerBoxscoresForCompetition(compId) {
   const { rows } = await pool.query(
     `SELECT pb.player_id,
@@ -3409,12 +3457,20 @@ async function playerCompetitionStatsHandler(req, res) {
     }
 
     const { rows } = await pool.query(
-      `SELECT pb.player_id, pb.player_name, pb.player_number, pb.stats
+      `SELECT pb.player_id, pb.player_name, pb.player_number, pb.stats, pb.side,
+              g.match_id, g.status, g.date_time_text, g.week, g.updated_at,
+              g.home_team_id, g.home_team_name,
+              COALESCE(NULLIF(TRIM(th.team_logo), ''), g.home_team_logo) AS home_team_logo,
+              g.away_team_id, g.away_team_name,
+              COALESCE(NULLIF(TRIM(ta.team_logo), ''), g.away_team_logo) AS away_team_logo
        FROM player_boxscores pb
        INNER JOIN games g ON g.match_id = pb.match_id
+       LEFT JOIN teams th ON th.team_id = g.home_team_id
+       LEFT JOIN teams ta ON ta.team_id = g.away_team_id
        WHERE g.competition_id = $1::int
          AND g.status IN ('final', 'live')
-         AND pb.player_id = $2::int`,
+         AND pb.player_id = $2::int
+       ORDER BY g.updated_at DESC NULLS LAST, g.match_id DESC`,
       [compId, playerId],
     );
 
@@ -3427,45 +3483,114 @@ async function playerCompetitionStatsHandler(req, res) {
     let stl = 0;
     let blk = 0;
     let tpm = 0;
+    let tpa = 0;
     let tov = 0;
     let fgm = 0;
     let fga = 0;
     let ftm = 0;
     let fta = 0;
     let min = 0;
+    let pf = 0;
+    let effSum = 0;
     let playerName = '';
     let playerNumber = '';
+    const games = [];
 
     for (const r of rows ?? []) {
       gp += 1;
       if (!playerName && r.player_name != null) playerName = String(r.player_name);
       if (!playerNumber && r.player_number != null) playerNumber = String(r.player_number);
-      const t = _parseTotalsJson(r.stats);
-      const rr = _playerLineRebounds(r.stats);
-      pts += _totalsNum(t, ['Pts', 'PTS', 'pts', 'Points']);
-      ast += _totalsNum(t, ['AST', 'Ast', 'ast']);
-      stl += _totalsNum(t, ['STL', 'Stl', 'stl']);
-      blk += _totalsNum(t, ['BLK', 'Blk', 'blk']);
-      tpm += _totalsNum(t, ['3PM', '3pm', 'TPM', '3P']);
-      tov += _playerLineTurnovers(r.stats);
-      reb += rr.reb;
-      oreb += rr.oreb;
-      dreb += rr.dreb;
-      fgm += _totalsNum(t, ['FGM', 'fgm', 'FG Made', 'FG']);
-      fga += _totalsNum(t, ['FGA', 'fga', 'FG Attempted', 'FGA']);
-      ftm += _totalsNum(t, ['FTM', 'ftm', 'FT Made']);
-      fta += _totalsNum(t, ['FTA', 'fta', 'FT Attempted']);
-      min += _totalsNum(t, ['MIN', 'Min', 'minutes', 'Minutes']);
+      const line = _playerLineBox(r.stats);
+      pts += line.pts;
+      ast += line.ast;
+      stl += line.stl;
+      blk += line.blk;
+      tpm += line.tpm;
+      tpa += line.tpa;
+      tov += line.tov;
+      reb += line.reb;
+      oreb += line.oreb;
+      dreb += line.dreb;
+      fgm += line.fgm;
+      fga += line.fga;
+      ftm += line.ftm;
+      fta += line.fta;
+      min += line.min;
+      pf += line.pf;
+      effSum += line.eff;
+
+      const side = String(r.side ?? '').toLowerCase();
+      const isHome = side === 'home';
+      const oppId = isHome ? r.away_team_id : r.home_team_id;
+      const oppName = isHome ? r.away_team_name : r.home_team_name;
+      const oppLogo = isHome ? r.away_team_logo : r.home_team_logo;
+      games.push({
+        match_id: r.match_id != null ? Number(r.match_id) : null,
+        week: r.week != null ? Number(r.week) : null,
+        date_time_text: r.date_time_text != null ? String(r.date_time_text) : null,
+        side: r.side != null ? String(r.side) : null,
+        opponent_team_id: oppId != null ? Number(oppId) : null,
+        opponent_team_name: oppName != null ? String(oppName) : '',
+        opponent_team_logo:
+          oppLogo != null && String(oppLogo).trim() !== '' ? String(oppLogo).trim() : null,
+        min: line.min,
+        pts: line.pts,
+        reb: line.reb,
+        ast: line.ast,
+        box: {
+          pts: line.pts,
+          reb: line.reb,
+          oreb: line.oreb,
+          dreb: line.dreb,
+          ast: line.ast,
+          stl: line.stl,
+          blk: line.blk,
+          tov: line.tov,
+          pf: line.pf,
+          two_m: line.two_m,
+          two_a: line.two_a,
+          two_pct: _shootingPct(line.two_m, line.two_a),
+          tpm: line.tpm,
+          tpa: line.tpa,
+          three_pct: _shootingPct(line.tpm, line.tpa),
+          ftm: line.ftm,
+          fta: line.fta,
+          ft_pct: _shootingPct(line.ftm, line.fta),
+          eff: line.eff,
+        },
+      });
     }
 
+    const twoM = Math.max(0, fgm - tpm);
+    const twoA = Math.max(0, fga - tpa);
     const per = (v) => (gp > 0 ? v / gp : 0);
+    const effRating = gp > 0 ? effSum / gp : 0;
     return res.json({
       competition_id: compId,
       player_id: playerId,
       player_name: playerName,
       player_number: playerNumber,
       gp,
-      totals: { pts, reb, oreb, dreb, ast, stl, blk, tpm, tov, fgm, fga, ftm, fta, min },
+      totals: {
+        pts,
+        reb,
+        oreb,
+        dreb,
+        ast,
+        stl,
+        blk,
+        tpm,
+        tpa,
+        tov,
+        fgm,
+        fga,
+        ftm,
+        fta,
+        min,
+        pf,
+        two_m: twoM,
+        two_a: twoA,
+      },
       per_game: {
         ppg: Number(per(pts).toFixed(1)),
         rpg: Number(per(reb).toFixed(1)),
@@ -3475,7 +3600,25 @@ async function playerCompetitionStatsHandler(req, res) {
         tpm_pg: Number(per(tpm).toFixed(1)),
         tov_pg: Number(per(tov).toFixed(1)),
         mpg: Number(per(min).toFixed(1)),
+        pf_pg: Number(per(pf).toFixed(1)),
+        ftm_pg: Number(per(ftm).toFixed(1)),
+        fta_pg: Number(per(fta).toFixed(1)),
+        two_m_pg: Number(per(twoM).toFixed(2)),
+        two_a_pg: Number(per(twoA).toFixed(2)),
+        eff_rating: Number(effRating.toFixed(1)),
       },
+      shooting: {
+        two_pct: _shootingPct(twoM, twoA),
+        three_pct: _shootingPct(tpm, tpa),
+        ft_pct: _shootingPct(ftm, fta),
+        two_made: twoM,
+        two_attempted: twoA,
+        three_made: tpm,
+        three_attempted: tpa,
+        ft_made: ftm,
+        ft_attempted: fta,
+      },
+      games,
     });
   } catch (err) {
     console.error('[GET /games/player-stats]', err);
