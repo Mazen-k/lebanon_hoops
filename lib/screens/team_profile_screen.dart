@@ -12,6 +12,7 @@ import '../services/players_api_service.dart';
 import '../state/competition_filter.dart';
 import '../widgets/league_fixture_card.dart';
 import 'game_boxscore_screen.dart';
+import 'player_competition_profile_screen.dart';
 import 'ticket_selection_screen.dart';
 
 class TeamProfileScreen extends StatefulWidget {
@@ -251,7 +252,12 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       error: _fixturesError,
                       onRetry: _loadFixtures,
                     ),
-                    _RosterTab(players: data.players),
+                    _RosterTab(
+                      team: data.team,
+                      players: data.players,
+                      gamesApi: _gamesApi,
+                      competitionId: _filter.selected.competitionId,
+                    ),
                     _TrophiesTab(trophies: data.trophies),
                   ],
                 ),
@@ -1229,19 +1235,6 @@ String _rosterCategoryTitle(int category) {
   }
 }
 
-String _abbrevPosition(String position) {
-  final raw = position.trim().toUpperCase();
-  if (raw.isEmpty) return '—';
-  if (raw == 'PG' || raw == 'SG' || raw == 'SF' || raw == 'PF' || raw == 'C')
-    return raw;
-  if (raw.contains('POINT')) return 'PG';
-  if (raw.contains('SHOOTING')) return 'SG';
-  if (raw.contains('SMALL')) return 'SF';
-  if (raw.contains('POWER')) return 'PF';
-  if (raw.contains('CENTER')) return 'C';
-  return raw.length <= 3 ? raw : raw.substring(0, 3);
-}
-
 String _exactPositionLabel(String position) {
   final raw = position.trim().toUpperCase();
   if (raw.isEmpty) return 'Position TBD';
@@ -1264,9 +1257,17 @@ String _exactPositionLabel(String position) {
 }
 
 class _RosterTab extends StatelessWidget {
-  const _RosterTab({required this.players});
+  const _RosterTab({
+    required this.team,
+    required this.players,
+    required this.gamesApi,
+    required this.competitionId,
+  });
 
+  final Team team;
   final List<Player> players;
+  final GamesApiService gamesApi;
+  final int competitionId;
 
   @override
   Widget build(BuildContext context) {
@@ -1317,7 +1318,21 @@ class _RosterTab extends StatelessWidget {
                   for (final p in groups[order]!)
                     SizedBox(
                       width: w,
-                      child: _PlayerBox(player: p),
+                      child: _PlayerBox(
+                        player: p,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => PlayerCompetitionProfileScreen(
+                                player: p,
+                                team: team,
+                                competitionId: competitionId,
+                                gamesApi: gamesApi,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                 ],
               );
@@ -1391,109 +1406,117 @@ class _PlayerPhotoSlot extends StatelessWidget {
 }
 
 class _PlayerBox extends StatelessWidget {
-  const _PlayerBox({required this.player});
+  const _PlayerBox({required this.player, this.onTap});
 
   final Player player;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final exact = _exactPositionLabel(player.position);
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [
-            colorScheme.surfaceContainerLow,
-            colorScheme.surfaceContainerHighest,
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.onSurface.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -10,
-            bottom: -20,
-            child: Text(
-              '${player.jerseyNumber}',
-              style: TextStyle(
-                fontFamily: 'Lexend',
-                fontSize: 110,
-                height: 1,
-                fontWeight: FontWeight.w900,
-                color: colorScheme.onSurface.withValues(alpha: 0.05),
-                letterSpacing: -6,
-              ),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [
+                colorScheme.surfaceContainerLow,
+                colorScheme.surfaceContainerHighest,
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: colorScheme.onSurface.withValues(alpha: 0.04),
+                blurRadius: 24,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: _PlayerPhotoSlot(player: player),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  player.fullName.toUpperCase(),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+          child: Stack(
+            children: [
+              Positioned(
+                right: -10,
+                bottom: -20,
+                child: Text(
+                  '${player.jerseyNumber}',
                   style: TextStyle(
                     fontFamily: 'Lexend',
-                    fontSize: 16,
+                    fontSize: 110,
+                    height: 1,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                    color: colorScheme.onSurface,
-                    height: 1.1,
+                    color: colorScheme.onSurface.withValues(alpha: 0.05),
+                    letterSpacing: -6,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  exact.toUpperCase(),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                    color: colorScheme.primary,
-                  ),
-                ),
-                if (player.nationality.trim().isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    player.nationality.toUpperCase(),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 9,
-                      letterSpacing: 0.5,
-                      fontWeight: FontWeight.w700,
-                      color: colorScheme.onSurfaceVariant.withValues(
-                        alpha: 0.8,
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: _PlayerPhotoSlot(player: player),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      player.fullName.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        color: colorScheme.onSurface,
+                        height: 1.1,
                       ),
                     ),
-                  ),
-                ],
-              ],
-            ),
+                    const SizedBox(height: 6),
+                    Text(
+                      exact.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    if (player.nationality.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        player.nationality.toUpperCase(),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 9,
+                          letterSpacing: 0.5,
+                          fontWeight: FontWeight.w700,
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.8,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
