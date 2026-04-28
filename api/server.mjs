@@ -3467,6 +3467,252 @@ async function getGameBoxscoreHandler(req, res) {
 app.get('/games/:matchId/boxscore', getGameBoxscoreHandler);
 app.get('/api/games/:matchId/boxscore', getGameBoxscoreHandler);
 
+// --- SBC (squad building challenges) ---
+function parsePositiveInt(raw) {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
+function parseSbcSlotsStrict(slotsIn) {
+  if (slotsIn == null || typeof slotsIn !== 'object') {
+    const err = new Error('slots is required with pg, sg, sf, pf, c (positive card ids).');
+    err.statusCode = 400;
+    throw err;
+  }
+  return {
+    pg: parseSlotStrictPositive(slotsIn.pg ?? slotsIn.guard1, 'pg'),
+    sg: parseSlotStrictPositive(slotsIn.sg ?? slotsIn.guard2, 'sg'),
+    sf: parseSlotStrictPositive(slotsIn.sf ?? slotsIn.forward1, 'sf'),
+    pf: parseSlotStrictPositive(slotsIn.pf ?? slotsIn.forward2, 'pf'),
+    c: parseSlotStrictPositive(slotsIn.c ?? slotsIn.center, 'c'),
+  };
+}
+
+function evaluateSbcRequirement(req, selectedCards) {
+  const minCount = Number.isInteger(Number(req.min_count)) ? Number(req.min_count) : 1;
+  const type = String(req.requirement_type ?? '').trim().toUpperCase();
+  const value = parsePositiveInt(req.required_value);
+  let matchedCount = 0;
+  if (type === 'TEAM') {
+    matchedCount = selectedCards.filter((c) => Number(c.team_id) === value).length;
+  } else if (type === 'PLAYER_REQUIRED') {
+    matchedCount = selectedCards.filter((c) => Number(c.player_id) === value).length;
+  } else {
+    return {
+      ok: false,
+      requirement_id: req.requirement_id,
+      requirement_type: req.requirement_type,
+      required_value: req.required_value,
+      required_text: req.required_text,
+      min_count: minCount,
+      matched_count: 0,
+      message: `Unsupported requirement type "${req.requirement_type}".`,
+    };
+  }
+  const targetLabel = req.required_text?.trim()
+    ? req.required_text.trim()
+    : (value != null ? String(value) : 'value');
+  return {
+    ok: matchedCount >= minCount,
+    requirement_id: req.requirement_id,
+    requirement_type: req.requirement_type,
+    required_value: req.required_value,
+    required_text: req.required_text,
+    min_count: minCount,
+    matched_count: matchedCount,
+    message:
+      type === 'TEAM'
+        ? `Need at least ${minCount} card(s) from team ${targetLabel}.`
+        : `Need at least ${minCount} card(s) for player ${targetLabel}.`,
+  };
+}
+
+async function sbcChallengesHandler(req, res) {
+  try {
+    const { rows: challenges } = await pool.query(
+      `SELECT
+         s.sbc_id, s.sbc_name, s.description, s.reward_card_id, s.is_active, s.created_at,
+         pc.card_type AS reward_card_type,
+         pc.attack AS reward_attack,
+         pc.defend AS reward_defend,
+         pc.card_image AS reward_card_image,
+         pc.player_id AS reward_player_id,
+         COALESCE(NULLIF(TRIM(p.first_name), ''), '') AS reward_first_name,
+         COALESCE(NULLIF(TRIM(p.last_name), ''), '') AS reward_last_name,
+         COALESCE(NULLIF(TRIM(p.position), ''), '?') AS reward_position,
+         t.team_id AS reward_team_id,
+         t.team_name AS reward_team_name
+       FROM sbc_challenges s
+       LEFT JOIN play_cards pc ON pc.card_id = s.reward_card_id
+       LEFT JOIN players p ON p.player_id = pc.player_id
+       LEFT JOIN teams t ON t.team_id = p.team_id
+       WHERE s.is_active = TRUE
+       ORDER BY s.created_at ASC NULLS LAST, s.sbc_id ASC`,
+    );
+    if (challenges.length === 0) {
+      return res.json({ challenges: [] });
+    }
+    const sbcIds = challenges.map((r) => r.sbc_id);
+    const { rows: reqs } = await pool.query(
+      `SELECT requirement_id, sbc_id, requirement_type, required_value, required_text, min_count
+       FROM sbc_requirements
+       WHERE sbc_id = ANY($1::int[])
+       ORDER BY sbc_id ASC, requirement_id ASC`,
+      [sbcIds],
+    );
+    const reqBySbc = new Map();
+    for (const r of reqs) {
+      if (!reqBySbc.has(r.sbc_id)) reqBySbc.set(r.sbc_id, []);
+      reqBySbc.get(r.sbc_id).push(r);
+    }
+    const payload = challenges.map((r) => ({
+      sbc_id: r.sbc_id,
+      sbc_name: r.sbc_name,
+      description: r.description,
+      reward_card_id: r.reward_card_id,
+      is_active: r.is_active,
+      created_at: r.created_at,
+      reward_card: {
+        card_id: r.reward_card_id,
+        card_type: r.reward_card_type,
+        attack: r.reward_attack,
+        defend: r.reward_defend,
+        overall: Math.round((Number(r.reward_attack ?? 0) + Number(r.reward_defend ?? 0)) / 2),
+        card_image: r.reward_card_image,
+        player_id: r.reward_player_id,
+        first_name: r.reward_first_name,
+        last_name: r.reward_last_name,
+        position: r.reward_position,
+        team_id: r.reward_team_id,
+        team_name: r.reward_team_name,
+      },
+      requirements: reqBySbc.get(r.sbc_id) ?? [],
+    }));
+    return res.json({ challenges: payload });
+  } catch (err) {
+    console.error('[GET /sbc/challenges]', err);
+    const msg = err.message ?? String(err);
+    if (msg.toLowerCase().includes('sbc_challenges') && msg.toLowerCase().includes('relation')) {
+      return res.status(503).json({
+        error:
+          'SBC tables are missing. Apply a migration that creates sbc_challenges and sbc_requirements.',
+      });
+    }
+    return res.status(500).json({ error: msg });
+  }
+}
+
+async function sbcSubmitHandler(req, res) {
+  const body = req.body ?? {};
+  const userId = parsePositiveInt(body.user_id ?? body.userId);
+  const sbcId = parsePositiveInt(body.sbc_id ?? body.sbcId);
+  if (userId == null) return res.status(400).json({ error: 'user_id is required (integer).' });
+  if (sbcId == null) return res.status(400).json({ error: 'sbc_id is required (integer).' });
+
+  let slots;
+  try {
+    slots = parseSbcSlotsStrict(body.slots);
+  } catch (err) {
+    return res.status(err.statusCode ?? 400).json({ error: err.message ?? String(err) });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: users } = await client.query(`SELECT 1 FROM users WHERE user_id = $1::int`, [userId]);
+    if (users.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const { rows: sbcRows } = await client.query(
+      `SELECT sbc_id, sbc_name, description, reward_card_id, is_active
+       FROM sbc_challenges
+       WHERE sbc_id = $1::int
+       LIMIT 1`,
+      [sbcId],
+    );
+    if (sbcRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'SBC challenge not found.' });
+    }
+    const sbc = sbcRows[0];
+    if (!sbc.is_active) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This SBC is not active right now.' });
+    }
+
+    const { rows: reqRows } = await client.query(
+      `SELECT requirement_id, requirement_type, required_value, required_text, min_count
+       FROM sbc_requirements
+       WHERE sbc_id = $1::int
+       ORDER BY requirement_id ASC`,
+      [sbcId],
+    );
+
+    await validateUserOwnsSquadMultiset(client, userId, slots.pg, slots.sg, slots.sf, slots.pf, slots.c);
+    await validateSquadLineupPositions(client, slots.pg, slots.sg, slots.sf, slots.pf, slots.c);
+
+    const selectedMap = await fetchPlayCardSummariesForSquad(client, [slots.pg, slots.sg, slots.sf, slots.pf, slots.c]);
+    const selectedCards = [slots.pg, slots.sg, slots.sf, slots.pf, slots.c]
+      .map((id) => selectedMap.get(id))
+      .filter(Boolean);
+
+    const checks = reqRows.map((req) => evaluateSbcRequirement(req, selectedCards));
+    const failed = checks.filter((c) => !c.ok);
+    if (failed.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'SBC requirements not met.',
+        unmet_requirements: failed,
+        requirement_results: checks,
+      });
+    }
+
+    const { rows: rewardRows } = await client.query(
+      `INSERT INTO card_instances (card_id, user_id)
+       VALUES ($1::int, $2::int)
+       RETURNING card_instance_id, card_id`,
+      [sbc.reward_card_id, userId],
+    );
+    const rewardInstance = rewardRows[0];
+    const rewardSummaryMap = await fetchPlayCardSummariesForSquad(client, [sbc.reward_card_id]);
+    const rewardCard = rewardSummaryMap.get(sbc.reward_card_id) ?? null;
+
+    await client.query('COMMIT');
+    return res.status(201).json({
+      ok: true,
+      sbc_id: sbc.sbc_id,
+      sbc_name: sbc.sbc_name,
+      reward_card_id: sbc.reward_card_id,
+      reward_instance_id: rewardInstance?.card_instance_id ?? null,
+      reward_card: rewardCard,
+      requirement_results: checks,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[POST /sbc/submit]', err);
+    const code = err.statusCode ?? 500;
+    const msg = err.message ?? String(err);
+    if (msg.toLowerCase().includes('sbc_challenges') && msg.toLowerCase().includes('relation')) {
+      return res.status(503).json({
+        error:
+          'SBC tables are missing. Apply a migration that creates sbc_challenges and sbc_requirements.',
+      });
+    }
+    return res.status(code >= 400 && code < 600 ? code : 500).json({ error: msg });
+  } finally {
+    client.release();
+  }
+}
+
+app.get('/sbc/challenges', sbcChallengesHandler);
+app.get('/api/sbc/challenges', sbcChallengesHandler);
+app.post('/sbc/submit', sbcSubmitHandler);
+app.post('/api/sbc/submit', sbcSubmitHandler);
+
 // --- 1v1 card squads (`cards_squad`) ---
 function parseCardsSquadNumber(raw) {
   const n = Number(raw);

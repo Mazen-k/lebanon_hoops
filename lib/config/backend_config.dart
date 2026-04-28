@@ -114,4 +114,18 @@ abstract final class BackendConfig {
     if (fromEnv.isNotEmpty) return fromEnv.trim().replaceAll(RegExp(r'^/+'), '');
     return 'user/wallet';
   }
+
+  /// `GET` active SBC challenges + requirements + reward card info.
+  static String get sbcChallengesPath {
+    const fromEnv = String.fromEnvironment('API_SBC_CHALLENGES_PATH', defaultValue: '');
+    if (fromEnv.isNotEmpty) return fromEnv.trim().replaceAll(RegExp(r'^/+'), '');
+    return 'sbc/challenges';
+  }
+
+  /// `POST` SBC submit body: `{ user_id, sbc_id, slots:{pg,sg,sf,pf,c} }`.
+  static String get sbcSubmitPath {
+    const fromEnv = String.fromEnvironment('API_SBC_SUBMIT_PATH', defaultValue: '');
+    if (fromEnv.isNotEmpty) return fromEnv.trim().replaceAll(RegExp(r'^/+'), '');
+    return 'sbc/submit';
+  }
 }
