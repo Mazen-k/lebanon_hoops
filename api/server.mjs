@@ -4727,21 +4727,25 @@ app.delete('/api/shop-vendor/photos/:photoId', shopVendorDeletePhotoHandler);
 
 // ── Fan Shop ──────────────────────────────────────────────────────────────────
 
+const _shopItemSelect = `
+  item_id, name, subtitle, category,
+  price::float8 AS price,
+  original_price::float8 AS original_price,
+  quantity_available, image_url, badge, is_featured, description`;
+
 async function listShopItemsHandler(req, res) {
   try {
     const category = req.query.category ?? req.query.category_name ?? null;
     const { rows } = category && category !== 'All Items'
       ? await pool.query(
-          `SELECT item_id, name, subtitle, category, price, original_price,
-                  quantity_available, image_url, badge, is_featured, description
+          `SELECT ${_shopItemSelect}
            FROM shop_items
            WHERE LOWER(category) = LOWER($1)
            ORDER BY is_featured DESC, item_id ASC`,
           [category],
         )
       : await pool.query(
-          `SELECT item_id, name, subtitle, category, price, original_price,
-                  quantity_available, image_url, badge, is_featured, description
+          `SELECT ${_shopItemSelect}
            FROM shop_items
            ORDER BY is_featured DESC, item_id ASC`,
         );
@@ -4759,9 +4763,7 @@ async function getShopItemHandler(req, res) {
   }
   try {
     const { rows } = await pool.query(
-      `SELECT item_id, name, subtitle, category, price, original_price,
-              quantity_available, image_url, badge, is_featured, description
-       FROM shop_items WHERE item_id = $1`,
+      `SELECT ${_shopItemSelect} FROM shop_items WHERE item_id = $1`,
       [itemId],
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Item not found' });
