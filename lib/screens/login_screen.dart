@@ -6,13 +6,15 @@ import '../widgets/auth_text_field.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/session_store.dart';
 import 'sign_up_screen.dart';
+import 'shop_vendor_login_screen.dart';
 import 'vendor_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.onAuthSuccess, this.onVendorSignedIn});
+  const LoginScreen({super.key, this.onAuthSuccess, this.onVendorSignedIn, this.onShopVendorSignedIn});
 
   final Future<void> Function()? onAuthSuccess;
   final Future<void> Function()? onVendorSignedIn;
+  final Future<void> Function()? onShopVendorSignedIn;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -268,7 +270,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 4),
 
-              // ── Vendor link ───────────────────────────────────────────────
+              // ── Vendor links ──────────────────────────────────────────────
               Center(
                 child: TextButton(
                   onPressed: (_loading || _googleLoading)
@@ -284,7 +286,32 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                         },
                   child: Text(
-                    'Sign in as vendor',
+                    'Sign in as court vendor',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.secondary,
+                          fontWeight: FontWeight.w700,
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppColors.secondary,
+                        ),
+                  ),
+                ),
+              ),
+              Center(
+                child: TextButton(
+                  onPressed: (_loading || _googleLoading)
+                      ? null
+                      : () async {
+                          final ok = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute<bool>(
+                              builder: (_) => const ShopVendorLoginScreen(),
+                            ),
+                          );
+                          if (ok == true && context.mounted) {
+                            await widget.onShopVendorSignedIn?.call();
+                          }
+                        },
+                  child: Text(
+                    'Sign in as shop vendor',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: AppColors.secondary,
                           fontWeight: FontWeight.w700,

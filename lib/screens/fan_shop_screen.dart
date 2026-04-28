@@ -132,6 +132,15 @@ class _FanShopScreenState extends State<FanShopScreen> {
               'Could not load shop items.',
               style: TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.bold, color: colorScheme.onSurface),
             ),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                _error ?? '',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: colorScheme.secondary),
+              ),
+            ),
             const SizedBox(height: 8),
             TextButton(onPressed: _load, child: const Text('Retry')),
           ],

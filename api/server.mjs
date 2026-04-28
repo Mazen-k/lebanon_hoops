@@ -4462,6 +4462,269 @@ async function getPeriodScoresHandler(req, res) {
 app.get('/games/:matchId/period-scores', getPeriodScoresHandler);
 app.get('/api/games/:matchId/period-scores', getPeriodScoresHandler);
 
+// ── Fan Shop vendor (owner) sessions ─────────────────────────────────────────
+
+const shopVendorSessions = new Map();
+
+function getShopVendorId(req) {
+  const h = req.headers.authorization ?? '';
+  if (!h.startsWith('Bearer ')) return null;
+  const token = h.slice(7).trim();
+  if (!token) return null;
+  const s = shopVendorSessions.get(token);
+  if (!s || s.expMs < Date.now()) {
+    if (token) shopVendorSessions.delete(token);
+    return null;
+  }
+  return s.shopVendorId;
+}
+
+async function shopVendorLoginHandler(req, res) {
+  const username = req.body?.username?.trim();
+  const password = req.body?.password;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'username and password required' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT shop_vendor_id, shop_name, username, password_hash
+       FROM shop_vendors WHERE username = $1 LIMIT 1`,
+      [username],
+    );
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid shop vendor username or password' });
+    }
+    const ok = await bcrypt.compare(password, rows[0].password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Invalid shop vendor username or password' });
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    shopVendorSessions.set(token, { shopVendorId: rows[0].shop_vendor_id, expMs: Date.now() + VENDOR_SESSION_MS });
+    res.json({
+      token,
+      shop_vendor_id: rows[0].shop_vendor_id,
+      shop_name: rows[0].shop_name,
+      username: rows[0].username,
+    });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({ error: 'shop_vendors table missing. Run DB/shop_vendor_schema.sql' });
+    }
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function shopVendorListItemsHandler(req, res) {
+  const svId = getShopVendorId(req);
+  if (!svId) return res.status(401).json({ error: 'Shop vendor session required' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         i.item_id,
+         i.name,
+         i.subtitle,
+         i.category,
+         i.price::float8 AS price,
+         i.original_price::float8 AS original_price,
+         i.quantity_available,
+         i.image_url,
+         i.badge,
+         i.is_featured,
+         i.description,
+         COALESCE(
+           json_agg(json_build_object('photo_id', p.photo_id, 'photo_url', p.photo_url) ORDER BY p.photo_id)
+           FILTER (WHERE p.photo_id IS NOT NULL),
+           '[]'::json
+         ) AS photos
+       FROM shop_items i
+       LEFT JOIN shop_item_photos p ON p.item_id = i.item_id
+       WHERE i.shop_vendor_id = $1::int
+       GROUP BY i.item_id
+       ORDER BY i.is_featured DESC, i.item_id ASC`,
+      [svId],
+    );
+    const items = rows.map((r) => ({
+      ...r,
+      photos: Array.isArray(r.photos) ? r.photos : JSON.parse(String(r.photos ?? '[]')),
+    }));
+    res.json({ items });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function shopVendorCreateItemHandler(req, res) {
+  const svId = getShopVendorId(req);
+  if (!svId) return res.status(401).json({ error: 'Shop vendor session required' });
+  const name = (req.body?.name ?? '').trim();
+  const category = (req.body?.category ?? 'Other').trim();
+  const price = req.body?.price;
+  const qty = req.body?.quantity_available ?? req.body?.quantityAvailable;
+  if (!name || price == null || qty == null) {
+    return res.status(400).json({ error: 'name, price, and quantity_available are required' });
+  }
+  const orig = req.body?.original_price ?? req.body?.originalPrice ?? null;
+  const isFeatured = req.body?.is_featured === true || req.body?.isFeatured === true;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO shop_items
+         (name, subtitle, category, price, original_price, quantity_available,
+          image_url, badge, is_featured, description, shop_vendor_id)
+       VALUES ($1,$2,$3,$4::numeric,$5::numeric,$6::int,$7,$8,$9::bool,$10,$11::int)
+       RETURNING item_id, name, subtitle, category,
+         price::float8, original_price::float8,
+         quantity_available, image_url, badge, is_featured, description`,
+      [
+        name,
+        req.body?.subtitle?.trim() || null,
+        category,
+        Number(price),
+        orig != null ? Number(orig) : null,
+        Number(qty),
+        req.body?.image_url?.trim() || req.body?.imageUrl?.trim() || null,
+        req.body?.badge?.trim() || null,
+        isFeatured,
+        req.body?.description?.trim() || null,
+        svId,
+      ],
+    );
+    res.status(201).json({ item: { ...rows[0], photos: [] } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function shopVendorPatchItemHandler(req, res) {
+  const svId = getShopVendorId(req);
+  if (!svId) return res.status(401).json({ error: 'Shop vendor session required' });
+  const itemId = Number(req.params.itemId);
+  if (Number.isNaN(itemId)) return res.status(400).json({ error: 'invalid item id' });
+  const b = req.body ?? {};
+  try {
+    const { rows } = await pool.query(
+      `UPDATE shop_items SET
+         name              = COALESCE($3::varchar,  name),
+         subtitle          = COALESCE($4::varchar,  subtitle),
+         category          = COALESCE($5::varchar,  category),
+         price             = COALESCE($6::numeric,  price),
+         original_price    = COALESCE($7::numeric,  original_price),
+         quantity_available= COALESCE($8::int,      quantity_available),
+         image_url         = COALESCE($9::text,     image_url),
+         badge             = COALESCE($10::varchar, badge),
+         is_featured       = COALESCE($11::bool,    is_featured),
+         description       = COALESCE($12::text,    description)
+       WHERE item_id = $2::int AND shop_vendor_id = $1::int
+       RETURNING item_id, name, subtitle, category,
+         price::float8, original_price::float8,
+         quantity_available, image_url, badge, is_featured, description`,
+      [
+        svId, itemId,
+        b.name?.trim() || null,
+        'subtitle' in b ? (b.subtitle?.trim() || null) : undefined,
+        b.category?.trim() || null,
+        b.price != null ? Number(b.price) : null,
+        'original_price' in b || 'originalPrice' in b
+          ? (b.original_price ?? b.originalPrice) != null ? Number(b.original_price ?? b.originalPrice) : null
+          : undefined,
+        b.quantity_available != null || b.quantityAvailable != null
+          ? Number(b.quantity_available ?? b.quantityAvailable) : null,
+        'image_url' in b || 'imageUrl' in b ? (b.image_url?.trim() ?? b.imageUrl?.trim() ?? null) : undefined,
+        'badge' in b ? (b.badge?.trim() || null) : undefined,
+        b.is_featured != null || b.isFeatured != null ? Boolean(b.is_featured ?? b.isFeatured) : null,
+        'description' in b ? (b.description?.trim() || null) : undefined,
+      ],
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+    res.json({ item: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function shopVendorDeleteItemHandler(req, res) {
+  const svId = getShopVendorId(req);
+  if (!svId) return res.status(401).json({ error: 'Shop vendor session required' });
+  const itemId = Number(req.params.itemId);
+  if (Number.isNaN(itemId)) return res.status(400).json({ error: 'invalid item id' });
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM shop_items WHERE item_id = $2::int AND shop_vendor_id = $1::int`,
+      [svId, itemId],
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Item not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function shopVendorAddPhotoHandler(req, res) {
+  const svId = getShopVendorId(req);
+  if (!svId) return res.status(401).json({ error: 'Shop vendor session required' });
+  const itemId = Number(req.params.itemId);
+  const url = (req.body?.photo_url ?? req.body?.photoUrl ?? '').trim();
+  if (Number.isNaN(itemId) || !url) {
+    return res.status(400).json({ error: 'photo_url required' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO shop_item_photos (item_id, photo_url)
+       SELECT i.item_id, $3
+       FROM shop_items i
+       WHERE i.item_id = $2::int AND i.shop_vendor_id = $1::int
+       RETURNING photo_id, item_id, photo_url`,
+      [svId, itemId, url],
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+    res.status(201).json({ photo: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function shopVendorDeletePhotoHandler(req, res) {
+  const svId = getShopVendorId(req);
+  if (!svId) return res.status(401).json({ error: 'Shop vendor session required' });
+  const photoId = Number(req.params.photoId);
+  if (Number.isNaN(photoId)) return res.status(400).json({ error: 'invalid photo id' });
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM shop_item_photos p
+       USING shop_items i
+       WHERE p.photo_id = $2::int
+         AND p.item_id = i.item_id
+         AND i.shop_vendor_id = $1::int`,
+      [svId, photoId],
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Photo not found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.post('/auth/shop-vendor-login', shopVendorLoginHandler);
+app.post('/api/auth/shop-vendor-login', shopVendorLoginHandler);
+app.get('/shop-vendor/items', shopVendorListItemsHandler);
+app.get('/api/shop-vendor/items', shopVendorListItemsHandler);
+app.post('/shop-vendor/items', shopVendorCreateItemHandler);
+app.post('/api/shop-vendor/items', shopVendorCreateItemHandler);
+app.patch('/shop-vendor/items/:itemId', shopVendorPatchItemHandler);
+app.patch('/api/shop-vendor/items/:itemId', shopVendorPatchItemHandler);
+app.delete('/shop-vendor/items/:itemId', shopVendorDeleteItemHandler);
+app.delete('/api/shop-vendor/items/:itemId', shopVendorDeleteItemHandler);
+app.post('/shop-vendor/items/:itemId/photos', shopVendorAddPhotoHandler);
+app.post('/api/shop-vendor/items/:itemId/photos', shopVendorAddPhotoHandler);
+app.delete('/shop-vendor/photos/:photoId', shopVendorDeletePhotoHandler);
+app.delete('/api/shop-vendor/photos/:photoId', shopVendorDeletePhotoHandler);
+
 // ── Fan Shop ──────────────────────────────────────────────────────────────────
 
 async function listShopItemsHandler(req, res) {
