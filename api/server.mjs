@@ -3552,9 +3552,21 @@ async function validateSbcUsesDuplicatesOnly(client, userId, cardIds) {
 
 async function sbcChallengesHandler(req, res) {
   try {
+    const rawUserId = req.query.user_id ?? req.query.userId;
+    const userId = parsePositiveInt(rawUserId);
     const { rows: challenges } = await pool.query(
       `SELECT
          s.sbc_id, s.sbc_name, s.description, s.reward_card_id, s.is_active, s.created_at,
+         CASE
+           WHEN $1::int IS NULL THEN FALSE
+           ELSE EXISTS (
+             SELECT 1
+             FROM card_instances ci
+             WHERE ci.user_id = $1::int
+               AND ci.card_id = s.reward_card_id
+             LIMIT 1
+           )
+         END AS completed,
          pc.card_type AS reward_card_type,
          pc.attack AS reward_attack,
          pc.defend AS reward_defend,
@@ -3570,7 +3582,8 @@ async function sbcChallengesHandler(req, res) {
        LEFT JOIN players p ON p.player_id = pc.player_id
        LEFT JOIN teams t ON t.team_id = p.team_id
        WHERE s.is_active = TRUE
-       ORDER BY s.created_at ASC NULLS LAST, s.sbc_id ASC`,
+       ORDER BY completed ASC, s.created_at ASC NULLS LAST, s.sbc_id ASC`,
+      [userId],
     );
     if (challenges.length === 0) {
       return res.json({ challenges: [] });
@@ -3633,6 +3646,13 @@ async function sbcChallengesHandler(req, res) {
           r.required_text = teamNameById.get(reqValue) ?? `Team #${reqValue}`;
         }
       }
+      if (reqType === 'PLAYER_REQUIRED') {
+        r.resolved_name = reqValue != null ? (playerNameById.get(reqValue) ?? `Player #${reqValue}`) : null;
+      } else if (reqType === 'TEAM') {
+        r.resolved_name = reqValue != null ? (teamNameById.get(reqValue) ?? `Team #${reqValue}`) : null;
+      } else {
+        r.resolved_name = null;
+      }
       if (!reqBySbc.has(r.sbc_id)) reqBySbc.set(r.sbc_id, []);
       reqBySbc.get(r.sbc_id).push(r);
     }
@@ -3642,6 +3662,7 @@ async function sbcChallengesHandler(req, res) {
       description: r.description,
       reward_card_id: r.reward_card_id,
       is_active: r.is_active,
+      completed: r.completed === true,
       created_at: r.created_at,
       reward_card: {
         card_id: r.reward_card_id,
@@ -3711,6 +3732,17 @@ async function sbcSubmitHandler(req, res) {
     if (!sbc.is_active) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'This SBC is not active right now.' });
+    }
+    const { rows: priorReward } = await client.query(
+      `SELECT 1
+       FROM card_instances
+       WHERE user_id = $1::int AND card_id = $2::int
+       LIMIT 1`,
+      [userId, sbc.reward_card_id],
+    );
+    if (priorReward.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'You already completed this SBC.' });
     }
 
     const { rows: reqRows } = await client.query(

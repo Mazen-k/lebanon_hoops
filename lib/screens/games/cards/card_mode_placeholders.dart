@@ -10,6 +10,7 @@ import '../../../services/session_store.dart';
 import '../../../util/card_image_url.dart' show BundledPlayCardImage;
 import 'card_game_ui_theme.dart';
 import 'squad_halfcourt_board.dart';
+import 'view_collection_page.dart';
 
 String? _sbcRoleForSlotKey(String slotKey) {
   return const {'pg': 'PG', 'sg': 'SG', 'sf': 'SF', 'pf': 'PF', 'c': 'C'}[slotKey];
@@ -144,11 +145,14 @@ class _SbcPageState extends State<SbcPage> {
         final challenge = _challenges[index];
         return _SbcChallengeRow(
           challenge: challenge,
-          onTap: () => Navigator.of(context).push<void>(
+          onTap: () async {
+            await Navigator.of(context).push<void>(
             MaterialPageRoute<void>(
               builder: (_) => _SbcChallengeDetailPage(challenge: challenge),
             ),
-          ),
+            );
+            if (context.mounted) _load();
+          },
         );
       },
     );
@@ -253,6 +257,18 @@ class _SbcChallengeRow extends StatelessWidget {
                             fontSize: 12,
                           ),
                         ),
+                        if (challenge.completed)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Completed',
+                              style: TextStyle(
+                                color: Color(0xFF4CD964),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -359,6 +375,8 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
   bool get _allRequirementsMet => _progressList().every((p) => p.done);
 
   String _requirementName(SbcRequirement req) {
+    final resolved = (req.resolvedName ?? '').trim();
+    if (resolved.isNotEmpty) return resolved;
     final text = (req.requiredText ?? '').trim();
     if (text.isNotEmpty && !RegExp(r'^\d+$').hasMatch(text)) return text;
     final type = req.requirementType.trim().toUpperCase();
@@ -554,7 +572,7 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
   }
 
   Future<void> _submitSbc() async {
-    if (!_allSlotsFilled || !_allRequirementsMet || _submitting) return;
+    if (widget.challenge.completed || !_allSlotsFilled || !_allRequirementsMet || _submitting) return;
     setState(() => _submitting = true);
     try {
       final uid = await _userId();
@@ -568,12 +586,18 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
         _lineup = CardsSquadPayload.draft(0);
         _submitting = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('SBC complete. Reward card #${result.rewardCardId} added to your collection.'),
-          behavior: SnackBarBehavior.floating,
+      final goBackToList = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          fullscreenDialog: true,
+          builder: (_) => _SbcRewardRevealPage(
+            rewardCard: widget.challenge.rewardCard,
+            rewardCardId: result.rewardCardId,
+          ),
         ),
       );
+      if (goBackToList == true && mounted) {
+        Navigator.of(context).pop();
+      }
     } on SbcApiException catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
@@ -593,7 +617,7 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
   Widget build(BuildContext context) {
     final reward = widget.challenge.rewardCard;
     final progress = _progressList();
-    final canSubmit = !_submitting && _allSlotsFilled && _allRequirementsMet;
+    final canSubmit = !widget.challenge.completed && !_submitting && _allSlotsFilled && _allRequirementsMet;
     return Scaffold(
       backgroundColor: CardGameUiTheme.bg,
       appBar: AppBar(
@@ -614,6 +638,23 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
               style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(185), fontSize: 13, height: 1.35),
             ),
             const SizedBox(height: 12),
+            if (widget.challenge.completed)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C3A25),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF4CD964).withAlpha(180)),
+                ),
+                child: const Text(
+                  'You already completed this SBC.',
+                  style: TextStyle(
+                    color: Color(0xFFB7FFC9),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -726,6 +767,116 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
               child: Text(_submitting ? 'Submitting...' : 'Submit SBC'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SbcRewardRevealPage extends StatelessWidget {
+  const _SbcRewardRevealPage({
+    required this.rewardCard,
+    required this.rewardCardId,
+  });
+
+  final SbcRewardCard rewardCard;
+  final int rewardCardId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: CardGameUiTheme.bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'SBC Completed!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: CardGameUiTheme.gold,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'You unlocked ${rewardCard.playerLabel}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: CardGameUiTheme.onDark.withAlpha(220),
+                  fontSize: 14,
+                ),
+              ),
+              const Spacer(),
+              Center(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.7, end: 1.0),
+                  duration: const Duration(milliseconds: 550),
+                  curve: Curves.easeOutBack,
+                  builder: (context, value, child) => Transform.scale(
+                    scale: value,
+                    child: Opacity(opacity: value.clamp(0.0, 1.0), child: child),
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: CardGameUiTheme.orangeGlow.withAlpha(80),
+                          blurRadius: 28,
+                          spreadRadius: -4,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: SizedBox(
+                        width: 240,
+                        height: 320,
+                        child: BundledPlayCardImage(
+                          cardId: rewardCardId,
+                          fit: BoxFit.cover,
+                          fallbackImageUrl: rewardCard.cardImage,
+                          errorPlaceholder: ColoredBox(
+                            color: CardGameUiTheme.panel,
+                            child: Center(
+                              child: Text(
+                                rewardCard.playerLabel,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: CardGameUiTheme.onDark,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const ViewCollectionPage()),
+                  );
+                  if (context.mounted) Navigator.of(context).pop(true);
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: CardGameUiTheme.gold,
+                  foregroundColor: const Color(0xFF1A120C),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: const Text('Go to Collection'),
+              ),
+            ],
+          ),
         ),
       ),
     );

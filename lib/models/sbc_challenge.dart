@@ -61,6 +61,7 @@ class SbcRequirement {
     required this.requirementType,
     required this.requiredValue,
     required this.requiredText,
+    required this.resolvedName,
     required this.minCount,
   });
 
@@ -69,6 +70,7 @@ class SbcRequirement {
   final String requirementType;
   final int? requiredValue;
   final String? requiredText;
+  final String? resolvedName;
   final int minCount;
 
   factory SbcRequirement.fromJson(Map<String, dynamic> json) {
@@ -92,6 +94,7 @@ class SbcRequirement {
       requirementType: (json['requirement_type'] ?? json['requirementType'] ?? '').toString(),
       requiredValue: optInt('required_value', 'requiredValue'),
       requiredText: json['required_text']?.toString() ?? json['requiredText']?.toString(),
+      resolvedName: json['resolved_name']?.toString() ?? json['resolvedName']?.toString(),
       minCount: optInt('min_count', 'minCount') ?? 1,
     );
   }
@@ -104,6 +107,7 @@ class SbcChallenge {
     required this.description,
     required this.rewardCardId,
     required this.isActive,
+    required this.completed,
     required this.rewardCard,
     required this.requirements,
   });
@@ -113,6 +117,7 @@ class SbcChallenge {
   final String? description;
   final int rewardCardId;
   final bool isActive;
+  final bool completed;
   final SbcRewardCard rewardCard;
   final List<SbcRequirement> requirements;
 
@@ -138,6 +143,7 @@ class SbcChallenge {
       description: json['description']?.toString(),
       rewardCardId: n('reward_card_id', 'rewardCardId'),
       isActive: json['is_active'] == true || json['isActive'] == true,
+      completed: json['completed'] == true,
       rewardCard: SbcRewardCard.fromJson(rewardRaw),
       requirements: reqRaw
           .whereType<Map>()
