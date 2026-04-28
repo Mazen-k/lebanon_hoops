@@ -6,6 +6,9 @@ class Player {
   final String nationality;
   final String position;
   final String? pictureUrl;
+  final String? dominantHand;
+  final String? dateOfBirth;
+  final String? height;
 
   const Player({
     required this.playerId,
@@ -15,6 +18,9 @@ class Player {
     required this.nationality,
     required this.position,
     this.pictureUrl,
+    this.dominantHand,
+    this.dateOfBirth,
+    this.height,
   });
 
   factory Player.fromJson(Map<String, dynamic> json) {
@@ -27,6 +33,9 @@ class Player {
       nationality: json['nationality'] as String? ?? '',
       position: json['position'] as String? ?? '',
       pictureUrl: pic?.toString().trim().isEmpty == true ? null : pic?.toString(),
+      dominantHand: json['dominant_hand']?.toString(),
+      dateOfBirth: json['dob']?.toString(),
+      height: json['height']?.toString() ?? json['height_cm']?.toString(),
     );
   }
 

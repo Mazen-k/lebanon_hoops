@@ -3394,10 +3394,101 @@ async function listPlayerLeadersDetailHandler(req, res) {
   }
 }
 
+/** Aggregate one player's stats from player_boxscores in a competition. */
+async function playerCompetitionStatsHandler(req, res) {
+  try {
+    const rawComp = req.query.competition_id ?? req.query.competitionId;
+    const rawPlayer = req.query.player_id ?? req.query.playerId;
+    const compId = rawComp != null && rawComp !== '' ? Number(rawComp) : null;
+    const playerId = rawPlayer != null && rawPlayer !== '' ? Number(rawPlayer) : null;
+    if (compId == null || Number.isNaN(compId)) {
+      return res.status(400).json({ error: 'competition_id is required' });
+    }
+    if (playerId == null || Number.isNaN(playerId)) {
+      return res.status(400).json({ error: 'player_id is required' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT pb.player_id, pb.player_name, pb.player_number, pb.stats
+       FROM player_boxscores pb
+       INNER JOIN games g ON g.match_id = pb.match_id
+       WHERE g.competition_id = $1::int
+         AND g.status IN ('final', 'live')
+         AND pb.player_id = $2::int`,
+      [compId, playerId],
+    );
+
+    let gp = 0;
+    let pts = 0;
+    let reb = 0;
+    let oreb = 0;
+    let dreb = 0;
+    let ast = 0;
+    let stl = 0;
+    let blk = 0;
+    let tpm = 0;
+    let tov = 0;
+    let fgm = 0;
+    let fga = 0;
+    let ftm = 0;
+    let fta = 0;
+    let min = 0;
+    let playerName = '';
+    let playerNumber = '';
+
+    for (const r of rows ?? []) {
+      gp += 1;
+      if (!playerName && r.player_name != null) playerName = String(r.player_name);
+      if (!playerNumber && r.player_number != null) playerNumber = String(r.player_number);
+      const t = _parseTotalsJson(r.stats);
+      const rr = _playerLineRebounds(r.stats);
+      pts += _totalsNum(t, ['Pts', 'PTS', 'pts', 'Points']);
+      ast += _totalsNum(t, ['AST', 'Ast', 'ast']);
+      stl += _totalsNum(t, ['STL', 'Stl', 'stl']);
+      blk += _totalsNum(t, ['BLK', 'Blk', 'blk']);
+      tpm += _totalsNum(t, ['3PM', '3pm', 'TPM', '3P']);
+      tov += _playerLineTurnovers(r.stats);
+      reb += rr.reb;
+      oreb += rr.oreb;
+      dreb += rr.dreb;
+      fgm += _totalsNum(t, ['FGM', 'fgm', 'FG Made', 'FG']);
+      fga += _totalsNum(t, ['FGA', 'fga', 'FG Attempted', 'FGA']);
+      ftm += _totalsNum(t, ['FTM', 'ftm', 'FT Made']);
+      fta += _totalsNum(t, ['FTA', 'fta', 'FT Attempted']);
+      min += _totalsNum(t, ['MIN', 'Min', 'minutes', 'Minutes']);
+    }
+
+    const per = (v) => (gp > 0 ? v / gp : 0);
+    return res.json({
+      competition_id: compId,
+      player_id: playerId,
+      player_name: playerName,
+      player_number: playerNumber,
+      gp,
+      totals: { pts, reb, oreb, dreb, ast, stl, blk, tpm, tov, fgm, fga, ftm, fta, min },
+      per_game: {
+        ppg: Number(per(pts).toFixed(1)),
+        rpg: Number(per(reb).toFixed(1)),
+        apg: Number(per(ast).toFixed(1)),
+        spg: Number(per(stl).toFixed(1)),
+        bpg: Number(per(blk).toFixed(1)),
+        tpm_pg: Number(per(tpm).toFixed(1)),
+        tov_pg: Number(per(tov).toFixed(1)),
+        mpg: Number(per(min).toFixed(1)),
+      },
+    });
+  } catch (err) {
+    console.error('[GET /games/player-stats]', err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
 app.get('/games/player-leaders/detail', listPlayerLeadersDetailHandler);
 app.get('/api/games/player-leaders/detail', listPlayerLeadersDetailHandler);
 app.get('/games/player-leaders', listPlayerLeadersHandler);
 app.get('/api/games/player-leaders', listPlayerLeadersHandler);
+app.get('/games/player-stats', playerCompetitionStatsHandler);
+app.get('/api/games/player-stats', playerCompetitionStatsHandler);
 
 /** GET /games/:matchId — single game row */
 async function getGameHandler(req, res) {

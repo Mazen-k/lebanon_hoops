@@ -278,4 +278,39 @@ class GamesApiService {
       if (_client == null) own.close();
     }
   }
+
+  /// One player's aggregated stats in one competition from `player_boxscores`.
+  Future<Map<String, dynamic>> fetchPlayerCompetitionStats({
+    required int competitionId,
+    required int playerId,
+  }) async {
+    final q = <String, String>{
+      'competition_id': '$competitionId',
+      'player_id': '$playerId',
+    };
+    final paths = _pair('games/player-stats');
+    final own = _client ?? http.Client();
+    try {
+      for (final p in paths) {
+        final res = await own
+            .get(_rootUri(p, q), headers: const {'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 30));
+        if (res.statusCode == 404) continue;
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          var msg = 'Player stats failed (${res.statusCode})';
+          try {
+            final m = jsonDecode(utf8.decode(res.bodyBytes));
+            if (m is Map && m['error'] != null) msg = m['error'].toString();
+          } catch (_) {}
+          throw GamesApiException(msg);
+        }
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d is! Map) throw GamesApiException('Invalid player stats JSON');
+        return Map<String, dynamic>.from(d);
+      }
+      throw GamesApiException('Player stats route not found');
+    } finally {
+      if (_client == null) own.close();
+    }
+  }
 }
