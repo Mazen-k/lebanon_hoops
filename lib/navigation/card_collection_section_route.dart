@@ -625,33 +625,39 @@ class _RealisticBasketballPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    // Equator (single great circle read as a gentle arc)
+    // Equator (slightly curved arc)
     final equator = Path()
-      ..moveTo(c.dx - R * 0.9, c.dy + R * 0.015)
-      ..quadraticBezierTo(c.dx, c.dy + R * 0.065, c.dx + R * 0.9, c.dy + R * 0.015);
+      ..moveTo(c.dx - R * 0.98, c.dy + R * 0.05)
+      ..quadraticBezierTo(c.dx, c.dy + R * 0.12, c.dx + R * 0.98, c.dy + R * 0.05);
     canvas.drawPath(equator, seam);
 
-    // Two channel seams (Wilson-style), meeting near poles — no extra vertical arc.
+    // Vertical meridian (slightly curved arc)
+    final meridian = Path()
+      ..moveTo(c.dx + R * 0.05, c.dy - R * 0.98)
+      ..quadraticBezierTo(c.dx + R * 0.12, c.dy, c.dx + R * 0.05, c.dy + R * 0.98);
+    canvas.drawPath(meridian, seam);
+
+    // Two channel seams (Emoji style: pushed outwards)
     final leftChannel = Path()
-      ..moveTo(c.dx + R * 0.028, c.dy - R * 0.9)
+      ..moveTo(c.dx - R * 0.32, c.dy - R * 0.9)
       ..cubicTo(
-        c.dx - R * 0.98,
-        c.dy - R * 0.38,
-        c.dx - R * 0.98,
-        c.dy + R * 0.38,
-        c.dx + R * 0.028,
+        c.dx - R * 0.88,
+        c.dy - R * 0.42,
+        c.dx - R * 0.88,
+        c.dy + R * 0.42,
+        c.dx - R * 0.32,
         c.dy + R * 0.9,
       );
     canvas.drawPath(leftChannel, seam);
 
     final rightChannel = Path()
-      ..moveTo(c.dx - R * 0.028, c.dy - R * 0.9)
+      ..moveTo(c.dx + R * 0.32, c.dy - R * 0.9)
       ..cubicTo(
-        c.dx + R * 0.98,
-        c.dy - R * 0.38,
-        c.dx + R * 0.98,
-        c.dy + R * 0.38,
-        c.dx - R * 0.028,
+        c.dx + R * 0.88,
+        c.dy - R * 0.42,
+        c.dx + R * 0.88,
+        c.dy + R * 0.42,
+        c.dx + R * 0.32,
         c.dy + R * 0.9,
       );
     canvas.drawPath(rightChannel, seam);

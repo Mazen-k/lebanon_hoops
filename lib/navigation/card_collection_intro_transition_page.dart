@@ -562,73 +562,103 @@ class _IntroBasketballPainter extends CustomPainter {
     final R = size.width / 2 * 0.92;
     final rect = Rect.fromCircle(center: c, radius: R);
 
+    // 1. Base sphere with spherical gradient
     final ball = Paint()
       ..shader = RadialGradient(
         center: const Alignment(-0.36, -0.4),
         radius: 1.06,
         colors: const [
-          Color(0xFFFFE8C8),
-          Color(0xFFE79A52),
-          Color(0xFFB85F1E),
-          Color(0xFF5C2E12),
+          Color(0xFFFFE8C8), // Highlight
+          Color(0xFFE79A52), // Mid-tone
+          Color(0xFFB85F1E), // Base
+          Color(0xFF5C2E12), // Shadow
         ],
         stops: const [0.0, 0.34, 0.66, 1.0],
       ).createShader(rect);
     canvas.drawCircle(c, R, ball);
 
+    // 2. Subtle pebble texture for leather feel
+    final rng = math.Random(42);
+    final pebble = Paint()
+      ..blendMode = BlendMode.multiply
+      ..style = PaintingStyle.fill;
+    for (var i = 0; i < 60; i++) {
+      final u = rng.nextDouble() * 2 * math.pi;
+      final rr = R * math.sqrt(rng.nextDouble()) * 0.94;
+      final px = c.dx + rr * math.cos(u);
+      final py = c.dy + rr * math.sin(u) * 0.98;
+      final pr = 0.5 + rng.nextDouble() * 1.0;
+      pebble.color = const Color(0xFF3D2414).withAlpha((15 + rng.nextInt(15)).clamp(5, 40));
+      canvas.drawCircle(Offset(px, py), pr, pebble);
+    }
+
+    // 3. Ambient occlusion shadow
     final ao = Paint()
       ..shader = RadialGradient(
         center: const Alignment(0.12, 0.55),
         radius: 0.92,
         colors: [
           Colors.transparent,
-          Colors.black.withAlpha(95),
+          Colors.black.withAlpha(100),
         ],
         stops: const [0.44, 1.0],
       ).createShader(rect);
     canvas.drawCircle(c, R * 0.99, ao);
 
+    // 4. Seams
     final seam = Paint()
       ..color = const Color(0xFF120800)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(2.0, size.width * 0.038)
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = math.max(2.5, size.width * 0.035)
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
 
+    // Horizontal equator (slightly curved)
     final eq = Path()
-      ..moveTo(c.dx - R * 0.88, c.dy + R * 0.02)
-      ..quadraticBezierTo(c.dx, c.dy + R * 0.065, c.dx + R * 0.88, c.dy + R * 0.02);
+      ..moveTo(c.dx - R * 0.98, c.dy + R * 0.05)
+      ..quadraticBezierTo(c.dx, c.dy + R * 0.12, c.dx + R * 0.98, c.dy + R * 0.05);
     canvas.drawPath(eq, seam);
 
+    // Vertical meridian (slightly curved)
+    final meridian = Path()
+      ..moveTo(c.dx + R * 0.05, c.dy - R * 0.98)
+      ..quadraticBezierTo(c.dx + R * 0.12, c.dy, c.dx + R * 0.05, c.dy + R * 0.98);
+    canvas.drawPath(meridian, seam);
+
+    // Side channels (Pushed further outwards to look like 🏀 emoji)
+    // Left channel
     final left = Path()
-      ..moveTo(c.dx + R * 0.03, c.dy - R * 0.88)
+      ..moveTo(c.dx - R * 0.3, c.dy - R * 0.92)
       ..cubicTo(
-        c.dx - R * 0.94,
-        c.dy - R * 0.35,
-        c.dx - R * 0.94,
-        c.dy + R * 0.35,
-        c.dx + R * 0.03,
-        c.dy + R * 0.88,
+        c.dx - R * 0.85,
+        c.dy - R * 0.45,
+        c.dx - R * 0.85,
+        c.dy + R * 0.45,
+        c.dx - R * 0.3,
+        c.dy + R * 0.92,
       );
     canvas.drawPath(left, seam);
 
+    // Right channel
     final right = Path()
-      ..moveTo(c.dx - R * 0.03, c.dy - R * 0.88)
+      ..moveTo(c.dx + R * 0.3, c.dy - R * 0.92)
       ..cubicTo(
-        c.dx + R * 0.94,
-        c.dy - R * 0.35,
-        c.dx + R * 0.94,
-        c.dy + R * 0.35,
-        c.dx - R * 0.03,
-        c.dy + R * 0.88,
+        c.dx + R * 0.85,
+        c.dy - R * 0.45,
+        c.dx + R * 0.85,
+        c.dy + R * 0.45,
+        c.dx + R * 0.3,
+        c.dy + R * 0.92,
       );
     canvas.drawPath(right, seam);
 
+    // 5. Specular glint
     final glint = Paint()
       ..shader = RadialGradient(
         center: const Alignment(-0.5, -0.55),
         radius: 0.34,
         colors: [
-          Colors.white.withAlpha(200),
+          Colors.white.withAlpha(180),
           Colors.white.withAlpha(0),
         ],
       ).createShader(Rect.fromCircle(center: c.translate(-R * 0.26, -R * 0.3), radius: R * 0.2));
