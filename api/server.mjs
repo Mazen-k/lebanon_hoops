@@ -3562,8 +3562,54 @@ async function sbcChallengesHandler(req, res) {
        ORDER BY sbc_id ASC, requirement_id ASC`,
       [sbcIds],
     );
+    const playerReqIds = reqs
+      .filter((r) => String(r.requirement_type ?? '').toUpperCase() === 'PLAYER_REQUIRED')
+      .map((r) => parsePositiveInt(r.required_value))
+      .filter((v) => v != null);
+    const teamReqIds = reqs
+      .filter((r) => String(r.requirement_type ?? '').toUpperCase() === 'TEAM')
+      .map((r) => parsePositiveInt(r.required_value))
+      .filter((v) => v != null);
+    const uniqPlayerIds = [...new Set(playerReqIds)];
+    const uniqTeamIds = [...new Set(teamReqIds)];
+    const playerNameById = new Map();
+    const teamNameById = new Map();
+    if (uniqPlayerIds.length > 0) {
+      const { rows: pRows } = await pool.query(
+        `SELECT player_id,
+                COALESCE(NULLIF(TRIM(first_name), ''), '') AS first_name,
+                COALESCE(NULLIF(TRIM(last_name), ''), '') AS last_name
+         FROM players
+         WHERE player_id = ANY($1::int[])`,
+        [uniqPlayerIds],
+      );
+      for (const p of pRows) {
+        const label = `${p.first_name} ${p.last_name}`.trim();
+        playerNameById.set(p.player_id, label || `Player #${p.player_id}`);
+      }
+    }
+    if (uniqTeamIds.length > 0) {
+      const { rows: tRows } = await pool.query(
+        `SELECT team_id, team_name FROM teams WHERE team_id = ANY($1::int[])`,
+        [uniqTeamIds],
+      );
+      for (const t of tRows) {
+        teamNameById.set(t.team_id, t.team_name ?? `Team #${t.team_id}`);
+      }
+    }
     const reqBySbc = new Map();
-    for (const r of reqs) {
+    for (const rawReq of reqs) {
+      const r = { ...rawReq };
+      const reqType = String(r.requirement_type ?? '').toUpperCase();
+      const reqValue = parsePositiveInt(r.required_value);
+      const hasText = String(r.required_text ?? '').trim().length > 0;
+      if (!hasText && reqValue != null) {
+        if (reqType === 'PLAYER_REQUIRED') {
+          r.required_text = playerNameById.get(reqValue) ?? `Player #${reqValue}`;
+        } else if (reqType === 'TEAM') {
+          r.required_text = teamNameById.get(reqValue) ?? `Team #${reqValue}`;
+        }
+      }
       if (!reqBySbc.has(r.sbc_id)) reqBySbc.set(r.sbc_id, []);
       reqBySbc.get(r.sbc_id).push(r);
     }
