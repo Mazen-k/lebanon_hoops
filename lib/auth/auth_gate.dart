@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_shell.dart';
+import '../models/shop_vendor_session.dart';
 import '../models/user_session.dart';
 import '../models/vendor_session.dart';
 import '../navigation/app_nav_shell_key.dart';
 import '../screens/login_screen.dart';
 import '../screens/vendor_court_dashboard_page.dart';
+import '../screens/vendor_shop_dashboard_page.dart';
 import '../services/session_store.dart';
+import '../services/shop_vendor_session_store.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/vendor_session_store.dart';
 import '../widgets/main_app_drawer.dart';
@@ -33,6 +36,7 @@ class _AuthGateState extends State<AuthGate> {
   bool _ready = false;
   UserSession? _user;
   VendorSession? _vendor;
+  ShopVendorSession? _shopVendor;
 
   final _authService = SupabaseAuthService();
   late final StreamSubscription<AuthState> _authSubscription;
@@ -58,7 +62,15 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _restore() async {
     try {
-      // Vendor session takes precedence (independent of Supabase).
+      // Shop vendor session takes precedence over court vendor.
+      final shopVendor = await ShopVendorSessionStore.instance.load();
+      if (shopVendor != null) {
+        if (!mounted) return;
+        setState(() { _shopVendor = shopVendor; _ready = true; });
+        return;
+      }
+
+      // Court vendor session.
       final vendor = await VendorSessionStore.instance.load();
       if (vendor != null) {
         if (!mounted) return;
@@ -138,6 +150,14 @@ class _AuthGateState extends State<AuthGate> {
     } catch (_) {}
   }
 
+  Future<void> _handleShopVendorSignOut() async {
+    if (!mounted) return;
+    setState(() => _shopVendor = null);
+    try {
+      await ShopVendorSessionStore.instance.clear();
+    } catch (_) {}
+  }
+
   // ── Callbacks from login / sign-up screens ────────────────────────────────
 
   /// Called after a successful email/password login or sign-up. The Supabase
@@ -159,7 +179,17 @@ class _AuthGateState extends State<AuthGate> {
     try {
       final vendor = await VendorSessionStore.instance.load();
       if (!mounted) return;
-      setState(() { _vendor = vendor; _user = null; });
+      setState(() { _vendor = vendor; _user = null; _shopVendor = null; });
+    } catch (_) {
+      if (!mounted) return;
+    }
+  }
+
+  Future<void> _handleShopVendorSignedIn() async {
+    try {
+      final shopVendor = await ShopVendorSessionStore.instance.load();
+      if (!mounted) return;
+      setState(() { _shopVendor = shopVendor; _user = null; _vendor = null; });
     } catch (_) {
       if (!mounted) return;
     }
@@ -172,6 +202,12 @@ class _AuthGateState extends State<AuthGate> {
     if (!_ready) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator(color: Color(0xFFBB0013))),
+      );
+    }
+    if (_shopVendor != null) {
+      return VendorShopDashboardPage(
+        session: _shopVendor!,
+        onSignedOut: _handleShopVendorSignOut,
       );
     }
     if (_vendor != null) {
@@ -193,6 +229,7 @@ class _AuthGateState extends State<AuthGate> {
     return LoginScreen(
       onAuthSuccess: _handleAuthSuccess,
       onVendorSignedIn: _handleVendorSignedIn,
+      onShopVendorSignedIn: _handleShopVendorSignedIn,
     );
   }
 }
