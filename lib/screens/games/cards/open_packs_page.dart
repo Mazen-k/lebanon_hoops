@@ -17,10 +17,11 @@ abstract final class _OpenPacksTheme {
   static const Color segmentBg = Color(0xFF161022);
 }
 
-/// View-only coin bundles (purchase not wired yet).
+/// Coin bundles available in the store.
 const List<({int coins, String priceUsd})> kCoinShopOffers = [
-  (coins: 5, priceUsd: r'$1.99'),
-  (coins: 10, priceUsd: r'$3.74'),
+  (coins: 20, priceUsd: r'$7.19'),
+  (coins: 40, priceUsd: r'$14.14'),
+  (coins: 80, priceUsd: r'$28.19'),
 ];
 
 class OpenPacksPage extends StatefulWidget {
@@ -101,13 +102,28 @@ class _OpenPacksPageState extends State<OpenPacksPage> {
     }
   }
 
-  void _comingSoonBuy() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Purchases are not available yet.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  Future<void> _buyCoins(int coins) async {
+    final session = await SessionStore.instance.load();
+    final userId = session?.userId ?? BackendConfig.devUserId;
+    try {
+      final wallet = await _walletApi.buyCoins(userId: userId, coins: coins);
+      if (!mounted) return;
+      setState(() => _cardCoins = wallet.cardCoins);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Purchased $coins coins successfully.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on UserWalletApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _goToPage(int index) {
@@ -181,7 +197,7 @@ class _OpenPacksPageState extends State<OpenPacksPage> {
                   },
                 ),
                 _CoinShopPage(
-                  onBuyTap: _comingSoonBuy,
+                  onBuyTap: _buyCoins,
                 ),
               ],
             ),
@@ -291,7 +307,7 @@ class _StoreSectionTab extends StatelessWidget {
 class _CoinShopPage extends StatelessWidget {
   const _CoinShopPage({required this.onBuyTap});
 
-  final VoidCallback onBuyTap;
+  final ValueChanged<int> onBuyTap;
 
   @override
   Widget build(BuildContext context) {
@@ -306,14 +322,6 @@ class _CoinShopPage extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Preview only — checkout is not enabled yet.',
-          style: TextStyle(
-            color: _OpenPacksTheme.onDark.withAlpha(150),
-            fontSize: 12.5,
-          ),
-        ),
         const SizedBox(height: 16),
         ...kCoinShopOffers.map(
           (o) => Padding(
@@ -323,40 +331,6 @@ class _CoinShopPage extends StatelessWidget {
               priceUsd: o.priceUsd,
               onBuyTap: onBuyTap,
             ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'More coin bundles',
-          style: TextStyle(
-            color: _OpenPacksTheme.onDark.withAlpha(200),
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Larger packs and bonuses will appear here later.',
-          style: TextStyle(
-            color: _OpenPacksTheme.onDark.withAlpha(140),
-            fontSize: 12.5,
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          'More card packs',
-          style: TextStyle(
-            color: _OpenPacksTheme.onDark.withAlpha(200),
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Additional playable packs will be listed in the store when ready.',
-          style: TextStyle(
-            color: _OpenPacksTheme.onDark.withAlpha(140),
-            fontSize: 12.5,
           ),
         ),
       ],
@@ -373,14 +347,14 @@ class _CoinOfferRow extends StatelessWidget {
 
   final int coins;
   final String priceUsd;
-  final VoidCallback onBuyTap;
+  final ValueChanged<int> onBuyTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onBuyTap,
+        onTap: () => onBuyTap(coins),
         borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
@@ -414,7 +388,7 @@ class _CoinOfferRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 TextButton(
-                  onPressed: onBuyTap,
+                  onPressed: () => onBuyTap(coins),
                   style: TextButton.styleFrom(
                     foregroundColor: _OpenPacksTheme.orangeGlow,
                   ),

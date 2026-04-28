@@ -768,6 +768,49 @@ async function userWalletHandler(req, res) {
 app.get('/user/wallet', userWalletHandler);
 app.get('/api/user/wallet', userWalletHandler);
 
+/** Instantly credits card coins to user wallet (no payment provider). */
+async function buyCoinsHandler(req, res) {
+  const rawUserId = req.query.user_id ?? req.query.userId ?? req.body?.userId ?? req.body?.user_id;
+  if (rawUserId == null || rawUserId === '' || Number.isNaN(Number(rawUserId))) {
+    return res.status(400).json({ error: 'user_id is required (integer).' });
+  }
+  const rawCoins = req.body?.coins;
+  if (rawCoins == null || Number.isNaN(Number(rawCoins))) {
+    return res.status(400).json({ error: 'coins is required (integer).' });
+  }
+
+  const userId = Number(rawUserId);
+  const coins = Math.floor(Number(rawCoins));
+  if (!Number.isFinite(coins) || coins <= 0) {
+    return res.status(400).json({ error: 'coins must be greater than 0.' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `
+      UPDATE users
+      SET card_coins = COALESCE(card_coins, 0) + $1::int
+      WHERE user_id = $2::int
+      RETURNING username, COALESCE(card_coins, 0)::int AS card_coins
+      `,
+      [coins, userId],
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.json({
+      username: rows[0].username,
+      card_coins: rows[0].card_coins,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.post('/user/wallet/buy-coins', buyCoinsHandler);
+app.post('/api/user/wallet/buy-coins', buyCoinsHandler);
+
 const LEBANESE_BASE_PACK_ID = 'lebanese_base';
 const LEBANESE_BASE_PACK_COST = 5;
 const IMPORT_CHANCE_PACK_ID = 'import_chance';

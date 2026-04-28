@@ -45,7 +45,7 @@ const List<PackShopItem> kPackShopCatalog = [
     id: 'import_chance',
     apiPackId: 'import_chance',
     imageFileName: 'ImportChancePick.png',
-    title: 'Import Chance Pick',
+    title: 'Import Chance Pack',
     descriptionLines: [
       'Guranteed 3 Base cards with chance of 1 import',
     ],

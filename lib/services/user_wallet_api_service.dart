@@ -48,6 +48,24 @@ class UserWalletApiService {
     return t.startsWith('<!doctype') || t.startsWith('<html');
   }
 
+  Future<http.Response> _postBuyCoins(
+    http.Client own,
+    String path, {
+    required int userId,
+    required int coins,
+  }) {
+    return own
+        .post(
+          _uri(path, userId),
+          headers: const {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode({'coins': coins}),
+        )
+        .timeout(const Duration(seconds: 20));
+  }
+
   Future<UserWallet> fetchWallet({required int userId}) async {
     final configured = BackendConfig.userWalletPath;
     final fallback = configured == 'user/wallet' ? 'api/user/wallet' : null;
@@ -85,6 +103,63 @@ class UserWalletApiService {
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! Map<String, dynamic>) {
         throw UserWalletApiException('Invalid wallet response');
+      }
+      return UserWallet.fromJson(decoded);
+    } finally {
+      if (_client == null) {
+        own.close();
+      }
+    }
+  }
+
+  Future<UserWallet> buyCoins({
+    required int userId,
+    required int coins,
+  }) async {
+    final configured = 'user/wallet/buy-coins';
+    const fallback = 'api/user/wallet/buy-coins';
+
+    final own = _client ?? http.Client();
+    try {
+      if (coins <= 0) {
+        throw UserWalletApiException('coins must be greater than 0');
+      }
+
+      http.Response res = await _postBuyCoins(
+        own,
+        configured,
+        userId: userId,
+        coins: coins,
+      );
+      final preview = utf8.decode(res.bodyBytes, allowMalformed: true);
+      final retry =
+          res.statusCode == 404 || (res.statusCode >= 400 && _looksLikeHtmlError(preview));
+      if (retry) {
+        res = await _postBuyCoins(
+          own,
+          fallback,
+          userId: userId,
+          coins: coins,
+        );
+      }
+
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        var msg = 'Buy coins failed (${res.statusCode})';
+        final body = utf8.decode(res.bodyBytes, allowMalformed: true);
+        if (!_looksLikeHtmlError(body)) {
+          try {
+            final err = jsonDecode(body);
+            if (err is Map && err['error'] != null) msg = err['error'].toString();
+          } catch (_) {
+            if (body.isNotEmpty) msg = body;
+          }
+        }
+        throw UserWalletApiException(msg);
+      }
+
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+      if (decoded is! Map<String, dynamic>) {
+        throw UserWalletApiException('Invalid buy coins response');
       }
       return UserWallet.fromJson(decoded);
     } finally {
