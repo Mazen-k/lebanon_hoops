@@ -831,7 +831,7 @@ function isKnownOpenPack(packId) {
 
 /**
  * Picks 4 card_ids for this pack. Lebanese base = 4× base. Standard = 4× any.
- * Import chance = slot1: 10% import (else base); if import pool empty on 10% roll, slot1 is base.
+ * Import chance = slot1: 25% import (else base); if import pool empty on 25% roll, slot1 is base.
  * Slots 2–4 always base, distinct from slot1.
  */
 async function pickCardIdsForOpenPack(client, packId) {
@@ -853,7 +853,7 @@ async function pickCardIdsForOpenPack(client, packId) {
 
   if (packId === IMPORT_CHANCE_PACK_ID) {
     const firstIds = [];
-    const rollImport = Math.random() < 0.1;
+    const rollImport = Math.random() < 0.25;
 
     if (rollImport) {
       const { rows: imp } = await client.query(`

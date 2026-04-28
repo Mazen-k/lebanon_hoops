@@ -19,6 +19,8 @@ abstract final class _OpenPacksTheme {
 
 /// Coin bundles available in the store.
 const List<({int coins, String priceUsd})> kCoinShopOffers = [
+  (coins: 5, priceUsd: r'$1.99'),
+  (coins: 10, priceUsd: r'$2.74'),
   (coins: 20, priceUsd: r'$7.19'),
   (coins: 40, priceUsd: r'$14.14'),
   (coins: 80, priceUsd: r'$28.19'),
