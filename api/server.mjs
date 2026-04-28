@@ -229,7 +229,11 @@ async function getTeamDetails(req, res) {
     let stadium = null;
     try {
       const { rows: stRows } = await pool.query(
-        `SELECT stadium_id, stadium_name, location, capacity
+        `SELECT stadium_id,
+                stadium_name,
+                location,
+                capacity,
+                NULLIF(TRIM(image_url), '') AS stadium_image_url
          FROM stadiums WHERE team_id = $1 ORDER BY stadium_id ASC LIMIT 1`,
         [teamId],
       );
