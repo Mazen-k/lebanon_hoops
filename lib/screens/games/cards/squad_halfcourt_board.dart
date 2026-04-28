@@ -46,8 +46,8 @@ class SquadHalfcourtBoard extends StatelessWidget {
             children: [
               Positioned.fill(child: CustomPaint(painter: _HalfCourtPainter())),
               _slotAt(w, h, 'pg', 0.5, 0.18),
-              _slotAt(w, h, 'sg', 0.88, 0.42),
-              _slotAt(w, h, 'sf', 0.12, 0.42),
+              _slotAt(w, h, 'sg', 0.82, 0.42),
+              _slotAt(w, h, 'sf', 0.18, 0.42),
               _slotAt(w, h, 'pf', 0.32, 0.78),
               _slotAt(w, h, 'c', 0.68, 0.78),
             ],
@@ -88,10 +88,10 @@ class _CourtSlotChip extends StatelessWidget {
   });
 
   static const double slotStackWidth = 108;
-  static const double slotStackHeight = 158;
+  static const double slotStackHeight = 168;
 
   static const double _cardW = 96;
-  static const double _cardH = 118;
+  static const double _cardH = 130;
 
   final String label;
   final CardsSquadSlotCard card;

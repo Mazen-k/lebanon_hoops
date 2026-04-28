@@ -620,6 +620,129 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
     }
   }
 
+  Future<void> _openRequirementsPopup({bool fromSubmitTap = false}) async {
+    final progress = _progressList();
+    final reward = widget.challenge.rewardCard;
+    final canSubmitNow =
+        fromSubmitTap && !widget.challenge.completed && !_submitting && _allSlotsFilled && _allRequirementsMet;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: CardGameUiTheme.panel,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: CardGameUiTheme.gold.withAlpha(100)),
+        ),
+        title: const Text(
+          'Requirements',
+          style: TextStyle(color: CardGameUiTheme.onDark, fontWeight: FontWeight.w800),
+        ),
+        content: SizedBox(
+          width: 330,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ...progress.map(
+                  (p) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          p.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                          size: 18,
+                          color: p.done ? const Color(0xFF4CD964) : CardGameUiTheme.gold.withAlpha(180),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${_requirementName(p.requirement)} (${p.matchedCount}/${p.requirement.minCount})',
+                            style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(205), fontSize: 12.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 120,
+                      height: 165,
+                      child: BundledPlayCardImage(
+                        cardId: reward.cardId,
+                        fit: BoxFit.cover,
+                        fallbackImageUrl: reward.cardImage,
+                        errorPlaceholder: ColoredBox(
+                          color: CardGameUiTheme.panel,
+                          child: Center(
+                            child: Text(
+                              reward.playerLabel,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: CardGameUiTheme.onDark,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  reward.playerLabel,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: CardGameUiTheme.onDark,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.challenge.description?.trim().isNotEmpty == true
+                      ? widget.challenge.description!.trim()
+                      : 'Complete this SBC to claim the reward card.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: CardGameUiTheme.onDark.withAlpha(180),
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: CardGameUiTheme.gold)),
+          ),
+          if (canSubmitNow)
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _submitSbc();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: CardGameUiTheme.gold,
+                foregroundColor: const Color(0xFF1A120C),
+              ),
+              child: const Text('Submit'),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _autoCompleteSquad() async {
     if (_loadingCollection || _submitting || widget.challenge.completed) return;
 
@@ -766,6 +889,7 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
   Widget build(BuildContext context) {
     final reward = widget.challenge.rewardCard;
     final progress = _progressList();
+    final doneCount = progress.where((p) => p.done).length;
     final canSubmit = !widget.challenge.completed && !_submitting && _allSlotsFilled && _allRequirementsMet;
     return Scaffold(
       backgroundColor: CardGameUiTheme.bg,
@@ -775,21 +899,14 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
         foregroundColor: CardGameUiTheme.onDark,
         surfaceTintColor: Colors.transparent,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              widget.challenge.description?.trim().isNotEmpty == true
-                  ? widget.challenge.description!.trim()
-                  : 'Complete this SBC to claim the reward card.',
-              style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(185), fontSize: 13, height: 1.35),
-            ),
-            const SizedBox(height: 12),
             if (widget.challenge.completed)
               Container(
-                margin: const EdgeInsets.only(bottom: 12),
+                margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1C3A25),
@@ -804,127 +921,57 @@ class _SbcChallengeDetailPageState extends State<_SbcChallengeDetailPage> {
                   ),
                 ),
               ),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: CardGameUiTheme.panel.withAlpha(225),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: CardGameUiTheme.gold.withAlpha(75)),
-              ),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: SizedBox(
-                      width: 56,
-                      height: 74,
-                      child: BundledPlayCardImage(
-                        cardId: reward.cardId,
-                        fit: BoxFit.cover,
-                        fallbackImageUrl: reward.cardImage,
-                        errorPlaceholder: ColoredBox(
-                          color: CardGameUiTheme.panel,
-                          child: Center(
-                            child: Text(
-                              reward.playerLabel,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: CardGameUiTheme.onDark,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: (_loadingCollection || _submitting || widget.challenge.completed) ? null : _autoCompleteSquad,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: CardGameUiTheme.gold,
+                      side: BorderSide(color: CardGameUiTheme.gold.withAlpha(180)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.auto_fix_high_rounded),
+                    label: const Text('Auto-complete'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _submitting
+                        ? null
+                        : () => _openRequirementsPopup(fromSubmitTap: true),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: CardGameUiTheme.gold,
+                      foregroundColor: const Color(0xFF1A120C),
+                    ),
+                    child: Text(
+                      _submitting
+                          ? 'Submitting...'
+                          : 'Submit $doneCount/${progress.length}',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _loadingCollection
+                  ? const Center(child: CircularProgressIndicator(color: CardGameUiTheme.gold))
+                  : Center(
+                      child: Transform.scale(
+                        scale: 1.1,
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: SquadHalfcourtBoard(
+                            squad: _lineup,
+                            readOnly: _submitting,
+                            onSlotTap: _pickSlot,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Reward',
-                          style: TextStyle(color: CardGameUiTheme.gold, fontWeight: FontWeight.w900, fontSize: 12),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          reward.playerLabel,
-                          style: const TextStyle(color: CardGameUiTheme.onDark, fontWeight: FontWeight.w800),
-                        ),
-                        Text(
-                          '${reward.position} ${reward.teamName ?? ''}'.trim(),
-                          style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(170), fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            ...progress.map(
-              (p) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      p.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                      size: 18,
-                      color: p.done ? const Color(0xFF4CD964) : CardGameUiTheme.gold.withAlpha(180),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${_requirementName(p.requirement)} (${p.matchedCount}/${p.requirement.minCount})',
-                        style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(205), fontSize: 12.8),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Build your SBC squad (position-locked).',
-              style: TextStyle(color: CardGameUiTheme.onDark.withAlpha(165), fontSize: 12.5),
-            ),
-            const SizedBox(height: 10),
-            if (_loadingCollection)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 30),
-                child: Center(
-                  child: CircularProgressIndicator(color: CardGameUiTheme.gold),
-                ),
-              )
-            else
-              SquadHalfcourtBoard(
-                squad: _lineup,
-                readOnly: _submitting,
-                onSlotTap: _pickSlot,
-              ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: (_loadingCollection || _submitting || widget.challenge.completed) ? null : _autoCompleteSquad,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: CardGameUiTheme.gold,
-                side: BorderSide(color: CardGameUiTheme.gold.withAlpha(180)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              icon: const Icon(Icons.auto_fix_high_rounded),
-              label: const Text('Auto-complete'),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: canSubmit ? _submitSbc : null,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: CardGameUiTheme.gold,
-                foregroundColor: const Color(0xFF1A120C),
-              ),
-              child: Text(_submitting ? 'Submitting...' : 'Submit SBC'),
             ),
           ],
         ),
