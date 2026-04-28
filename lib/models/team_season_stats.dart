@@ -5,6 +5,9 @@ class TeamSeasonStats {
     required this.teamName,
     this.teamLogoUrl,
     required this.gp,
+    required this.wins,
+    required this.losses,
+    required this.ptsAgainst,
     required this.pts,
     required this.reb,
     required this.ast,
@@ -18,12 +21,17 @@ class TeamSeasonStats {
     required this.dreb,
     required this.stl,
     required this.blk,
+    required this.tov,
+    required this.pf,
   });
 
   final int teamId;
   final String teamName;
   final String? teamLogoUrl;
   final int gp;
+  final int wins;
+  final int losses;
+  final int ptsAgainst;
   final int pts;
   final int reb;
   final int ast;
@@ -37,6 +45,8 @@ class TeamSeasonStats {
   final int dreb;
   final int stl;
   final int blk;
+  final int tov;
+  final int pf;
 
   static int _i(dynamic v, [int d = 0]) {
     if (v == null) return d;
@@ -53,6 +63,9 @@ class TeamSeasonStats {
       teamName: (j['team_name'] ?? j['teamName'] ?? '').toString(),
       teamLogoUrl: (logoStr != null && logoStr.isNotEmpty) ? logoStr : null,
       gp: _i(j['gp']),
+      wins: _i(j['wins']),
+      losses: _i(j['losses']),
+      ptsAgainst: _i(j['pts_against'] ?? j['ptsAgainst']),
       pts: _i(j['pts']),
       reb: _i(j['reb']),
       ast: _i(j['ast']),
@@ -66,6 +79,8 @@ class TeamSeasonStats {
       dreb: _i(j['dreb']),
       stl: _i(j['stl']),
       blk: _i(j['blk']),
+      tov: _i(j['tov'] ?? j['TOV']),
+      pf: _i(j['pf'] ?? j['PF']),
     );
   }
 }

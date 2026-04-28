@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import '../models/player.dart';
 import '../models/team.dart';
 import '../services/games_api_service.dart';
+import '../widgets/boxscore_expanded_stat_panel.dart';
 
 const _headerBlue = Color(0xFF1E4A8C);
 const _accentRed = Color(0xFFE31C23);
 const _pageBg = Color(0xFFF0F2F5);
 
-/// Full-screen player profile for one competition (PROFILE / GAME LOG / …).
+/// Full-screen player profile for one competition (PROFILE / GAME LOG).
 class PlayerCompetitionProfileScreen extends StatefulWidget {
   const PlayerCompetitionProfileScreen({
     super.key,
@@ -36,7 +37,7 @@ class _PlayerCompetitionProfileScreenState
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
@@ -75,31 +76,10 @@ class _PlayerCompetitionProfileScreenState
                   playerId: widget.player.playerId,
                   gamesApi: widget.gamesApi,
                 ),
-                const _PlaceholderTab(label: 'Pictures coming soon'),
-                const _PlaceholderTab(label: 'Video coming soon'),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        label,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }
@@ -214,8 +194,6 @@ class _ProfileHeader extends StatelessWidget {
             tabs: const [
               Tab(text: 'PROFILE'),
               Tab(text: 'GAME LOG'),
-              Tab(text: 'PICTURES'),
-              Tab(text: 'VIDEO'),
             ],
           ),
         ],
@@ -979,26 +957,26 @@ class _GameLogTabBody extends StatelessWidget {
                     bottom: BorderSide(color: Colors.grey.shade300),
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Expanded(flex: 5, child: Text('TEAM', style: _tableHead)),
+                    const Expanded(flex: 5, child: Text('TEAM', style: _tableHead)),
                     SizedBox(
-                      width: 36,
+                      width: _gameLogStatColW,
                       child: Text('MIN', textAlign: TextAlign.center, style: _tableHead),
                     ),
                     SizedBox(
-                      width: 36,
+                      width: _gameLogStatColW,
                       child: Text('PTS', textAlign: TextAlign.center, style: _tableHead),
                     ),
                     SizedBox(
-                      width: 36,
+                      width: _gameLogStatColW,
                       child: Text('REB', textAlign: TextAlign.center, style: _tableHead),
                     ),
                     SizedBox(
-                      width: 36,
+                      width: _gameLogStatColW,
                       child: Text('AST', textAlign: TextAlign.center, style: _tableHead),
                     ),
-                    SizedBox(width: 28),
+                    SizedBox(width: _gameLogTrailingW),
                   ],
                 ),
               ),
@@ -1025,6 +1003,10 @@ const _tableHead = TextStyle(
   letterSpacing: 0.4,
 );
 
+/// Same widths as [GameBoxscoreScreen] player row (`_CompactStatValue` = 40).
+const double _gameLogStatColW = 40;
+const double _gameLogTrailingW = 36;
+
 class _GameLogRow extends StatefulWidget {
   const _GameLogRow({required this.g});
 
@@ -1035,84 +1017,114 @@ class _GameLogRow extends StatefulWidget {
 }
 
 class _GameLogRowState extends State<_GameLogRow> {
-  bool _open = false;
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final g = widget.g;
     final name = (g['opponent_team_name'] as String?)?.trim() ?? '—';
     final logo = (g['opponent_team_logo'] as String?)?.trim();
-    final min = (g['min'] as num?)?.toInt() ?? 0;
-    final pts = (g['pts'] as num?)?.toInt() ?? 0;
-    final reb = (g['reb'] as num?)?.toInt() ?? 0;
-    final ast = (g['ast'] as num?)?.toInt() ?? 0;
-    final box = Map<String, dynamic>.from(
-      (g['box'] as Map?)?.cast<String, dynamic>() ?? const {},
-    );
+    final stats = parseBoxscoreStatTotals(g['stats']);
+    final mins = boxscoreMinutesDisplay(stats);
+    final pts = boxscoreStatValue(stats, 'Pts');
+    final reb = boxscoreStatValue(stats, 'REB');
+    final ast = boxscoreStatValue(stats, 'AST');
 
-    return InkWell(
-      onTap: () => setState(() => _open = !_open),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 6, 4, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        dividerColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+      ),
+      child: ExpansionTile(
+        onExpansionChanged: (value) => setState(() => _expanded = value),
+        tilePadding: const EdgeInsets.fromLTRB(8, 4, 2, 4),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        iconColor: const Color(0xFFF2C94C),
+        collapsedIconColor: const Color(0xFFF2C94C),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        trailing: Icon(
+          _expanded
+              ? Icons.keyboard_arrow_up_rounded
+              : Icons.keyboard_arrow_down_rounded,
+          color: const Color(0xFFF2C94C),
+          size: 30,
+        ),
+        title: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  flex: 5,
-                  child: Row(
-                    children: [
-                      _TinyLogo(url: logo),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13,
-                          ),
-                        ),
+            Expanded(
+              flex: 5,
+              child: Row(
+                children: [
+                  _TinyLogo(url: logo),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Lexend',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        height: 1.2,
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                SizedBox(
-                  width: 36,
-                  child: Text('$min', textAlign: TextAlign.center, style: _cell),
-                ),
-                SizedBox(
-                  width: 36,
-                  child: Text('$pts', textAlign: TextAlign.center, style: _cell),
-                ),
-                SizedBox(
-                  width: 36,
-                  child: Text('$reb', textAlign: TextAlign.center, style: _cell),
-                ),
-                SizedBox(
-                  width: 36,
-                  child: Text('$ast', textAlign: TextAlign.center, style: _cell),
-                ),
-                SizedBox(
-                  width: 28,
-                  child: Icon(
-                    _open ? Icons.expand_less : Icons.expand_more,
-                    color: Colors.amber.shade800,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-            if (_open) _ExpandedBox(box: box),
+            _GameLogStatCell(value: mins),
+            _GameLogStatCell(value: pts),
+            _GameLogStatCell(value: reb),
+            _GameLogStatCell(value: ast),
           ],
         ),
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: scheme.outlineVariant.withValues(alpha: 0.45),
+                ),
+              ),
+            ),
+            child: BoxscoreExpandedStatPanel(scheme: scheme, stats: stats),
+          ),
+        ],
       ),
     );
   }
 }
 
-const _cell = TextStyle(fontWeight: FontWeight.w700, fontSize: 13);
+class _GameLogStatCell extends StatelessWidget {
+  const _GameLogStatCell({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: _gameLogStatColW,
+      child: Text(
+        value,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontFamily: 'Lexend',
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+          color: scheme.onSurface,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+}
 
 class _TinyLogo extends StatelessWidget {
   const _TinyLogo({this.url});
@@ -1135,95 +1147,6 @@ class _TinyLogo extends StatelessWidget {
           : Icon(Icons.sports_basketball, size: 16, color: Colors.grey.shade600),
     );
   }
-}
-
-class _ExpandedBox extends StatelessWidget {
-  const _ExpandedBox({required this.box});
-
-  final Map<String, dynamic> box;
-
-  int n(String k) => (box[k] as num?)?.toInt() ?? 0;
-  double f(String k) => (box[k] as num?)?.toDouble() ?? 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final oreb = n('oreb');
-    final dreb = n('dreb');
-    final treb = n('reb');
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF7F8FA),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'REB: OFF $oreb  DEF $dreb  T $treb',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 6,
-              children: [
-                _miniStat('PTS', n('pts')),
-                _miniStat('AST', n('ast')),
-                _miniStat('STL', n('stl')),
-                _miniStat('BLK', n('blk')),
-                _miniStat('TO', n('tov')),
-                _miniStat('PF', n('pf')),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _shootCol('2PTS', n('two_m'), n('two_a'), f('two_pct'))),
-                Expanded(child: _shootCol('3PTS', n('tpm'), n('tpa'), f('three_pct'))),
-                Expanded(child: _shootCol('FT', n('ftm'), n('fta'), f('ft_pct'))),
-                SizedBox(
-                  width: 44,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      const Text('EFF', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800)),
-                      Text(
-                        '${n('eff')}',
-                        style: const TextStyle(
-                          fontFamily: 'Lexend',
-                          fontWeight: FontWeight.w900,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-Widget _miniStat(String k, int v) {
-  return Text('$k $v', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12));
-}
-
-Widget _shootCol(String title, int m, int a, double pct) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900)),
-      Text('$m / $a', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-      Text('${pct.toStringAsFixed(1)}%', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
-    ],
-  );
 }
 
 String _exactPositionLabel(String position) {

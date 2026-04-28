@@ -4,6 +4,7 @@ import '../data/team_repository.dart';
 import '../models/game_fixture_view.dart';
 import '../models/player.dart';
 import '../models/team.dart';
+import '../models/team_season_stats.dart';
 import '../models/team_staff.dart';
 import '../models/team_stadium.dart';
 import '../models/team_trophy.dart';
@@ -39,7 +40,13 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
   String? _fixturesError;
   int _fixtureLoadSeq = 0;
 
-  static const _tabLabels = ['Overview', 'Fixtures', 'Roster', 'Trophies'];
+  static const _tabLabels = [
+    'Overview',
+    'Fixtures',
+    'Roster',
+    'Stats',
+    'Trophies',
+  ];
 
   @override
   void initState() {
@@ -199,7 +206,7 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
     }
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         backgroundColor: colorScheme.surface,
         body: SafeArea(
@@ -257,6 +264,11 @@ class _TeamProfileScreenState extends State<TeamProfileScreen> {
                       players: data.players,
                       gamesApi: _gamesApi,
                       competitionId: _filter.selected.competitionId,
+                    ),
+                    _TeamStatsTab(
+                      team: data.team,
+                      competitionId: _filter.selected.competitionId,
+                      gamesApi: _gamesApi,
                     ),
                     _TrophiesTab(trophies: data.trophies),
                   ],
@@ -1520,6 +1532,543 @@ class _PlayerBox extends StatelessWidget {
       ),
     );
   }
+}
+
+double _teamStatShootPct(int made, int att) {
+  if (att <= 0) return 0;
+  return (100 * made) / att;
+}
+
+class _TeamStatsTab extends StatelessWidget {
+  const _TeamStatsTab({
+    required this.team,
+    required this.competitionId,
+    required this.gamesApi,
+  });
+
+  final Team team;
+  final int competitionId;
+  final GamesApiService gamesApi;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return FutureBuilder<List<TeamSeasonStats>>(
+      future: gamesApi.fetchTeamSeasonStats(competitionId: competitionId),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return Center(child: CircularProgressIndicator(color: cs.primary));
+        }
+        if (snap.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                '${snap.error}',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.error),
+              ),
+            ),
+          );
+        }
+        final list = snap.data ?? const <TeamSeasonStats>[];
+        TeamSeasonStats? row;
+        for (final r in list) {
+          if (r.teamId == team.teamId) {
+            row = r;
+            break;
+          }
+        }
+        if (row == null || row.gp == 0) {
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+            children: [
+              Text(
+                'Team stats',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                row == null
+                    ? 'No season totals in this competition for ${team.teamName} yet.'
+                    : 'Totals appear after this team plays a final or live game with a synced box score.',
+                style: TextStyle(color: cs.onSurfaceVariant, height: 1.45),
+              ),
+            ],
+          );
+        }
+        final s = row;
+        final gp = s.gp;
+        final gpg = gp > 0 ? gp : 1;
+        final twoM = s.fgm - s.threePm < 0 ? 0 : s.fgm - s.threePm;
+        final twoA = s.fga - s.threePa < 0 ? 0 : s.fga - s.threePa;
+        final twoPct = _teamStatShootPct(twoM, twoA);
+        final threePct = _teamStatShootPct(s.threePm, s.threePa);
+        final ftPct = _teamStatShootPct(s.ftm, s.fta);
+        final ppg = s.pts / gp;
+        final rpg = s.reb / gp;
+        final apg = s.ast / gp;
+        final spg = s.stl / gp;
+        final bpg = s.blk / gp;
+        final tovPg = s.tov / gp;
+        final pfPg = s.pf / gp;
+        final drebPg = s.dreb / gp;
+        final orebPg = s.oreb / gp;
+        final eff = (s.pts + s.reb + s.ast + s.stl + s.blk - s.tov - s.pf) / gp;
+        final decided = s.wins + s.losses;
+        final recordLabel =
+            decided > 0 ? '${s.wins}/${s.losses}' : (gp > 0 ? '—' : '0/0');
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          children: [
+            Text(
+              'Team stats',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'From team box scores in the selected competition',
+              style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _TeamStatSummaryCard(
+                    icon: Icons.sports_rounded,
+                    headline: '$gp',
+                    caption: 'GAMES',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _TeamStatSummaryCard(
+                    icon: Icons.emoji_events_outlined,
+                    headline: recordLabel,
+                    caption: 'RECORD',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _TeamStatSummaryCard(
+                    icon: Icons.stacked_line_chart_rounded,
+                    headline: '${s.pts}',
+                    subline: '${s.ptsAgainst} allowed',
+                    caption: 'POINTS',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _TeamStatsSectionCard(
+              title: 'GAMES',
+              child: Column(
+                children: [
+                  _TeamStatsKvRow(label: 'Games played', value: '$gp'),
+                  _TeamStatsKvRow(label: 'Record', value: recordLabel),
+                  _TeamStatsKvHighlight(
+                    label: 'Efficiency rating',
+                    value: eff.toStringAsFixed(1),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _TeamStatsSectionCard(
+              title: 'SHOOTING PERCENTAGES',
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _TeamStatsShootRing(
+                    scheme: cs,
+                    label: '2 Points',
+                    pct: twoPct,
+                    made: twoM,
+                    att: twoA,
+                  ),
+                  _TeamStatsShootRing(
+                    scheme: cs,
+                    label: '3 Points',
+                    pct: threePct,
+                    made: s.threePm,
+                    att: s.threePa,
+                  ),
+                  _TeamStatsShootRing(
+                    scheme: cs,
+                    label: 'Free throws',
+                    pct: ftPct,
+                    made: s.ftm,
+                    att: s.fta,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _TeamStatsSectionCard(
+              title: 'POINTS',
+              child: Column(
+                children: [
+                  _TeamStatsKvRow(
+                    label: 'Points per game',
+                    value: ppg.toStringAsFixed(1),
+                  ),
+                  _TeamStatsKvRow(
+                    label: '2 points',
+                    value: '${(twoM / gpg).toStringAsFixed(1)} ($twoM)',
+                  ),
+                  _TeamStatsKvRow(
+                    label: '3 points',
+                    value:
+                        '${(s.threePm / gpg).toStringAsFixed(1)} (${s.threePm})',
+                  ),
+                  _TeamStatsKvRow(
+                    label: 'Free throws',
+                    value: '${(s.ftm / gpg).toStringAsFixed(1)} (${s.ftm})',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _TeamStatsSectionCard(
+              title: 'REBOUNDS',
+              child: Column(
+                children: [
+                  _TeamStatsKvRow(
+                    label: 'Rebounds per game',
+                    value: '${rpg.toStringAsFixed(1)} (${s.reb})',
+                  ),
+                  _TeamStatsKvRow(
+                    label: 'Defensive rebounds',
+                    value: '${drebPg.toStringAsFixed(1)} (${s.dreb})',
+                  ),
+                  _TeamStatsKvRow(
+                    label: 'Offensive rebounds',
+                    value: '${orebPg.toStringAsFixed(1)} (${s.oreb})',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _TeamStatsSectionCard(
+              title: 'OTHERS',
+              child: Column(
+                children: [
+                  _TeamStatsKvRow(
+                    label: 'Assists',
+                    value: '${apg.toStringAsFixed(1)} (${s.ast})',
+                  ),
+                  _TeamStatsKvRow(
+                    label: 'Steals',
+                    value: '${spg.toStringAsFixed(2)} (${s.stl})',
+                  ),
+                  _TeamStatsKvRow(
+                    label: 'Blocks',
+                    value: '${bpg.toStringAsFixed(2)} (${s.blk})',
+                  ),
+                  _TeamStatsKvRow(
+                    label: 'Turnovers',
+                    value: '${tovPg.toStringAsFixed(1)} (${s.tov})',
+                  ),
+                  _TeamStatsKvRow(
+                    label: 'Personal fouls',
+                    value: pfPg.toStringAsFixed(1),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TeamStatSummaryCard extends StatelessWidget {
+  const _TeamStatSummaryCard({
+    required this.icon,
+    required this.headline,
+    required this.caption,
+    this.subline,
+  });
+
+  final IconData icon;
+  final String headline;
+  final String caption;
+  final String? subline;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 26, color: cs.primary),
+          const SizedBox(height: 8),
+          Text(
+            headline,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+              color: cs.onSurface,
+              height: 1.1,
+            ),
+          ),
+          if (subline != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subline!,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: cs.onSurfaceVariant,
+                height: 1.2,
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Text(
+            caption.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.9,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamStatsSectionCard extends StatelessWidget {
+  const _TeamStatsSectionCard({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              letterSpacing: 0.9,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamStatsKvRow extends StatelessWidget {
+  const _TeamStatsKvRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontFamily: 'Lexend',
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamStatsKvHighlight extends StatelessWidget {
+  const _TeamStatsKvHighlight({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontFamily: 'Lexend',
+                fontWeight: FontWeight.w900,
+                fontSize: 15,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamStatsShootRing extends StatelessWidget {
+  const _TeamStatsShootRing({
+    required this.scheme,
+    required this.label,
+    required this.pct,
+    required this.made,
+    required this.att,
+  });
+
+  final ColorScheme scheme;
+  final String label;
+  final double pct;
+  final int made;
+  final int att;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = (pct / 100).clamp(0.0, 1.0);
+    return Column(
+      children: [
+        SizedBox(
+          width: 76,
+          height: 76,
+          child: CustomPaint(
+            painter: _TeamStatsRingPainter(
+              progress: p,
+              color: scheme.primary,
+            ),
+            child: Center(
+              child: Text(
+                '${pct.round()}%',
+                style: const TextStyle(
+                  fontFamily: 'Lexend',
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '$made OF $att',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TeamStatsRingPainter extends CustomPainter {
+  _TeamStatsRingPainter({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2 - 5;
+    final bg = Paint()
+      ..color = color.withValues(alpha: 0.12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..strokeCap = StrokeCap.round;
+    final fg = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(c, r, bg);
+    final sweep = 2 * 3.141592653589793 * progress;
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: r),
+      -3.141592653589793 / 2,
+      sweep,
+      false,
+      fg,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TeamStatsRingPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.color != color;
 }
 
 class _TrophiesTab extends StatelessWidget {
