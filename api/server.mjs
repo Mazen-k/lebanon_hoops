@@ -3533,6 +3533,7 @@ async function playerCompetitionStatsHandler(req, res) {
         opponent_team_name: oppName != null ? String(oppName) : '',
         opponent_team_logo:
           oppLogo != null && String(oppLogo).trim() !== '' ? String(oppLogo).trim() : null,
+        stats: r.stats,
         min: line.min,
         pts: line.pts,
         reb: line.reb,
