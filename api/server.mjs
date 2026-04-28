@@ -3006,6 +3006,8 @@ function _accumulateTotalsFromBox(row, totalsRaw) {
   row.dreb += _totalsNum(t, ['DREB', 'DRB', 'DEF', 'Def', 'dreb', 'drb']);
   row.stl += _totalsNum(t, ['STL', 'Stl', 'stl']);
   row.blk += _totalsNum(t, ['BLK', 'Blk', 'blk']);
+  row.tov += _totalsNum(t, ['TO', 'TOV', 'Tov', 'to', 'Turnovers', 'From', 'FROM']);
+  row.pf += _totalsNum(t, ['PF', 'Pf', 'pf', 'PERSONAL', 'Fouls', 'Personal Fouls']);
 }
 
 async function listTeamStatsHandler(req, res) {
@@ -3028,7 +3030,7 @@ async function listTeamStatsHandler(req, res) {
         [compId],
       ),
       pool.query(
-        `SELECT g.match_id, g.home_team_id, g.away_team_id
+        `SELECT g.match_id, g.home_team_id, g.away_team_id, g.home_score, g.away_score
          FROM games g
          WHERE g.competition_id = $1::int
            AND g.status IN ('final', 'live')
@@ -3052,6 +3054,9 @@ async function listTeamStatsHandler(req, res) {
       team_name: '',
       team_logo: null,
       gp: 0,
+      wins: 0,
+      losses: 0,
+      pts_against: 0,
       pts: 0,
       reb: 0,
       ast: 0,
@@ -3065,6 +3070,8 @@ async function listTeamStatsHandler(req, res) {
       dreb: 0,
       stl: 0,
       blk: 0,
+      tov: 0,
+      pf: 0,
     });
 
     const byId = new Map();
@@ -3106,13 +3113,31 @@ async function listTeamStatsHandler(req, res) {
       const awayId = Number(g.away_team_id);
       if (Number.isNaN(homeId) || Number.isNaN(awayId)) continue;
 
+      const hsRaw = g.home_score;
+      const asRaw = g.away_score;
+      const hs =
+        hsRaw != null && String(hsRaw).trim() !== '' ? Number(hsRaw) : NaN;
+      const ascr =
+        asRaw != null && String(asRaw).trim() !== '' ? Number(asRaw) : NaN;
+      const scoresOk = Number.isFinite(hs) && Number.isFinite(ascr);
+
       const rh = ensureRow(homeId);
       rh.gp += 1;
       _accumulateTotalsFromBox(rh, boxMap.get(`${mid}:${homeId}`));
+      if (scoresOk) {
+        rh.pts_against += ascr;
+        if (hs > ascr) rh.wins += 1;
+        else if (ascr > hs) rh.losses += 1;
+      }
 
       const ra = ensureRow(awayId);
       ra.gp += 1;
       _accumulateTotalsFromBox(ra, boxMap.get(`${mid}:${awayId}`));
+      if (scoresOk) {
+        ra.pts_against += hs;
+        if (ascr > hs) ra.wins += 1;
+        else if (hs > ascr) ra.losses += 1;
+      }
     }
 
     const out = [...byId.values()].sort((a, b) => {
