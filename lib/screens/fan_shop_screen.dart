@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
+import '../models/shop_item.dart';
+import '../services/shop_api_service.dart';
 
 class FanShopScreen extends StatefulWidget {
   const FanShopScreen({super.key});
@@ -10,42 +11,47 @@ class FanShopScreen extends StatefulWidget {
 
 class _FanShopScreenState extends State<FanShopScreen> {
   int _selectedCategory = 0;
-  final List<String> _categories = ['All Items', 'Jerseys', 'Headwear', 'Memorabilia', 'Training'];
-
-  // Product data matching the Stitch design
-  final List<Map<String, String>> _products = [
-    {
-      'title': 'Cedar Elite Home Jersey',
-      'subtitle': '2024 Season Edition • Moisture-wicking fabric',
-      'price': '\$120.00',
-      'badge': 'Authentic',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCBhqlu88FtI77R06HoxfnJ4gt9nK2r9_eKpBsj-5ezeHa6KFh5DgYAD5pUEcAGgbQ_bsPf_xAbDxXS1wIM9og7ZzAw0QSc25-RUITZLadjEIGk41cMkf5iU8ejUYtIQc5SUeS_0wlT-Ub-mrXaptJQWTbEDWrHvxbZIrgs_eQMJTNrFExUilIfHEqRwMHWtZp4w0vkbIxrnPzgp3nPzAwUT9faSzu6KspN5KBmV1BxQCJdE2qvxK2-4AUCNx4Tb2PuLZBmAEUyAKfD',
-    },
-    {
-      'title': 'The Finals Snapback',
-      'subtitle': 'Adjustable • One size',
-      'price': '\$35.00',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCkxKuLef9iVRYDuD1TGyLt3aoYGn5-s01ceYK5GgkxRkG5kSz7O9w7HGXNsYSe8z35Zir1tI4UBWl2qcyHezxoUZZzmVfJCmdZo4tsaKlWnPxw1ZGYR3RODtaL-JLUN7WeusxUOb2ZJCmC0y535uMvDwt_TlOUdZWITFd9Ln3lynSe1R6W0TdfFPb8q8CzJh7A4paSs2Zo_Xy8NzKPfy1J8Z81qpJGWq-eqjd1WIsvNH0x-nxhLB4hKuS1HfyFpqf45p5S6U4kHM86',
-    },
-    {
-      'title': 'Official Game Ball',
-      'subtitle': 'Pro League Standard Size 7',
-      'price': '\$85.00',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuBgYl9M_nujrgtwP53a-ldvxavTlBsOXL16EnXfozUWPEpu4SVb85fI_GbuH1jJnDj48gGCIHRBgKHKvrdAF0pK7bgENnDiPMu0kZgExCO0ANoi7GqQ2mcjCqgVnpJoMnQTduXRrsNLcf2g0c5deKONXRFogZc2C2CfT7pqunoD1EA4qrG6j4uryHiLE0XrXm0-rmx7X0tse19XbEv_LuMwr3rpfB5VnwdKd_p9vNP8eqOG9ytyE1wa7lwJOJ8LNB7YztFfSxN8dI1L',
-    },
-    {
-      'title': 'Sideline Fleece Hoodie',
-      'subtitle': 'Available in Grey / Black',
-      'price': '\$65.00',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuBwk91XV2mPKLowey1YFyKShlG97mVenZFlTba6h_9hNfOP9V0fuH3YilG2KZn888biDYYyXRVrxUbtPmDbwQxF2B5r83QatqSGobWao_hDW4O_OFvY6nqhquO0TZhr2s0IRlgJXRrPx3Rt7NuK_0YczPeQzHLZF2Bp2wFV5P0oNAZO4IVL8Y6FrozOYqaV7SPGWQ1OeBX8f-fE5ylVcTatdy18vRuV4Y7R8jzPBi31doQAwodqt3TctbSH9l-EAq-cSl3wFvN6X1OW',
-    },
-    {
-      'title': 'Autographed Frame',
-      'subtitle': 'Hand-signed by 2023 MVP',
-      'price': '\$245.00',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCMWpwqDCrQaBY9F89MN3Z03MJRvCg5AkU80hRSo7LE6TgA6T6uu0nXKnuSninjUjAdaPAChy7JuAY-jet4JywTbiICaCbPuuE8IloNBfRpuYEgAUhjd0eEgQudSTn0tTPvyT2hbkx9nmPwdMraoI9K3U6YuZuEDRqvunBTjNQSjdmAn64-4e_CrAIgp-MhvxwFS1DpJUUcGAah0_zljZCY3hG6cZJuaDYLVl-8l2F8UdEhkWe7_Q7ZGX8Xm4MLAtNE7XCpAckZpWRr',
-    },
+  final List<String> _categories = [
+    'All Items',
+    'Jerseys',
+    'Headwear',
+    'Memorabilia',
+    'Training',
   ];
+
+  final _service = ShopApiService();
+  List<ShopItem> _items = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final category = _categories[_selectedCategory];
+      final items = await _service.fetchItems(category: category);
+      if (mounted) setState(() { _items = items; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  ShopItem? get _featured =>
+      _items.where((i) => i.isFeatured).firstOrNull ?? (_items.isNotEmpty ? _items.first : null);
+
+  List<ShopItem> get _standardItems {
+    final f = _featured;
+    if (f == null) return _items;
+    return _items.where((i) => i.itemId != f.itemId).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,32 +74,76 @@ class _FanShopScreenState extends State<FanShopScreen> {
         elevation: 0,
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(top: 16, bottom: 128, left: 24, right: 24), // pt-20 pb-32 px-6
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeroBanner(context),
-              const SizedBox(height: 48), // mb-12
-              _buildCategoryFilters(context),
-              const SizedBox(height: 48), // mb-12
-              _buildFeaturedProduct(context),
-              const SizedBox(height: 32), // gap-8
-              _buildProductGrid(context),
-              const SizedBox(height: 80), // mt-20
-              _buildMvpPackSection(context),
-            ],
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(top: 16, bottom: 128, left: 24, right: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeroBanner(context),
+                const SizedBox(height: 48),
+                _buildCategoryFilters(context),
+                const SizedBox(height: 48),
+                if (_loading)
+                  const Center(child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 80),
+                    child: CircularProgressIndicator(),
+                  ))
+                else if (_error != null)
+                  _buildError(context)
+                else if (_items.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 80),
+                      child: Text(
+                        'No items found.',
+                        style: TextStyle(fontFamily: 'Inter', color: colorScheme.secondary),
+                      ),
+                    ),
+                  )
+                else ...[
+                  if (_featured != null) ...[
+                    _buildFeaturedProduct(context, _featured!),
+                    const SizedBox(height: 32),
+                  ],
+                  if (_standardItems.isNotEmpty)
+                    _buildProductGrid(context, _standardItems),
+                ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ── Hero Editorial Section ──────────────────────────────────
+  Widget _buildError(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 80),
+        child: Column(
+          children: [
+            Icon(Icons.error_outline, color: colorScheme.error, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              'Could not load shop items.',
+              style: TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.bold, color: colorScheme.onSurface),
+            ),
+            const SizedBox(height: 8),
+            TextButton(onPressed: _load, child: const Text('Retry')),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeroBanner(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12), // rounded-xl
+      borderRadius: BorderRadius.circular(12),
       child: SizedBox(
         height: 340,
         width: double.infinity,
@@ -117,45 +167,62 @@ class _FanShopScreenState extends State<FanShopScreen> {
                 ),
               ),
             ),
-            // Text content
             Positioned(
-              bottom: 32, // p-8
+              bottom: 32,
               left: 32,
               right: 32,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), // px-3 py-1
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     color: colorScheme.primary,
                     child: const Text(
                       'Limited Drop',
-                      style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2.0), // text-xs uppercase tracking-widest
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 2.0,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16), // mb-4
+                  const SizedBox(height: 16),
                   Text(
                     'REPRESENT THE LEGACY',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 36, fontWeight: FontWeight.w900, color: colorScheme.onSurface, fontStyle: FontStyle.italic, height: 1.0), // text-4xl font-black italic leading-none
+                    style: TextStyle(
+                      fontFamily: 'Lexend',
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
+                      color: colorScheme.onSurface,
+                      fontStyle: FontStyle.italic,
+                      height: 1.0,
+                    ),
                   ),
-                  const SizedBox(height: 16), // mb-4
+                  const SizedBox(height: 16),
                   Text(
                     'Explore the official 2024 Lebanese League collection. Authentic gear for the ultimate fan.',
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: colorScheme.onSurface.withAlpha((255 * 0.8).round()), height: 1.4), // text-sm text-white/80
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      color: colorScheme.onSurface.withAlpha((255 * 0.8).round()),
+                      height: 1.4,
+                    ),
                   ),
-                  const SizedBox(height: 24), // mb-6
+                  const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: () {},
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colorScheme.primary,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12), // px-8 py-3
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // rounded-xl
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 0,
                     ),
                     child: const Text(
                       'SHOP EXCLUSIVES',
-                      style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold), // font-bold text-sm
+                      style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -167,7 +234,6 @@ class _FanShopScreenState extends State<FanShopScreen> {
     );
   }
 
-  // ── Category Filter Chips ──────────────────────────────────
   Widget _buildCategoryFilters(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return SizedBox(
@@ -176,16 +242,19 @@ class _FanShopScreenState extends State<FanShopScreen> {
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
         itemCount: _categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 16), // gap-4
+        separatorBuilder: (_, _) => const SizedBox(width: 16),
         itemBuilder: (context, index) {
           final isActive = _selectedCategory == index;
           return GestureDetector(
-            onTap: () => setState(() => _selectedCategory = index),
+            onTap: () {
+              setState(() => _selectedCategory = index);
+              _load();
+            },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8), // px-6 py-2
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               decoration: BoxDecoration(
                 color: isActive ? colorScheme.primary : colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12), // rounded-xl
+                borderRadius: BorderRadius.circular(12),
                 boxShadow: isActive
                     ? [BoxShadow(color: colorScheme.primary.withAlpha((255 * 0.2).round()), blurRadius: 8, offset: const Offset(0, 4))]
                     : [],
@@ -195,7 +264,7 @@ class _FanShopScreenState extends State<FanShopScreen> {
                   _categories[index],
                   style: TextStyle(
                     fontFamily: 'Lexend',
-                    fontSize: 14, // text-sm
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: isActive ? Colors.white : colorScheme.onSurface,
                   ),
@@ -208,51 +277,63 @@ class _FanShopScreenState extends State<FanShopScreen> {
     );
   }
 
-  // ── Featured (Large) Product Card ──────────────────────────
-  Widget _buildFeaturedProduct(BuildContext context) {
+  Widget _buildFeaturedProduct(BuildContext context, ShopItem product) {
     final colorScheme = Theme.of(context).colorScheme;
-    final product = _products[0];
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12), // rounded-xl
+        borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.hardEdge,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image with badge
           Stack(
             children: [
               AspectRatio(
                 aspectRatio: 4 / 5,
-                child: Image.network(
-                  product['image']!,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                ),
+                child: product.imageUrl != null
+                    ? Image.network(product.imageUrl!, fit: BoxFit.cover, width: double.infinity)
+                    : Container(color: colorScheme.surfaceContainerHighest),
               ),
-              Positioned(
-                top: 16,
-                left: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), // px-3 py-1
-                  decoration: BoxDecoration(
-                    color: colorScheme.surface,
-                    borderRadius: BorderRadius.circular(100), // rounded-full
-                  ),
-                  child: Text(
-                    'Authentic',
-                    style: TextStyle(fontFamily: 'Lexend', fontSize: 10, fontWeight: FontWeight.w900, color: colorScheme.primary, letterSpacing: -0.5), // text-[10px] font-black tracking-tighter
+              if (product.badge != null)
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      product.badge!,
+                      style: TextStyle(
+                        fontFamily: 'Lexend',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: colorScheme.primary,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              if (!product.inStock)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withAlpha((255 * 0.45).round()),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'SOLD OUT',
+                      style: TextStyle(fontFamily: 'Lexend', fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 2),
+                    ),
+                  ),
+                ),
             ],
           ),
-          // Product info
           Container(
-            padding: const EdgeInsets.all(32), // p-8
-            color: colorScheme.surfaceContainerHighest.withAlpha((255 * 0.5).round()), // bg-surface-container-highest/50
+            padding: const EdgeInsets.all(32),
+            color: colorScheme.surfaceContainerHighest.withAlpha((255 * 0.5).round()),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -265,38 +346,65 @@ class _FanShopScreenState extends State<FanShopScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            product['title']!,
-                            style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, color: colorScheme.onSurface, height: 1.1), // text-2xl font-extrabold italic leading-tight
+                            product.name,
+                            style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w800, fontStyle: FontStyle.italic, color: colorScheme.onSurface, height: 1.1),
                           ),
-                          const SizedBox(height: 4), // mb-1
+                          if (product.subtitle != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              product.subtitle!,
+                              style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: colorScheme.secondary),
+                            ),
+                          ],
+                          const SizedBox(height: 4),
                           Text(
-                            product['subtitle']!,
-                            style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: colorScheme.secondary), // text-sm text-secondary
+                            '${product.quantityAvailable} in stock',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: product.quantityAvailable < 10 ? colorScheme.error : colorScheme.secondary,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    Text(
-                      product['price']!,
-                      style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.primary), // text-2xl font-black text-primary
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          product.formattedPrice,
+                          style: TextStyle(fontFamily: 'Lexend', fontSize: 24, fontWeight: FontWeight.w900, color: colorScheme.primary),
+                        ),
+                        if (product.formattedOriginalPrice != null)
+                          Text(
+                            product.formattedOriginalPrice!,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              color: colorScheme.secondary,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 24), // mt-6
+                const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () {},
+                    onPressed: product.inStock ? () {} : null,
                     icon: const Icon(Icons.add_shopping_cart, size: 20),
-                    label: const Text(
-                      'QUICK ADD',
-                      style: TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold),
+                    label: Text(
+                      product.inStock ? 'QUICK ADD' : 'SOLD OUT',
+                      style: const TextStyle(fontFamily: 'Lexend', fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colorScheme.primary,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16), // py-4
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // rounded-xl
+                      disabledBackgroundColor: colorScheme.surfaceContainerHighest,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 0,
                     ),
                   ),
@@ -309,48 +417,56 @@ class _FanShopScreenState extends State<FanShopScreen> {
     );
   }
 
-  // ── Standard Product Grid (2-col) ─────────────────────────
-  Widget _buildProductGrid(BuildContext context) {
+  Widget _buildProductGrid(BuildContext context, List<ShopItem> products) {
     final colorScheme = Theme.of(context).colorScheme;
-    final standardProducts = _products.sublist(1); // skip the featured one
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 32, // gap-8
-        mainAxisSpacing: 32, // gap-8
+        crossAxisSpacing: 32,
+        mainAxisSpacing: 32,
         childAspectRatio: 0.5,
       ),
-      itemCount: standardProducts.length,
+      itemCount: products.length,
       itemBuilder: (context, index) {
-        final product = standardProducts[index];
+        final product = products[index];
         return Container(
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12), // rounded-xl
+            borderRadius: BorderRadius.circular(12),
           ),
           clipBehavior: Clip.hardEdge,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Product image
               Expanded(
                 flex: 3,
-                child: Container(
-                  color: colorScheme.surface, // bg-white
-                  width: double.infinity,
-                  child: Image.network(
-                    product['image']!,
-                    fit: BoxFit.cover,
-                  ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      color: colorScheme.surface,
+                      child: product.imageUrl != null
+                          ? Image.network(product.imageUrl!, fit: BoxFit.cover)
+                          : const SizedBox(),
+                    ),
+                    if (!product.inStock)
+                      Container(
+                        color: Colors.black.withAlpha((255 * 0.45).round()),
+                        alignment: Alignment.center,
+                        child: const Text(
+                          'SOLD OUT',
+                          style: TextStyle(fontFamily: 'Lexend', fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              // Product info
               Expanded(
                 flex: 2,
                 child: Padding(
-                  padding: const EdgeInsets.all(12), // p-3
+                  padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -361,17 +477,28 @@ class _FanShopScreenState extends State<FanShopScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              product['title']!,
+                              product.name,
                               style: TextStyle(fontFamily: 'Lexend', fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface, height: 1.1),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
+                            if (product.subtitle != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                product.subtitle!,
+                                style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: colorScheme.secondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                             const SizedBox(height: 2),
                             Text(
-                              product['subtitle']!,
-                              style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: colorScheme.secondary),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              '${product.quantityAvailable} left',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 10,
+                                color: product.quantityAvailable < 10 ? colorScheme.error : colorScheme.secondary,
+                              ),
                             ),
                           ],
                         ),
@@ -380,16 +507,25 @@ class _FanShopScreenState extends State<FanShopScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            product['price']!,
+                            product.formattedPrice,
                             style: TextStyle(fontFamily: 'Lexend', fontSize: 18, fontWeight: FontWeight.w900, color: colorScheme.onSurface),
                           ),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: colorScheme.onInverseSurface,
-                              borderRadius: BorderRadius.circular(12),
+                          GestureDetector(
+                            onTap: product.inStock ? () {} : null,
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: product.inStock
+                                    ? colorScheme.onInverseSurface
+                                    : colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.add,
+                                color: product.inStock ? colorScheme.surface : colorScheme.secondary,
+                                size: 18,
+                              ),
                             ),
-                            child: Icon(Icons.add, color: colorScheme.surface, size: 18),
                           ),
                         ],
                       ),
@@ -401,136 +537,6 @@ class _FanShopScreenState extends State<FanShopScreen> {
           ),
         );
       },
-    );
-  }
-
-  // ── Limited Edition MVP Pack Section ───────────────────────
-  Widget _buildMvpPackSection(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(40), // p-10
-      decoration: BoxDecoration(
-        color: const Color(0xFF151B2A), // Fixed dark background for premium "limited" feel
-        borderRadius: BorderRadius.circular(16), // rounded-2xl
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'LIMITED EDITION MVP PACK',
-            style: TextStyle(
-              fontFamily: 'Lexend',
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              fontStyle: FontStyle.italic,
-              letterSpacing: -2.0,
-              height: 1.1,
-            ), // text-3xl font-black italic uppercase tracking-tighter
-          ),
-          const SizedBox(height: 16), // mb-4
-          Text(
-            'Get the exclusive MVP bundle including the limited edition game day jersey, signed photo, and a commemorative ring box.',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 16,
-              color: Colors.white.withAlpha((255 * 0.8).round()),
-              height: 1.5,
-            ), // text-white/80
-          ),
-          const SizedBox(height: 32), // mb-8
-          // Pricing row
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '\$399.00',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: colorScheme.primaryContainer,
-                    ), // text-2xl font-black text-primary-container
-                  ),
-                  Text(
-                    '\$550.00',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      color: Colors.white.withAlpha((255 * 0.4).round()),
-                      decoration: TextDecoration.lineThrough,
-                    ), // text-sm line-through text-white/40
-                  ),
-                ],
-              ),
-              const SizedBox(width: 24), // gap-6
-              Container(
-                height: 40,
-                width: 1,
-                color: Colors.white.withAlpha((255 * 0.2).round()),
-              ), // h-10 w-[1px] bg-white/20
-              const SizedBox(width: 24), // gap-6
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Only 50',
-                    style: TextStyle(
-                      fontFamily: 'Lexend',
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ), // text-xl font-bold
-                  ),
-                  Text(
-                    'PACKS LEFT',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      color: Colors.white.withAlpha((255 * 0.6).round()),
-                      letterSpacing: 2.0,
-                    ), // text-xs uppercase text-white/60 tracking-widest
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 32), // mb-8
-          // MVP pack image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Image.network(
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuDQHqQs-m67gy7EMc5cN937YiLcBXKX6g4zpfKKlqcbzlTePA4aXxIclAHjm2_BMLhG__ypw8Ib2l_v1DTlkXHcYksixROpznJqwXHqsCQDGZ0Req3jsFJZJF71zAIVs4tbiuFSDMjuA5bVVbRr7VKxfb4VLSSN-CkP_h0O5tsn-h8qMiI0zKN8DM6Ue8HYaGh5KM-VJ4h6wVzL6E5zL0cn69wW5lq8xZK8oL1KI_AQxmBsvLTDmUSQfa3ugS815PpYWk7PRmSpW70n',
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
-          // CTA button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 40), // px-10 py-4
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // rounded-xl
-                elevation: 0,
-              ),
-              child: const Text(
-                'SECURE YOUR PACK',
-                style: TextStyle(fontFamily: 'Lexend', fontSize: 18, fontWeight: FontWeight.bold), // font-bold text-lg
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

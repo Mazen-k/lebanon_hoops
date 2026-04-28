@@ -4462,6 +4462,58 @@ async function getPeriodScoresHandler(req, res) {
 app.get('/games/:matchId/period-scores', getPeriodScoresHandler);
 app.get('/api/games/:matchId/period-scores', getPeriodScoresHandler);
 
+// ── Fan Shop ──────────────────────────────────────────────────────────────────
+
+async function listShopItemsHandler(req, res) {
+  try {
+    const category = req.query.category ?? req.query.category_name ?? null;
+    const { rows } = category && category !== 'All Items'
+      ? await pool.query(
+          `SELECT item_id, name, subtitle, category, price, original_price,
+                  quantity_available, image_url, badge, is_featured, description
+           FROM shop_items
+           WHERE LOWER(category) = LOWER($1)
+           ORDER BY is_featured DESC, item_id ASC`,
+          [category],
+        )
+      : await pool.query(
+          `SELECT item_id, name, subtitle, category, price, original_price,
+                  quantity_available, image_url, badge, is_featured, description
+           FROM shop_items
+           ORDER BY is_featured DESC, item_id ASC`,
+        );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+async function getShopItemHandler(req, res) {
+  const itemId = Number(req.params.itemId);
+  if (Number.isNaN(itemId)) {
+    return res.status(400).json({ error: 'itemId must be an integer' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT item_id, name, subtitle, category, price, original_price,
+              quantity_available, image_url, badge, is_featured, description
+       FROM shop_items WHERE item_id = $1`,
+      [itemId],
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message ?? String(err) });
+  }
+}
+
+app.get('/shop/items', listShopItemsHandler);
+app.get('/api/shop/items', listShopItemsHandler);
+app.get('/shop/items/:itemId', getShopItemHandler);
+app.get('/api/shop/items/:itemId', getShopItemHandler);
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const port = Number(process.env.PORT ?? 3000);

@@ -41,7 +41,7 @@ class AuthTextField extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         TextFormField(
           controller: controller,
           obscureText: obscureText,
@@ -56,7 +56,7 @@ class AuthTextField extends StatelessWidget {
             suffixIcon: suffixIcon,
             filled: true,
             fillColor: colorScheme.surfaceContainerLow,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: colorScheme.outlineVariant),

@@ -106,15 +106,15 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 8),
               _buildHero(context),
-              const SizedBox(height: 28),
+              const SizedBox(height: 12),
               _buildSectionTitle(context, 'SIGN IN'),
-              const SizedBox(height: 20),
+              const SizedBox(height: 8),
 
               // Email + password inside GlassCard only.
               // Google button lives OUTSIDE the GlassCard so it is never
@@ -122,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // clip content on iOS with the Impeller renderer.
               GlassCard(
                 borderRadius: 12,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -134,13 +134,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         hint: 'Your email address',
                         textInputAction: TextInputAction.next,
                         keyboardType: TextInputType.emailAddress,
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Required';
-                          if (!v.contains('@')) return 'Enter a valid email';
-                          return null;
-                        },
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       AuthTextField(
                         controller: _password,
                         label: 'Password',
@@ -164,7 +160,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 16),
                       if (_loading)
                         Center(
                           child: Padding(
@@ -179,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
 
               // ── OR divider ────────────────────────────────────────────────
               Row(
@@ -209,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               // ── Google sign-in button ─────────────────────────────────────
               _googleLoading
@@ -237,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
 
               // ── Create account link ───────────────────────────────────────
               Row(
@@ -270,7 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
 
               // ── Vendor link ───────────────────────────────────────────────
               Center(
@@ -309,7 +305,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: [colorScheme.primary, colorScheme.primaryContainer]),
         borderRadius: BorderRadius.circular(16),
@@ -333,7 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   letterSpacing: -0.5,
                 ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             'Welcome back — pick up where you left off.',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -359,7 +355,7 @@ class _LoginScreenState extends State<LoginScreen> {
             title,
             style: TextStyle(
               fontFamily: 'Lexend',
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: FontWeight.w800,
               fontStyle: FontStyle.italic,
               letterSpacing: -1,

@@ -71,7 +71,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -79,10 +79,10 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
                 'Sign in with your court account to manage playgrounds, photos, prices, and booking slots.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colorScheme.secondary, height: 1.4),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               GlassCard(
                 borderRadius: 12,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -95,7 +95,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
                         textInputAction: TextInputAction.next,
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       AuthTextField(
                         controller: _password,
                         label: 'Password',
@@ -111,7 +111,7 @@ class _VendorLoginScreenState extends State<VendorLoginScreen> {
                         ),
                         validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 16),
                       if (_loading)
                         Center(
                           child: Padding(

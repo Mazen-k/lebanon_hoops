@@ -119,15 +119,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildSectionTitle(context, 'CREATE ACCOUNT'),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
               GlassCard(
                 borderRadius: 12,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -143,7 +143,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 12),
                       AuthTextField(
                         controller: _email,
                         label: 'Email',
@@ -157,7 +157,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 12),
                       AuthTextField(
                         controller: _password,
                         label: 'Password',
@@ -177,7 +177,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 12),
                       AuthTextField(
                         controller: _confirmPassword,
                         label: 'Confirm password',
@@ -195,7 +195,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 12),
                       AuthTextField(
                         controller: _phone,
                         label: 'Phone (optional)',
@@ -210,9 +210,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           FilteringTextInputFormatter.allow(RegExp(r'[\d+\-\s()]')),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 12),
                       _buildFavoriteTeamField(context),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 20),
                       if (_submitting)
                         Center(
                           child: Padding(
@@ -245,7 +245,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 fontWeight: FontWeight.w600,
               ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         if (_teamsLoading)
           LinearProgressIndicator(color: colorScheme.primary, minHeight: 3)
         else if (_teamsError != null)
@@ -284,7 +284,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             decoration: InputDecoration(
               filled: true,
               fillColor: colorScheme.surfaceContainerLow,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: colorScheme.outlineVariant),
@@ -323,7 +323,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             title,
             style: TextStyle(
               fontFamily: 'Lexend',
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: FontWeight.w800,
               fontStyle: FontStyle.italic,
               letterSpacing: -1,
