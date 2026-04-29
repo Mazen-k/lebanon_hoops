@@ -113,36 +113,52 @@ class MainAppDrawer extends StatelessWidget {
                     icon: Icons.shopping_bag_outlined,
                     label: 'Fan shop',
                     onTap: () => _closeDrawerThen(context, () {
-                      Navigator.of(hostContext).push(
-                        MaterialPageRoute<void>(builder: (_) => const FanShopScreen()),
-                      );
+                      final nav = Navigator.of(hostContext);
+                      final route = MaterialPageRoute<void>(builder: (_) => const FanShopScreen());
+                      if (variant == MainDrawerVariant.gamesSection) {
+                        nav.pushReplacement(route);
+                      } else {
+                        nav.push(route);
+                      }
                     }),
                   ),
                   _DrawerTile(
                     icon: Icons.event_available_outlined,
                     label: 'Court booking',
                     onTap: () => _closeDrawerThen(context, () {
-                      Navigator.of(hostContext).push(
-                        MaterialPageRoute<void>(builder: (_) => const CourtReservationPage()),
-                      );
+                      final nav = Navigator.of(hostContext);
+                      final route = MaterialPageRoute<void>(builder: (_) => const CourtReservationPage());
+                      if (variant == MainDrawerVariant.gamesSection) {
+                        nav.pushReplacement(route);
+                      } else {
+                        nav.push(route);
+                      }
                     }),
                   ),
                   _DrawerTile(
                     icon: Icons.settings_outlined,
                     label: 'Settings',
                     onTap: () => _closeDrawerThen(context, () {
-                      Navigator.of(hostContext).push(
-                        MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
-                      );
+                      final nav = Navigator.of(hostContext);
+                      final route = MaterialPageRoute<void>(builder: (_) => const SettingsPage());
+                      if (variant == MainDrawerVariant.gamesSection) {
+                        nav.pushReplacement(route);
+                      } else {
+                        nav.push(route);
+                      }
                     }),
                   ),
                   _DrawerTile(
                     icon: Icons.info_outline_rounded,
                     label: 'About us',
                     onTap: () => _closeDrawerThen(context, () {
-                      Navigator.of(hostContext).push(
-                        MaterialPageRoute<void>(builder: (_) => const AboutUsPage()),
-                      );
+                      final nav = Navigator.of(hostContext);
+                      final route = MaterialPageRoute<void>(builder: (_) => const AboutUsPage());
+                      if (variant == MainDrawerVariant.gamesSection) {
+                        nav.pushReplacement(route);
+                      } else {
+                        nav.push(route);
+                      }
                     }),
                   ),
                   ListenableBuilder(
@@ -177,9 +193,13 @@ class MainAppDrawer extends StatelessWidget {
               label: 'Profile',
               denseBottom: true,
               onTap: () => _closeDrawerThen(context, () {
-                Navigator.of(hostContext).push(
-                  MaterialPageRoute<void>(builder: (_) => const ProfilePage()),
-                );
+                final nav = Navigator.of(hostContext);
+                final route = MaterialPageRoute<void>(builder: (_) => const ProfilePage());
+                if (variant == MainDrawerVariant.gamesSection) {
+                  nav.pushReplacement(route);
+                } else {
+                  nav.push(route);
+                }
               }),
             ),
             const SizedBox(height: 8),
