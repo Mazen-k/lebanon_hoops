@@ -162,18 +162,34 @@ async function getTeamDetails(req, res) {
     let playerRows;
     try {
       const q = await pool.query(
+        `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob,
+                picture_url,
+                image
+         FROM players WHERE team_id = $1 ORDER BY jersey_number ASC`,
+        [teamId],
+      );
+      playerRows = q.rows.map((r) => {
+        const img = r.image != null && String(r.image).trim() !== '' ? String(r.image).trim() : null;
+        const pic =
+          r.picture_url != null && String(r.picture_url).trim() !== ''
+            ? String(r.picture_url).trim()
+            : null;
+        const { image, ...rest } = r;
+        return { ...rest, picture_url: img || pic || null };
+      });
+    } catch (playerColErr) {
+      const q = await pool.query(
         `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob, picture_url
          FROM players WHERE team_id = $1 ORDER BY jersey_number ASC`,
         [teamId],
       );
-      playerRows = q.rows;
-    } catch (playerColErr) {
-      const q = await pool.query(
-        `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob
-         FROM players WHERE team_id = $1 ORDER BY jersey_number ASC`,
-        [teamId],
-      );
-      playerRows = q.rows.map((r) => ({ ...r, picture_url: null }));
+      playerRows = q.rows.map((r) => {
+        const pic =
+          r.picture_url != null && String(r.picture_url).trim() !== ''
+            ? String(r.picture_url).trim()
+            : null;
+        return { ...r, picture_url: pic || null };
+      });
     }
 
     let staff = [];
@@ -3317,22 +3333,44 @@ async function aggregatePlayerBoxscoresForCompetition(compId) {
   if (playerIds.length > 0) {
     const uniq = [...new Set(playerIds)];
     try {
-      const { rows: pRows } = await pool.query(
-        `SELECT p.player_id,
-                NULLIF(TRIM(p.position), '') AS position,
-                NULLIF(TRIM(p.picture_url), '') AS picture_url
-         FROM players p
-         WHERE p.player_id = ANY($1::bigint[])`,
-        [uniq],
-      );
+      let pRows;
+      try {
+        const q = await pool.query(
+          `SELECT p.player_id,
+                  NULLIF(TRIM(p.position), '') AS position,
+                  NULLIF(TRIM(p.image), '') AS player_image,
+                  NULLIF(TRIM(p.picture_url), '') AS picture_url
+           FROM players p
+           WHERE p.player_id = ANY($1::bigint[])`,
+          [uniq],
+        );
+        pRows = q.rows;
+      } catch (imgColErr) {
+        const q = await pool.query(
+          `SELECT p.player_id,
+                  NULLIF(TRIM(p.position), '') AS position,
+                  NULLIF(TRIM(p.picture_url), '') AS picture_url
+           FROM players p
+           WHERE p.player_id = ANY($1::bigint[])`,
+          [uniq],
+        );
+        pRows = q.rows.map((r) => ({ ...r, player_image: null }));
+      }
       const byPid = new Map();
       for (const p of pRows ?? []) {
         const pid = Number(p.player_id);
         if (Number.isNaN(pid)) continue;
+        const img =
+          p.player_image != null && String(p.player_image).trim() !== ''
+            ? String(p.player_image).trim()
+            : null;
+        const pic =
+          p.picture_url != null && String(p.picture_url).trim() !== ''
+            ? String(p.picture_url).trim()
+            : null;
         byPid.set(pid, {
           position: p.position != null ? String(p.position).trim() : null,
-          headshot_url:
-            p.picture_url != null ? String(p.picture_url).trim() : null,
+          headshot_url: img || pic || null,
         });
       }
       for (const a of out) {
@@ -3774,10 +3812,51 @@ async function getGameBoxscoreHandler(req, res) {
       ),
     ]);
     if (gameRes.rows.length === 0) return res.status(404).json({ error: 'Game not found' });
+
+    let enrichedPlayers = playersRes.rows;
+    const photoIds = [
+      ...new Set(
+        enrichedPlayers
+          .map((r) => Number(r.player_id))
+          .filter((n) => Number.isFinite(n) && n > 0),
+      ),
+    ];
+    if (photoIds.length > 0) {
+      try {
+        let phRows;
+        try {
+          const q = await pool.query(
+            `SELECT player_id,
+                    COALESCE(NULLIF(TRIM(image), ''), NULLIF(TRIM(picture_url), '')) AS picture_url
+             FROM players WHERE player_id = ANY($1::bigint[])`,
+            [photoIds],
+          );
+          phRows = q.rows;
+        } catch (imgErr) {
+          const q = await pool.query(
+            `SELECT player_id, NULLIF(TRIM(picture_url), '') AS picture_url
+             FROM players WHERE player_id = ANY($1::bigint[])`,
+            [photoIds],
+          );
+          phRows = q.rows;
+        }
+        const phMap = new Map(phRows.map((r) => [Number(r.player_id), r.picture_url]));
+        enrichedPlayers = enrichedPlayers.map((row) => {
+          const pid = Number(row.player_id);
+          if (!Number.isFinite(pid) || pid <= 0) return row;
+          const url = phMap.get(pid);
+          if (!url || String(url).trim() === '') return row;
+          return { ...row, picture_url: String(url).trim() };
+        });
+      } catch (enrichErr) {
+        console.warn('getGameBoxscoreHandler player photo merge skipped:', enrichErr?.message ?? enrichErr);
+      }
+    }
+
     res.json({
       game: gameRes.rows[0],
       teams: teamsRes.rows,
-      players: playersRes.rows,
+      players: enrichedPlayers,
       events: eventsRes.rows,
     });
   } catch (err) {

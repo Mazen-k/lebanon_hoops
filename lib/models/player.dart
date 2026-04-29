@@ -24,7 +24,12 @@ class Player {
   });
 
   factory Player.fromJson(Map<String, dynamic> json) {
-    final pic = json['picture_url'] ?? json['pictureUrl'] ?? json['player_image_url'] ?? json['playerImageUrl'];
+    final pic = json['image'] ??
+        json['player_image'] ??
+        json['picture_url'] ??
+        json['pictureUrl'] ??
+        json['player_image_url'] ??
+        json['playerImageUrl'];
     return Player(
       playerId: json['player_id'] as int,
       jerseyNumber: json['jersey_number'] as int,
