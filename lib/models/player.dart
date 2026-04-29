@@ -23,6 +23,13 @@ class Player {
     this.height,
   });
 
+  static int _asInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
   factory Player.fromJson(Map<String, dynamic> json) {
     final pic = json['image'] ??
         json['player_image'] ??
@@ -31,8 +38,8 @@ class Player {
         json['player_image_url'] ??
         json['playerImageUrl'];
     return Player(
-      playerId: json['player_id'] as int,
-      jerseyNumber: json['jersey_number'] as int,
+      playerId: _asInt(json['player_id']),
+      jerseyNumber: _asInt(json['jersey_number']),
       firstName: json['first_name'] as String? ?? 'Unknown',
       lastName: json['last_name'] as String? ?? '',
       nationality: json['nationality'] as String? ?? '',

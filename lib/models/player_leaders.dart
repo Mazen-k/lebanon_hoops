@@ -1,3 +1,12 @@
+String? _firstNonEmptyUrl(dynamic a, [dynamic b, dynamic c]) {
+  for (final v in [a, b, c]) {
+    if (v == null) continue;
+    final s = v.toString().trim();
+    if (s.isNotEmpty) return s;
+  }
+  return null;
+}
+
 class PlayerLeaderRow {
   const PlayerLeaderRow({
     required this.rank,
@@ -37,7 +46,11 @@ class PlayerLeaderRow {
       teamId: (j['team_id'] as num?)?.toInt() ?? 0,
       teamName: (j['team_name'] ?? '').toString(),
       teamLogo: j['team_logo']?.toString(),
-      headshotUrl: j['headshot_url']?.toString(),
+      headshotUrl: _firstNonEmptyUrl(
+        j['headshot_url'],
+        j['image'],
+        j['picture_url'],
+      ),
       gp: (j['gp'] as num?)?.toInt() ?? 0,
       value: (j['value'] as num?)?.toDouble() ?? 0,
       decimals: (j['decimals'] as num?)?.toInt() ?? 1,

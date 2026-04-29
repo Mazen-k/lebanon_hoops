@@ -64,7 +64,7 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
       final boxscoreF = _api.fetchBoxscore(matchId: widget.matchId);
       final periodsF = _api
           .fetchPeriodScores(matchId: widget.matchId)
-          .onError((_, __) => <Map<String, dynamic>>[]);
+          .onError((_, _) => <Map<String, dynamic>>[]);
       final data = await boxscoreF;
       final periods = await periodsF;
       if (!mounted) return;
@@ -2012,7 +2012,7 @@ class _BoxScorePlayerTileState extends State<_BoxScorePlayerTile> {
   }
 
   static String? _playerImageUrl(Map<String, dynamic> player) {
-    final value =
+    final value = player['image'] ??
         player['picture_url'] ??
         player['pictureUrl'] ??
         player['player_image_url'] ??
