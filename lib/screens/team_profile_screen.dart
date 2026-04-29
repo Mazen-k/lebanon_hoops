@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config/supabase_config.dart';
 import '../data/team_repository.dart';
 import '../models/game_fixture_view.dart';
 import '../models/player.dart';
@@ -15,6 +16,11 @@ import '../widgets/league_fixture_card.dart';
 import 'game_boxscore_screen.dart';
 import 'player_competition_profile_screen.dart';
 import 'ticket_selection_screen.dart';
+
+const _supabaseImageHeaders = {
+  'apikey': SupabaseConfig.anonKey,
+  'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+};
 
 class TeamProfileScreen extends StatefulWidget {
   const TeamProfileScreen({super.key, required this.teamId});
@@ -1394,6 +1400,7 @@ class _PlayerPhotoSlot extends StatelessWidget {
                   width: 84,
                   height: 84,
                   alignment: Alignment.topCenter,
+                  headers: _supabaseImageHeaders,
                   errorBuilder: (context, error, stackTrace) =>
                       _fallback(colorScheme),
                 )

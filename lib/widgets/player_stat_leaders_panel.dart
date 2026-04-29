@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../config/supabase_config.dart';
 import '../models/player_leaders.dart';
 import '../services/games_api_service.dart';
+
+const _supabaseImageHeaders = {
+  'apikey': SupabaseConfig.anonKey,
+  'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+};
 
 /// Grid of stat leader cards (top 3 each) + tap opens top-20 sheet.
 class PlayerStatLeadersPanel extends StatelessWidget {
@@ -566,6 +572,7 @@ class _AvatarWithTeamBadge extends StatelessWidget {
         width: d,
         height: d,
         fit: BoxFit.cover,
+        headers: _supabaseImageHeaders,
         errorBuilder: (_, _, _) => Container(
           width: d,
           height: d,
@@ -604,6 +611,7 @@ class _SmallAvatar extends StatelessWidget {
         width: d,
         height: d,
         fit: BoxFit.cover,
+        headers: _supabaseImageHeaders,
         errorBuilder: (_, _, _) => CircleAvatar(
           radius: radius,
           backgroundColor: const Color(0xFFE8E8E8),

@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../config/supabase_config.dart';
 import '../services/games_api_service.dart';
 import '../widgets/boxscore_expanded_stat_panel.dart';
+
+const _supabaseImageHeaders = {
+  'apikey': SupabaseConfig.anonKey,
+  'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+};
 
 // ---------------------------------------------------------------------------
 // PBP list item types — period header or event row
@@ -2180,6 +2186,7 @@ class _PlayerMiniAvatar extends StatelessWidget {
                 ? Image.network(
                     imageUrl!,
                     fit: BoxFit.cover,
+                    headers: _supabaseImageHeaders,
                     errorBuilder: (_, _, _) => _PlayerMiniAvatarFallback(
                       initials: _initials(name),
                       scheme: scheme,

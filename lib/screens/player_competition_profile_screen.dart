@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../config/supabase_config.dart';
 import '../models/player.dart';
 import '../models/team.dart';
 import '../services/games_api_service.dart';
 import '../widgets/boxscore_expanded_stat_panel.dart';
+
+const _supabaseImageHeaders = {
+  'apikey': SupabaseConfig.anonKey,
+  'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+};
 
 const _headerBlue = Color(0xFF1E4A8C);
 const _accentRed = Color(0xFFE31C23);
@@ -264,6 +270,7 @@ class _HeaderPhoto extends StatelessWidget {
                   url,
                   fit: BoxFit.cover,
                   alignment: Alignment.topCenter,
+                  headers: _supabaseImageHeaders,
                   errorBuilder: (context, error, stackTrace) => Center(
                     child: Text(
                       _initials(),

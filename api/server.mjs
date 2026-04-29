@@ -161,16 +161,16 @@ async function getTeamDetails(req, res) {
 
     /** Prefer `image`, then `picture_url`; support DBs that only have one of the columns. */
     const rosterSqlAttempts = [
-      `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob,
+      `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob, height,
               COALESCE(NULLIF(TRIM(image), ''), NULLIF(TRIM(picture_url), '')) AS picture_url
        FROM players WHERE team_id = $1 ORDER BY jersey_number ASC`,
-      `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob,
+      `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob, height,
               NULLIF(TRIM(image), '') AS picture_url
        FROM players WHERE team_id = $1 ORDER BY jersey_number ASC`,
-      `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob,
+      `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob, height,
               NULLIF(TRIM(picture_url), '') AS picture_url
        FROM players WHERE team_id = $1 ORDER BY jersey_number ASC`,
-      `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob
+      `SELECT player_id, jersey_number, first_name, last_name, nationality, position, dominant_hand, dob, height
        FROM players WHERE team_id = $1 ORDER BY jersey_number ASC`,
     ];
     let playerRows = null;
