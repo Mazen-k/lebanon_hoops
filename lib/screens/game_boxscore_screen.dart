@@ -180,19 +180,20 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: scheme.surface,
+      backgroundColor: isDark ? scheme.surface : Colors.white,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        foregroundColor: scheme.onInverseSurface,
+        foregroundColor: scheme.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        iconTheme: IconThemeData(color: scheme.onInverseSurface),
+        iconTheme: IconThemeData(color: scheme.onSurface),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh_rounded, color: scheme.onInverseSurface),
+            icon: Icon(Icons.refresh_rounded, color: scheme.onSurface),
             onPressed: _loading ? null : _load,
           ),
         ],
@@ -218,6 +219,7 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
   }
 
   Widget _buildBody(BuildContext context, ColorScheme scheme) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final payload = _payload!;
     final game = payload['game'];
     final teamsRaw = payload['teams'];
@@ -267,7 +269,7 @@ class _GameBoxscoreScreenState extends State<GameBoxscoreScreen>
         ),
         Container(
           decoration: BoxDecoration(
-            color: scheme.surface,
+            color: isDark ? scheme.surface : Colors.white,
             border: Border(
               bottom: BorderSide(
                 color: scheme.outlineVariant.withAlpha(60),
@@ -375,75 +377,47 @@ class _GameHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasScore = homeScore != null && awayScore != null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
-        color: scheme.inverseSurface,
-        gradient: LinearGradient(
-          colors: [
-            scheme.inverseSurface,
-            Color.alphaBlend(Colors.black.withAlpha(40), scheme.inverseSurface),
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
+        color: isDark ? scheme.surface : Colors.white,
       ),
       child: Stack(
         children: [
           // Translucent Home Logo Background
           if (homeLogo != null && homeLogo!.isNotEmpty)
             Positioned(
-              left: -50,
-              bottom: -30,
+              left: -30,
+              bottom: -40,
               child: Opacity(
-                opacity: 0.08,
-                child: Transform.rotate(
-                  angle: -0.25,
-                  child: Image.network(
-                    homeLogo!,
-                    width: 220,
-                    height: 220,
-                    fit: BoxFit.contain,
-                  ),
+                opacity: isDark ? 0.08 : 0.05,
+                child: Image.network(
+                  homeLogo!,
+                  width: 240,
+                  height: 240,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
           // Translucent Away Logo Background
           if (awayLogo != null && awayLogo!.isNotEmpty)
             Positioned(
-              right: -50,
-              bottom: -30,
+              right: -30,
+              bottom: -40,
               child: Opacity(
-                opacity: 0.08,
-                child: Transform.rotate(
-                  angle: 0.25,
-                  child: Image.network(
-                    awayLogo!,
-                    width: 220,
-                    height: 220,
-                    fit: BoxFit.contain,
-                  ),
+                opacity: isDark ? 0.08 : 0.05,
+                child: Image.network(
+                  awayLogo!,
+                  width: 240,
+                  height: 240,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
-          // Gradient overlay for better text readability on edges
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    scheme.inverseSurface.withAlpha(150),
-                    Colors.transparent,
-                    scheme.inverseSurface.withAlpha(150),
-                  ],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  stops: const [0.0, 0.5, 1.0],
-                ),
-              ),
-            ),
-          ),
+          // (Removed gradient overlay for pure white look)
+          const SizedBox.shrink(),
           // Main content
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
@@ -459,7 +433,7 @@ class _GameHeader extends StatelessWidget {
                         child: Text(
                           dateText!,
                           style: TextStyle(
-                            color: scheme.onInverseSurface.withAlpha(153),
+                            color: scheme.onSurface.withAlpha(153),
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             fontFamily: 'Inter',
@@ -515,7 +489,7 @@ class _GameHeader extends StatelessWidget {
                       Text(
                         status.toUpperCase(),
                         style: TextStyle(
-                          color: scheme.onInverseSurface.withAlpha(115),
+                          color: scheme.onSurface.withAlpha(115),
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.2,
@@ -543,7 +517,7 @@ class _GameHeader extends StatelessWidget {
                           ? Text(
                               '$homeScore — $awayScore',
                               style: TextStyle(
-                                color: scheme.onInverseSurface,
+                                color: scheme.onSurface,
                                 fontSize: 34,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: -1,
@@ -553,7 +527,7 @@ class _GameHeader extends StatelessWidget {
                                 ],
                                 shadows: [
                                   Shadow(
-                                    color: Colors.black.withAlpha(50),
+                                    color: Colors.black.withAlpha(20),
                                     offset: const Offset(0, 2),
                                     blurRadius: 4,
                                   ),
@@ -563,7 +537,7 @@ class _GameHeader extends StatelessWidget {
                           : Text(
                               'vs',
                               style: TextStyle(
-                                color: scheme.onInverseSurface.withAlpha(102),
+                                color: scheme.onSurface.withAlpha(102),
                                 fontSize: 22,
                                 fontWeight: FontWeight.w700,
                                 fontFamily: 'Lexend',
@@ -613,7 +587,7 @@ class _TeamColumn extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: scheme.onInverseSurface.withValues(alpha: 0.7),
+          color: scheme.onSurface.withValues(alpha: 0.7),
           fontWeight: FontWeight.w800,
           fontSize: 13,
           fontFamily: 'Lexend',
@@ -633,8 +607,15 @@ class _TeamColumn extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: hasLogo ? Colors.white : Colors.white24,
+            color: hasLogo ? Colors.white : scheme.surfaceContainerHighest,
             shape: BoxShape.circle,
+            boxShadow: hasLogo ? [
+              BoxShadow(
+                color: Colors.black.withAlpha(15),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              )
+            ] : null,
           ),
           padding: hasLogo ? const EdgeInsets.all(4) : EdgeInsets.zero,
           child: hasLogo
@@ -654,7 +635,7 @@ class _TeamColumn extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: scheme.onInverseSurface,
+            color: scheme.onSurface,
             fontSize: 12,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.3,

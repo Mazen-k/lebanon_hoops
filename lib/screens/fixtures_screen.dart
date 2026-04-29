@@ -41,9 +41,6 @@ class _FixturesScreenState extends State<FixturesScreen>
   int _bootstrapSeq = 0;
   int? _activeCompetitionId;
 
-  // Animation controller for the week label cross-fade.
-  late final AnimationController _labelAnim;
-  late final Animation<double> _labelFade;
 
   int get _competitionId =>
       widget.competitionId ?? _filter.selected.competitionId;
@@ -63,12 +60,6 @@ class _FixturesScreenState extends State<FixturesScreen>
   @override
   void initState() {
     super.initState();
-    _labelAnim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-      value: 1.0,
-    );
-    _labelFade = CurvedAnimation(parent: _labelAnim, curve: Curves.easeInOut);
     if (widget.competitionId == null) {
       _filter.addListener(_onFilterChanged);
     }
@@ -81,7 +72,6 @@ class _FixturesScreenState extends State<FixturesScreen>
       _filter.removeListener(_onFilterChanged);
     }
     _pageController?.dispose();
-    _labelAnim.dispose();
     super.dispose();
   }
 
@@ -255,7 +245,7 @@ class _FixturesScreenState extends State<FixturesScreen>
   // ─── navigation ───────────────────────────────────────────────────────────
 
   void _onPageChanged(int index) {
-    _animateLabelChange(() => setState(() => _pageIndex = index));
+    setState(() => _pageIndex = index);
     if (_weeks.isEmpty) return;
     final w = _weeks[index];
     _loadWeek(w);
@@ -279,13 +269,6 @@ class _FixturesScreenState extends State<FixturesScreen>
     _goToWeekIndex((_pageIndex + delta).clamp(0, _weeks.length - 1));
   }
 
-  /// Briefly fades the label out and back in when the week changes.
-  void _animateLabelChange(VoidCallback change) {
-    _labelAnim.reverse().then((_) {
-      change();
-      if (mounted) _labelAnim.forward();
-    });
-  }
 
   // ─── build ────────────────────────────────────────────────────────────────
 
@@ -351,7 +334,6 @@ class _FixturesScreenState extends State<FixturesScreen>
           _WeekNavigatorHeader(
             weeks: _weeks,
             focusedIndex: _pageIndex,
-            labelFade: _labelFade,
             colorScheme: cs,
             onWeekSelected: _goToWeekIndex,
             onWindowSwipe: _jumpWeekWindow,
@@ -433,7 +415,6 @@ class _WeekNavigatorHeader extends StatelessWidget {
   const _WeekNavigatorHeader({
     required this.weeks,
     required this.focusedIndex,
-    required this.labelFade,
     required this.colorScheme,
     required this.onWeekSelected,
     required this.onWindowSwipe,
@@ -441,7 +422,6 @@ class _WeekNavigatorHeader extends StatelessWidget {
 
   final List<int> weeks;
   final int focusedIndex;
-  final Animation<double> labelFade;
   final ColorScheme colorScheme;
   final ValueChanged<int> onWeekSelected;
   final ValueChanged<int> onWindowSwipe;
@@ -476,10 +456,8 @@ class _WeekNavigatorHeader extends StatelessWidget {
           child: Container(
             margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-            child: FadeTransition(
-              opacity: labelFade,
-              child: Row(
-                children: [
+            child: Row(
+              children: [
                   for (var i = 0; i < visibleWeeks.length; i++) ...[
                     Expanded(
                       child: _WeekLabelChip(
@@ -492,7 +470,6 @@ class _WeekNavigatorHeader extends StatelessWidget {
                     if (i != visibleWeeks.length - 1) const SizedBox(width: 4),
                   ],
                 ],
-              ),
             ),
           ),
         );

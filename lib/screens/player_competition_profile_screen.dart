@@ -50,7 +50,7 @@ class _PlayerCompetitionProfileScreenState
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      backgroundColor: _pageBg,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -107,93 +107,118 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: _headerBlue,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      color: isDark ? scheme.surface : Colors.white,
+      child: Stack(
         children: [
-          SizedBox(height: topPadding + 4),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: onBack,
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                  color: _accentRed,
-                  iconSize: 22,
+          // Large faded jersey number background
+          Positioned(
+            right: -10,
+            bottom: -30,
+            child: Opacity(
+              opacity: isDark ? 0.08 : 0.04,
+              child: Text(
+                '${player.jerseyNumber}',
+                style: TextStyle(
+                  fontFamily: 'Lexend',
+                  fontSize: 160,
+                  fontWeight: FontWeight.w900,
+                  color: scheme.onSurface,
+                  height: 1,
                 ),
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _HeaderPhoto(player: player),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              player.fullName,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontFamily: 'Lexend',
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 22,
-                                height: 1.15,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _positionLine(),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: Colors.white.withValues(alpha: 0.88),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      _TeamLogoColumn(
-                        logoUrl: team.logoUrl,
-                        abbrev: _positionAbbrev(player.position),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(height: 14),
-          TabBar(
-            controller: tabController,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelColor: _accentRed,
-            unselectedLabelColor: Colors.white.withValues(alpha: 0.75),
-            indicatorColor: _accentRed,
-            indicatorWeight: 3,
-            labelStyle: const TextStyle(
-              fontFamily: 'Lexend',
-              fontWeight: FontWeight.w800,
-              fontSize: 11,
-              letterSpacing: 0.6,
-            ),
-            unselectedLabelStyle: const TextStyle(
-              fontFamily: 'Lexend',
-              fontWeight: FontWeight.w700,
-              fontSize: 11,
-              letterSpacing: 0.6,
-            ),
-            tabs: const [
-              Tab(text: 'PROFILE'),
-              Tab(text: 'GAME LOG'),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: topPadding + 20),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: onBack,
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                      color: isDark ? scheme.primary : _headerBlue,
+                      iconSize: 22,
+                    ),
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          _HeaderPhoto(player: player),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  player.fullName,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'Lexend',
+                                    color: scheme.onSurface,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 22,
+                                    height: 1.15,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _positionLine(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: scheme.onSurface.withValues(alpha: 0.65),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _TeamLogoColumn(
+                            logoUrl: team.logoUrl,
+                            abbrev: _positionAbbrev(player.position),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              TabBar(
+                controller: tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                labelColor: _accentRed,
+                unselectedLabelColor: scheme.onSurface.withValues(alpha: 0.4),
+                indicatorColor: _accentRed,
+                indicatorWeight: 3,
+                labelStyle: const TextStyle(
+                  fontFamily: 'Lexend',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  letterSpacing: 0.6,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontFamily: 'Lexend',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  letterSpacing: 0.6,
+                ),
+                tabs: const [
+                  Tab(text: 'PROFILE'),
+                  Tab(text: 'GAME LOG'),
+                ],
+              ),
             ],
           ),
         ],
@@ -221,6 +246,7 @@ class _HeaderPhoto extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = player.pictureUrl?.trim();
+    final scheme = Theme.of(context).colorScheme;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -229,8 +255,8 @@ class _HeaderPhoto extends StatelessWidget {
           height: 88,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 2),
-            color: Colors.white.withValues(alpha: 0.12),
+            border: Border.all(color: scheme.onSurface.withValues(alpha: 0.08), width: 2),
+            color: scheme.onSurface.withValues(alpha: 0.05),
           ),
           clipBehavior: Clip.antiAlias,
           child: url != null && url.isNotEmpty
@@ -241,8 +267,8 @@ class _HeaderPhoto extends StatelessWidget {
                   errorBuilder: (context, error, stackTrace) => Center(
                     child: Text(
                       _initials(),
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: scheme.onSurface,
                         fontWeight: FontWeight.w900,
                         fontSize: 28,
                       ),
@@ -252,8 +278,8 @@ class _HeaderPhoto extends StatelessWidget {
               : Center(
                   child: Text(
                     _initials(),
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: scheme.onSurface,
                       fontWeight: FontWeight.w900,
                       fontSize: 28,
                     ),
@@ -266,11 +292,11 @@ class _HeaderPhoto extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: scheme.primary,
               borderRadius: BorderRadius.circular(999),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
+                  color: scheme.primary.withValues(alpha: 0.2),
                   blurRadius: 4,
                   offset: const Offset(0, 1),
                 ),
@@ -278,11 +304,11 @@ class _HeaderPhoto extends StatelessWidget {
             ),
             child: Text(
               '${player.jerseyNumber}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Lexend',
                 fontWeight: FontWeight.w900,
                 fontSize: 12,
-                color: _headerBlue,
+                color: scheme.onPrimary,
               ),
             ),
           ),
@@ -301,6 +327,7 @@ class _TeamLogoColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final u = logoUrl?.trim();
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         Container(
@@ -309,28 +336,12 @@ class _TeamLogoColumn extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: scheme.onSurface.withValues(alpha: 0.1)),
           ),
           clipBehavior: Clip.antiAlias,
           child: u != null && u.isNotEmpty
               ? Image.network(u, fit: BoxFit.contain)
-              : Icon(Icons.shield_outlined, color: _headerBlue.withValues(alpha: 0.5)),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            abbrev,
-            style: const TextStyle(
-              fontFamily: 'Lexend',
-              fontWeight: FontWeight.w900,
-              fontSize: 11,
-              color: _headerBlue,
-            ),
-          ),
+              : Icon(Icons.shield_outlined, color: scheme.onSurface.withValues(alpha: 0.5)),
         ),
       ],
     );
@@ -398,6 +409,7 @@ class _BioCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     Widget row(String label, String value) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -439,11 +451,11 @@ class _BioCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -527,7 +539,7 @@ class _ProfileStatsContent extends StatelessWidget {
             children: [
               _kv('Games played', '$gp'),
               _kv('Minutes per game', mpg.toStringAsFixed(1)),
-              _kvHighlight('Efficiency rating', eff.toStringAsFixed(1)),
+              _kvHighlight(context, 'Efficiency rating', eff.toStringAsFixed(1)),
             ],
           ),
         ),
@@ -632,7 +644,9 @@ Widget _kv(String k, String v) {
   );
 }
 
-Widget _kvHighlight(String k, String v) {
+Widget _kvHighlight(BuildContext context, String k, String v) {
+  final cs = Theme.of(context).colorScheme;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 7),
     child: Row(
@@ -649,16 +663,20 @@ Widget _kvHighlight(String k, String v) {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.black87,
+            color: Theme.of(context).brightness == Brightness.dark 
+                ? cs.primaryContainer 
+                : Colors.black87,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             v,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Lexend',
               fontWeight: FontWeight.w900,
               fontSize: 15,
-              color: Colors.white,
+              color: Theme.of(context).brightness == Brightness.dark 
+                  ? cs.onPrimaryContainer 
+                  : Colors.white,
             ),
           ),
         ),
@@ -676,14 +694,15 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -731,6 +750,8 @@ class _SummaryStripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final u = logoUrl?.trim();
     Widget mini(String label, double v) {
       return Expanded(
@@ -761,11 +782,11 @@ class _SummaryStripCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -840,7 +861,12 @@ class _ShootRing extends StatelessWidget {
           width: 76,
           height: 76,
           child: CustomPaint(
-            painter: _RingPainter(progress: p, color: _headerBlue),
+            painter: _RingPainter(
+              progress: p,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.primary
+                  : _headerBlue,
+            ),
             child: Center(
               child: Text(
                 '${pct.round()}%',
@@ -945,8 +971,9 @@ class _GameLogTabBody extends StatelessWidget {
             ),
           );
         }
+        final scheme = Theme.of(context).colorScheme;
         return ColoredBox(
-          color: Colors.white,
+          color: scheme.surface,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -954,29 +981,29 @@ class _GameLogTabBody extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
                 decoration: BoxDecoration(
                   border: Border(
-                    bottom: BorderSide(color: Colors.grey.shade300),
+                    bottom: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
                   ),
                 ),
                 child: Row(
                   children: [
-                    const Expanded(flex: 5, child: Text('TEAM', style: _tableHead)),
+                    Expanded(flex: 5, child: Text('TEAM', style: _tableHead.copyWith(color: scheme.onSurfaceVariant))),
                     SizedBox(
                       width: _gameLogStatColW,
-                      child: Text('MIN', textAlign: TextAlign.center, style: _tableHead),
+                      child: Text('MIN', textAlign: TextAlign.center, style: _tableHead.copyWith(color: scheme.onSurfaceVariant)),
                     ),
                     SizedBox(
                       width: _gameLogStatColW,
-                      child: Text('PTS', textAlign: TextAlign.center, style: _tableHead),
+                      child: Text('PTS', textAlign: TextAlign.center, style: _tableHead.copyWith(color: scheme.onSurfaceVariant)),
                     ),
                     SizedBox(
                       width: _gameLogStatColW,
-                      child: Text('REB', textAlign: TextAlign.center, style: _tableHead),
+                      child: Text('REB', textAlign: TextAlign.center, style: _tableHead.copyWith(color: scheme.onSurfaceVariant)),
                     ),
                     SizedBox(
                       width: _gameLogStatColW,
-                      child: Text('AST', textAlign: TextAlign.center, style: _tableHead),
+                      child: Text('AST', textAlign: TextAlign.center, style: _tableHead.copyWith(color: scheme.onSurfaceVariant)),
                     ),
-                    SizedBox(width: _gameLogTrailingW),
+                    const SizedBox(width: _gameLogTrailingW),
                   ],
                 ),
               ),
@@ -985,7 +1012,7 @@ class _GameLogTabBody extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 24),
                   itemCount: games.length,
                   separatorBuilder: (context, index) =>
-                      Divider(height: 1, color: Colors.grey.shade200),
+                      Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
                   itemBuilder: (context, i) => _GameLogRow(g: games[i]),
                 ),
               ),
@@ -1139,12 +1166,12 @@ class _TinyLogo extends StatelessWidget {
       height: 28,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(6),
-        color: Colors.grey.shade200,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
       ),
       clipBehavior: Clip.antiAlias,
       child: u != null && u.isNotEmpty
           ? Image.network(u, fit: BoxFit.contain)
-          : Icon(Icons.sports_basketball, size: 16, color: Colors.grey.shade600),
+          : Icon(Icons.sports_basketball, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
     );
   }
 }
