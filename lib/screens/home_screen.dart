@@ -334,16 +334,16 @@ class _HomeScreenState extends State<HomeScreen>
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: colorScheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(20),
+                color: Colors.black.withAlpha(Theme.of(context).brightness == Brightness.dark ? 40 : 20),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
             ],
-            border: Border.all(color: Colors.black.withAlpha(15)),
+            border: Border.all(color: colorScheme.outlineVariant.withAlpha(80)),
           ),
           child: Column(
             children: [
@@ -525,16 +525,16 @@ class _HomeScreenState extends State<HomeScreen>
         width: 240,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha(20),
+              color: Colors.black.withAlpha(Theme.of(context).brightness == Brightness.dark ? 40 : 20),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
           ],
-          border: Border.all(color: Colors.black.withAlpha(15)),
+          border: Border.all(color: colorScheme.outlineVariant.withAlpha(80)),
         ),
         child: Column(
           children: [
@@ -582,7 +582,7 @@ class _HomeScreenState extends State<HomeScreen>
                 _buildTeamColumn(
                   context,
                   team1Code,
-                  const Color(0xFF1A1A1A),
+                  colorScheme.onSurface,
                   team1Img,
                 ),
                 Text(
@@ -599,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen>
                 _buildTeamColumn(
                   context,
                   team2Code,
-                  const Color(0xFF1A1A1A),
+                  colorScheme.onSurface,
                   team2Img,
                 ),
               ],
@@ -678,17 +678,17 @@ class _HomeScreenState extends State<HomeScreen>
       width: 200,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: gold.withAlpha(80)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(20),
+            color: Colors.black.withAlpha(Theme.of(context).brightness == Brightness.dark ? 40 : 20),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
           BoxShadow(
-            color: gold.withAlpha(30),
+            color: gold.withAlpha(Theme.of(context).brightness == Brightness.dark ? 40 : 30),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -741,8 +741,8 @@ class _HomeScreenState extends State<HomeScreen>
           Container(
             width: 72,
             height: 72,
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
               shape: BoxShape.circle,
             ),
             padding: const EdgeInsets.all(10),
@@ -815,16 +815,16 @@ class _HomeScreenState extends State<HomeScreen>
         width: 280,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha(20),
+              color: Colors.black.withAlpha(Theme.of(context).brightness == Brightness.dark ? 40 : 20),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
           ],
-          border: Border.all(color: Colors.black.withAlpha(15)),
+          border: Border.all(color: colorScheme.outlineVariant.withAlpha(80)),
         ),
         child: Column(
           children: [
@@ -866,17 +866,17 @@ class _HomeScreenState extends State<HomeScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildTeamColumn(context, team1Code, const Color(0xFF1A1A1A), team1Img),
+                _buildTeamColumn(context, team1Code, colorScheme.onSurface, team1Img),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
                       score1,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Lexend',
                         fontSize: 30,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF1A1A1A),
+                        color: colorScheme.onSurface,
                         height: 1.0,
                       ),
                     ),
@@ -894,17 +894,17 @@ class _HomeScreenState extends State<HomeScreen>
                     const SizedBox(width: 16),
                     Text(
                       score2,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Lexend',
                         fontSize: 30,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF1A1A1A),
+                        color: colorScheme.onSurface,
                         height: 1.0,
                       ),
                     ),
                   ],
                 ),
-                _buildTeamColumn(context, team2Code, const Color(0xFF1A1A1A), team2Img),
+                _buildTeamColumn(context, team2Code, colorScheme.onSurface, team2Img),
               ],
             ),
           ],
@@ -925,7 +925,7 @@ class _HomeScreenState extends State<HomeScreen>
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: const Color(0xFFF5F5F5),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             shape: BoxShape.circle,
           ),
           padding: const EdgeInsets.all(8),
