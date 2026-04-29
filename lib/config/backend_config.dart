@@ -1,4 +1,4 @@
-/// Backend / database configuration for Lebanon Hoops.
+/// Backend / database configuration for Swish.
 ///
 /// **Security:** The Flutter app must not open raw PostgreSQL connections.
 /// Use the Node API in this repo at `api/` (`npm install` + `npm start`; see `api/package.json`).

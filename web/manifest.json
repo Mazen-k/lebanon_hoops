@@ -1,11 +1,11 @@
 {
-    "name": "lebanon_hoops",
-    "short_name": "lebanon_hoops",
+    "name": "Swish",
+    "short_name": "Swish",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Swish — basketball app for fans.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

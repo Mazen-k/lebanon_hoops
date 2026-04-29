@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/app_display_name.dart';
 import '../theme/colors.dart';
 import '../navigation/app_nav_shell_key.dart';
 import '../navigation/card_collection_section_route.dart';
@@ -61,7 +62,7 @@ class MainAppDrawer extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Lebanon Hoops',
+                      kAppDisplayName,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
                             fontStyle: FontStyle.italic,

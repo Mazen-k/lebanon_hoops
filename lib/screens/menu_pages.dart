@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/app_display_name.dart';
 import '../navigation/app_nav_shell_key.dart';
 import 'fan_shop_screen.dart';
 import 'court_reservation_page.dart';
@@ -129,7 +130,7 @@ class AboutUsPage extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
       ),
       body: const MenuPlaceholderPage(
-        title: 'Lebanon Hoops',
+        title: kAppDisplayName,
         subtitle: 'Lebanese basketball — built for fans.',
       ),
     );

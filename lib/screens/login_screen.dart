@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/app_display_name.dart';
 import '../theme/colors.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/gradient_button.dart';
@@ -348,7 +349,7 @@ class _LoginScreenState extends State<LoginScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Lebanon Hoops',
+            kAppDisplayName,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: colorScheme.onPrimary,
                   fontWeight: FontWeight.w800,
